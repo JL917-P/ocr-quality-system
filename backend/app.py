@@ -829,7 +829,7 @@ def health() -> JSONResponse:
 
 @app.get("/", response_class=RedirectResponse)
 def root() -> RedirectResponse:
-    return RedirectResponse(url="/capture")
+    return RedirectResponse(url="/admin")
 
 
 @app.get("/capture", response_class=HTMLResponse)
