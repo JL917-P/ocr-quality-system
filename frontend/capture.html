@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Captura · Control de Calidad</title>
+    <link rel="stylesheet" href="/static/theme-quality.css" />
+  </head>
+  <body class="page-capture">
+    <div id="appSplash" class="app-splash" role="dialog" aria-label="Bienvenida">
+      <div class="splash-mark">QC</div>
+      <h2 class="splash-title">Control de Calidad</h2>
+      <p class="splash-sub">Captura documental · Logística y trazabilidad en campo</p>
+      <div class="splash-bar"><div class="splash-bar-fill"></div></div>
+      <p class="splash-hint">Toca la pantalla para continuar</p>
+    </div>
+
+    <div class="capture-shell">
+      <header class="capture-header">
+        <div class="brand-mark">QC</div>
+        <div>
+          <h1>Captura en campo</h1>
+          <p>Registro fotográfico para inspección y OCR</p>
+        </div>
+      </header>
+
+      <div class="capture-card card">
+        <p class="card-title">Estado de captura</p>
+        <div class="row">
+          <span class="pill" id="status">Listo para seleccionar</span>
+          <div id="qualityHint" class="hint">Selecciona una foto para evaluar calidad de imagen.</div>
+        </div>
+        <div class="row">
+          <label for="labelInput">Identificación del lote / punto</label>
+          <input id="labelInput" type="text" placeholder="Cliente, sede, lote o responsable" />
+        </div>
+        <div class="row grid">
+          <button class="btn btn-primary" id="cameraBtn" type="button">Tomar foto</button>
+          <button class="btn btn-secondary" id="galleryBtn" type="button">Seleccionar de galería</button>
+          <button class="btn btn-outline hidden" id="confirmBtn" type="button">Confirmar y enviar</button>
+        </div>
+        <div class="row">
+          <p class="muted">Use buena iluminación y enfoque nítido para el área de calidad.</p>
+          <input id="galleryInput" type="file" accept="image/*" class="hidden" />
+          <input id="cameraInput" type="file" accept="image/*" capture="environment" class="hidden" />
+        </div>
+      </div>
+
+      <div class="capture-card card">
+        <p class="card-title">Vista previa</p>
+        <img id="snapshot" alt="Vista previa" />
+      </div>
+
+      <div class="capture-card card">
+        <p class="card-title">Resultado OCR</p>
+        <div id="result" class="lines">Sin resultado aún.</div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden">
+      <span class="check">✓</span>
+      Registro enviado correctamente
+    </div>
+
+    <script src="/static/splash.js"></script>
+    <script>
+      const galleryInput = document.getElementById("galleryInput");
+      const cameraInput = document.getElementById("cameraInput");
+      const cameraBtn = document.getElementById("cameraBtn");
+      const galleryBtn = document.getElementById("galleryBtn");
+      const confirmBtn = document.getElementById("confirmBtn");
+      const result = document.getElementById("result");
+      const toast = document.getElementById("toast");
+      const labelInput = document.getElementById("labelInput");
+      const snapshot = document.getElementById("snapshot");
+      const status = document.getElementById("status");
+      const qualityHint = document.getElementById("qualityHint");
+      const qualityCanvas = document.createElement("canvas");
+      const qualityCtx = qualityCanvas.getContext("2d", { willReadFrequently: true });
+      let lastLines = [];
+      let lastWarnings = [];
+      function toggleConfirmButton() {
+        if (lastLines.length) {
+          confirmBtn.classList.remove("hidden");
+        } else {
+          confirmBtn.classList.add("hidden");
+        }
+      }
+
+      function analyzeQuality(file) {
+        const img = new Image();
+        img.onload = () => {
+          qualityCanvas.width = img.naturalWidth;
+          qualityCanvas.height = img.naturalHeight;
+          qualityCtx.drawImage(img, 0, 0);
+          const imageData = qualityCtx.getImageData(0, 0, qualityCanvas.width, qualityCanvas.height);
+          const data = imageData.data;
+          const total = qualityCanvas.width * qualityCanvas.height;
+          let sum = 0;
+          let sumSq = 0;
+          const gray = new Uint8Array(total);
+          for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+            const g = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+            gray[j] = g;
+            sum += g;
+            sumSq += g * g;
+          }
+          const mean = sum / total;
+          const variance = sumSq / total - mean * mean;
+          const contrast = Math.sqrt(Math.max(0, variance));
+          let lapSum = 0;
+          let lapSumSq = 0;
+          const w = qualityCanvas.width;
+          const h = qualityCanvas.height;
+          for (let y = 1; y < h - 1; y += 2) {
+            for (let x = 1; x < w - 1; x += 2) {
+              const idx = y * w + x;
+              const lap =
+                -gray[idx - w - 1] - gray[idx - w] - gray[idx - w + 1]
+                -gray[idx - 1] + 8 * gray[idx] - gray[idx + 1]
+                -gray[idx + w - 1] - gray[idx + w] - gray[idx + w + 1];
+              lapSum += lap;
+              lapSumSq += lap * lap;
+            }
+          }
+          const lapCount = Math.floor((h - 2) / 2) * Math.floor((w - 2) / 2);
+          const lapMean = lapSum / Math.max(1, lapCount);
+          const lapVar = lapSumSq / Math.max(1, lapCount) - lapMean * lapMean;
+
+          const tooDark = mean < 90;
+          const tooBright = mean > 200;
+          const lowContrast = contrast < 35;
+          const blurry = lapVar < 80;
+
+          if (!tooDark && !tooBright && !lowContrast && !blurry) {
+            qualityHint.className = "hint ok";
+            qualityHint.textContent = "Calidad OK: luz y enfoque correctos.";
+            return;
+          }
+          const issues = [];
+          if (tooDark) issues.push("poca luz");
+          if (tooBright) issues.push("exceso de luz");
+          if (lowContrast) issues.push("bajo contraste");
+          if (blurry) issues.push("imagen borrosa");
+          qualityHint.className = issues.length > 1 ? "hint warn" : "hint bad";
+          qualityHint.textContent = `Calidad baja: ${issues.join(", ")}.`;
+        };
+        img.onerror = () => {
+          qualityHint.className = "hint warn";
+          qualityHint.textContent = "No se pudo evaluar la calidad.";
+        };
+        img.src = URL.createObjectURL(file);
+      }
+
+      function processFile(file) {
+        if (!file) {
+          result.textContent = "Selecciona una imagen.";
+          return;
+        }
+        lastLines = [];
+        lastWarnings = [];
+        toggleConfirmButton();
+        snapshot.src = URL.createObjectURL(file);
+        analyzeQuality(file);
+        status.textContent = "Procesando…";
+
+        const form = new FormData();
+        form.append("file", file, "capture.jpg");
+        result.textContent = "Procesando…";
+
+        try {
+          fetch("/api/ocr_preview", { method: "POST", body: form })
+            .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+            .then(({ ok, data }) => {
+              if (!ok) {
+                result.textContent = data.detail || "Error en OCR";
+                status.textContent = "Error";
+                return;
+              }
+              lastLines = data.lines || [];
+              lastWarnings = data.warnings || [];
+              result.textContent = data.lines.join("\n") || "Sin texto detectado.";
+              status.textContent = "OCR listo";
+              toggleConfirmButton();
+            })
+            .catch(() => {
+              result.textContent = "Error de red o servidor.";
+              status.textContent = "Error";
+            });
+        } catch (err) {
+          result.textContent = "Error de red o servidor.";
+          status.textContent = "Error";
+        }
+      }
+
+      cameraBtn.addEventListener("click", () => {
+        cameraInput.click();
+      });
+
+      galleryBtn.addEventListener("click", () => {
+        galleryInput.click();
+      });
+
+      cameraInput.addEventListener("change", () => {
+        if (cameraInput.files[0]) {
+          processFile(cameraInput.files[0]);
+        }
+      });
+
+      galleryInput.addEventListener("change", () => {
+        if (galleryInput.files[0]) {
+          processFile(galleryInput.files[0]);
+        }
+      });
+
+      confirmBtn.addEventListener("click", async () => {
+        if (!lastLines.length) {
+          status.textContent = "No hay resultado para confirmar.";
+          return;
+        }
+        try {
+          const res = await fetch("/api/ocr_confirm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              lines: lastLines,
+              warnings: lastWarnings,
+              label_text: labelInput.value.trim(),
+            }),
+          });
+          if (!res.ok) {
+            const data = await res.json();
+            status.textContent = data.detail || "Error al confirmar.";
+            return;
+          }
+          status.textContent = "Enviado al panel";
+          toast.classList.remove("hidden");
+          setTimeout(() => {
+            window.location.reload();
+          }, 4000);
+        } catch (err) {
+          status.textContent = "Error de red o servidor.";
+        }
+      });
+    </script>
+  </body>
+</html>

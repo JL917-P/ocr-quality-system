@@ -1,0 +1,3188 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Panel · Control de Calidad Logística</title>
+    <link rel="stylesheet" href="/static/theme-quality.css?v=sidebar-edge" />
+    <link rel="stylesheet" href="/static/auth-gate.css" />
+    <style>
+      #adminLayout { display: flex; min-height: 100vh; position: relative; z-index: 1; }
+      #adminLayout .sidebar {
+        position: relative;
+        width: 52px;
+        min-height: 100vh;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        background: linear-gradient(180deg, #0c2340 0%, #143352 55%, #155e75 100%);
+        color: #fff;
+        box-shadow: 4px 0 20px rgba(12, 35, 64, 0.2);
+        transition: width 0.25s ease;
+        overflow: visible;
+      }
+      #adminLayout .sidebar-toggle {
+        position: absolute;
+        top: 50%;
+        right: 0;
+        left: auto;
+        transform: translate(50%, -50%);
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        max-width: 40px;
+        padding: 0;
+        margin: 0;
+        z-index: 30;
+      }
+      #adminLayout.sidebar-open .sidebar { width: 248px; }
+      #adminLayout .sidebar-inner { display: none; flex-direction: column; flex: 1; min-height: 0; }
+      #adminLayout.sidebar-open .sidebar-inner { display: flex; }
+      #adminLayout .sidebar .brand,
+      #adminLayout .sidebar .brand-sub { color: #fff; }
+    </style>
+  </head>
+  <body class="page-admin auth-locked">
+    <div id="authLogin" class="auth-screen auth-login-screen" role="dialog" aria-label="Inicio de sesión">
+      <div class="auth-login-card">
+        <div class="auth-avatar" aria-hidden="true">👤</div>
+        <form id="authLoginForm" autocomplete="off">
+          <div class="auth-field">
+            <span class="auth-field-icon" aria-hidden="true">👤</span>
+            <input id="authUser" type="text" name="username" placeholder="Usuario" autocomplete="username" required />
+          </div>
+          <div class="auth-field">
+            <span class="auth-field-icon" aria-hidden="true">🔒</span>
+            <input id="authPass" type="password" name="password" placeholder="Contraseña" autocomplete="current-password" required />
+          </div>
+          <div class="auth-login-row">
+            <label><input id="authRemember" type="checkbox" /> Recordarme</label>
+            <span class="auth-forgot">¿Olvidó su contraseña?</span>
+          </div>
+          <button type="submit" class="auth-login-btn">LOGIN</button>
+          <p id="authLoginError" class="auth-login-error" role="alert"></p>
+        </form>
+      </div>
+    </div>
+
+    <div id="authLoading" class="auth-screen auth-loading-screen hidden" aria-live="polite">
+      <h1 class="auth-loading-title">LOADING</h1>
+      <div class="auth-progress-wrap">
+        <div class="auth-progress-track">
+          <div id="authProgressFill" class="auth-progress-fill"></div>
+        </div>
+        <span id="authProgressPct" class="auth-progress-pct">0%</span>
+      </div>
+    </div>
+
+    <div id="authWelcome" class="auth-screen auth-welcome-screen hidden">
+      <h1 class="auth-welcome-text">Bienvenido</h1>
+    </div>
+
+    <div class="admin-bg" aria-hidden="true"></div>
+    <div class="layout" id="adminLayout">
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-inner" id="sidebarInner">
+          <div class="sidebar-brand">
+            <div class="brand-mark">QC</div>
+            <div class="sidebar-brand-text">
+              <div class="brand">Control de Calidad</div>
+              <div class="brand-sub">Logística · Calidad</div>
+            </div>
+          </div>
+          <nav id="navWrap" class="sidebar-nav" aria-label="Menú principal">
+            <a href="#" data-target="section-clients">Clientes</a>
+            <a href="#" data-target="section-products">Productos</a>
+            <a href="#" data-target="section-transports">Transporte</a>
+            <a class="active" href="#" data-target="section-ocr">OCR</a>
+            <a href="#" data-target="section-constancias">Constancias</a>
+            <a href="#" data-target="section-trazabilidad">Trazabilidad</a>
+            <a href="#" data-target="section-trasiegos">Trasiegos</a>
+          </nav>
+        </div>
+        <div class="sidebar-footer">
+          <button type="button" id="sidebarLogoutBtn" class="sidebar-logout-btn" title="Cerrar sesión">
+            <span class="sidebar-logout-icon" aria-hidden="true">⎋</span>
+            <span class="sidebar-logout-label">Cerrar sesión</span>
+          </button>
+        </div>
+        <button
+          type="button"
+          id="sidebarToggle"
+          class="sidebar-toggle"
+          aria-label="Mostrar menú"
+          aria-expanded="false"
+          title="Mostrar menú"
+        >
+          <span class="sidebar-toggle-icon" aria-hidden="true">▶</span>
+        </button>
+      </aside>
+      <div class="main-wrap">
+      <header class="page-header">
+        <div class="page-header-brand">
+          <div class="brand-mark">QC</div>
+          <span class="page-header-title">Control de Calidad</span>
+        </div>
+        <span class="topbar-badge">Área Calidad</span>
+      </header>
+      <main class="content">
+        <div class="container">
+        <section id="section-ocr">
+        <div class="card">
+          <div class="row">
+            <div>
+              <label>Número de Constancia</label>
+              <input id="constanciaNumero" type="text" placeholder="Ej: CONST-001" />
+            </div>
+            <div>
+              <label>Fecha de Emisión</label>
+              <input id="constanciaFecha" type="date" />
+            </div>
+            <div>
+              <label>Cliente *</label>
+              <input id="constanciaClienteInput" list="clientesList" placeholder="Escribe para buscar..." />
+              <datalist id="clientesList"></datalist>
+            </div>
+            <div>
+              <label>Unidad de Transporte</label>
+              <input id="constanciaTransporteInput" list="transportesList" placeholder="Escribe para buscar..." />
+              <datalist id="transportesList"></datalist>
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label>Constancias a emitir</label>
+              <div class="checkbox-inline">
+                <label><input id="constanciaFumigacion" type="checkbox" checked /> Fumigación</label>
+                <label><input id="constanciaCalidad" type="checkbox" checked /> Calidad</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:50px;">Item</th>
+                <th style="width:35%;">Producto *</th>
+                <th style="width:110px;">Lote</th>
+                <th style="width:110px;">F. Producción</th>
+                <th style="width:110px;">F. Vencimiento</th>
+                <th style="width:90px;">Cantidad (u)</th>
+                <th style="width:60px;">Eliminar</th>
+              </tr>
+            </thead>
+            <tbody id="productsBody"></tbody>
+          </table>
+          <div class="actions">
+            <button class="btn btn-success" id="addRowBtn">+ Agregar fila</button>
+            <button class="btn btn-primary" id="saveBtn">Guardar Constancia</button>
+            <button class="btn btn-warning" id="reserveBtn">Reserva</button>
+            <button class="btn btn-outline" id="cancelBtn">Cancelar</button>
+          </div>
+        </div>
+        </section>
+
+        <section id="section-clients" class="hidden">
+          <div class="card">
+            <div class="toolbar">
+              <div class="toolbar-right">
+                <button class="btn btn-primary" id="addClientBtn" type="button">Crear cliente</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:60px;">ID</th>
+                  <th>Nombre</th>
+                  <th style="width:160px;">RUC</th>
+                  <th style="width:90px;">Eliminar</th>
+                </tr>
+              </thead>
+              <tbody id="clientsList"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="section-transports" class="hidden">
+          <div class="card">
+            <div class="toolbar">
+              <div class="toolbar-right">
+                <button class="btn btn-primary" id="addTransportBtn" type="button">Crear matrícula</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:60px;">ID</th>
+                  <th>Matrícula</th>
+                  <th style="width:90px;">Eliminar</th>
+                </tr>
+              </thead>
+              <tbody id="transportsList"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="section-analisis" class="hidden">
+          <div class="card">
+            <div class="title">Análisis de datos</div>
+            <div class="sub">Carga un archivo CSV exportado de Excel para filtrar por tienda y obtener sus productos.</div>
+            <div class="row">
+              <div class="field">
+                <label>Archivo CSV</label>
+                <input id="analysisFile" type="file" accept=".csv,text/csv" multiple />
+              </div>
+              <div class="field">
+                <label>Tienda</label>
+                <select id="analysisStore">
+                  <option value="">Selecciona una tienda</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Resumen</label>
+                <div class="tag-muted" id="analysisSummary">Sin datos cargados.</div>
+              </div>
+              <div class="field">
+                <label>Hoja</label>
+                <button class="btn btn-outline" id="analysisSheetBtn" type="button">Abrir hoja</button>
+              </div>
+              <div class="field">
+                <label>Constancia</label>
+                <button class="btn btn-primary" id="analysisApplyBtn" type="button">Aplicar a constancia</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:60px;">N°</th>
+                  <th style="width:120px;">Código</th>
+                  <th>Descripción</th>
+                  <th style="width:90px;">U.M</th>
+                  <th style="width:90px;">Cantidad</th>
+                  <th style="width:120px;">P.U</th>
+                </tr>
+              </thead>
+              <tbody id="analysisRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="section-products" class="hidden">
+          <div class="card">
+            <div class="toolbar">
+              <div class="field" style="flex: 1;">
+                <label>Buscar producto</label>
+                <input id="productSearch" type="text" placeholder="Buscar..." />
+              </div>
+              <div class="field">
+                <label>Acción</label>
+                <div class="table-actions">
+                  <select id="productBulkAction">
+                    <option value="">---------</option>
+                    <option value="delete">Eliminar seleccionados</option>
+                  </select>
+                  <button class="btn btn-outline" id="applyBulkBtn" type="button">Aplicar</button>
+                </div>
+              </div>
+              <div class="field toolbar-field-btn">
+                <label class="toolbar-label-spacer" aria-hidden="true">&#8203;</label>
+                <button class="btn btn-primary" id="addProductBtn" type="button">Crear producto</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" id="productListCard">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:34px;"><input id="selectAllProducts" type="checkbox" /></th>
+                  <th style="width:60px;" data-sort="id">ID</th>
+                  <th data-sort="name">Nombre</th>
+                  <th style="width:120px;" data-sort="code">Código</th>
+                  <th style="width:80px;" data-sort="um">U.M</th>
+                  <th style="width:120px;" data-sort="lot">Lote</th>
+                  <th style="width:140px;" data-sort="production_text">Fecha Producción</th>
+                  <th style="width:140px;" data-sort="expiration_text">Fecha Vencimiento</th>
+                  <th style="width:80px;" data-sort="active">Activo</th>
+                  <th style="width:90px;">Eliminar</th>
+                </tr>
+              </thead>
+              <tbody id="productsList"></tbody>
+            </table>
+            <div class="pager">
+              <span class="tag-muted" id="productCount">0</span>
+              <button class="btn btn-outline" id="prevPageBtn" type="button">Anterior</button>
+              <button class="btn btn-outline" id="nextPageBtn" type="button">Siguiente</button>
+            </div>
+          </div>
+
+        </section>
+
+        <section id="section-constancias" class="hidden">
+          <div class="card">
+            <div class="toolbar">
+              <div class="field" style="flex: 1;">
+                <label>Buscar constancia</label>
+                <input id="constanciaSearch" type="text" placeholder="Buscar..." />
+              </div>
+              <div class="field">
+                <label>Acción</label>
+                <div class="table-actions">
+                  <select id="constanciaBulkAction">
+                    <option value="">---------</option>
+                    <option value="delete">Eliminar seleccionadas</option>
+                  </select>
+                  <button class="btn btn-outline" id="constanciaApplyBtn" type="button">Aplicar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:34px;"><input id="selectAllConstancias" type="checkbox" /></th>
+                  <th style="width:80px;">Número</th>
+                  <th style="width:140px;">Fecha emisión</th>
+                  <th>Cliente</th>
+                  <th style="width:160px;">Unidad transporte</th>
+                  <th style="width:140px;">Estado</th>
+                  <th style="width:90px;">Editar</th>
+                  <th style="width:90px;">Confirmar</th>
+                  <th style="width:90px;">Plantilla</th>
+                </tr>
+              </thead>
+              <tbody id="constanciasList"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="section-trazabilidad" class="hidden">
+          <div class="card">
+            <div class="toolbar">
+              <div class="field" style="flex: 1;">
+                <label>Buscar</label>
+                <input id="traceSearchInput" type="text" placeholder="Escribe para filtrar..." />
+              </div>
+              <div class="field">
+                <label>Buscar por</label>
+                <select id="traceSearchType">
+                  <option value="product">Producto</option>
+                  <option value="lot">Lote</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Resultados</label>
+                <div class="tag-muted" id="traceCount">0</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:60px;">N°</th>
+                  <th style="width:140px;">Fecha envío</th>
+                  <th>Cliente</th>
+                  <th>Producto</th>
+                  <th style="width:120px;">Lote</th>
+                  <th style="width:140px;">F. Producción</th>
+                  <th style="width:140px;">F. Vencimiento</th>
+                  <th style="width:120px;">Cantidad</th>
+                </tr>
+              </thead>
+              <tbody id="traceList"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="section-trasiegos" class="hidden">
+          <div class="card">
+            <div class="title">Trasiegos</div>
+            <div class="actions" style="margin-top: 12px;">
+              <button class="btn btn-success" id="addTrasiegoRowBtn" type="button">+ Agregar fila</button>
+              <span class="tag-muted" id="trasiegosCount">0 filas</span>
+            </div>
+          </div>
+          <div class="card trasiegos-sheet-card">
+            <div class="trasiegos-table-wrap">
+              <table class="trasiegos-table">
+                <thead>
+                  <tr>
+                    <th style="width:150px;">Fecha</th>
+                    <th style="width:120px;">M.P</th>
+                    <th style="width:150px;">F.Ingreso</th>
+                    <th style="width:120px;">Estado</th>
+                    <th style="width:120px;">Lote</th>
+                    <th style="width:170px;">F.P</th>
+                    <th style="width:170px;">F.V</th>
+                    <th style="width:110px;">Cantidad</th>
+                    <th style="width:56px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="trasiegosBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <div class="modal-backdrop hidden" id="productModal">
+          <div class="modal">
+            <div class="toolbar">
+              <div class="tag-muted" id="productFormTitle">Nuevo producto</div>
+              <div class="toolbar-right">
+                <button class="btn btn-outline" id="closeProductModal" type="button" onclick="closeProductModal()">Cerrar</button>
+              </div>
+            </div>
+            <div class="section-title">Información básica</div>
+            <div class="row-2">
+              <div class="field">
+                <label>Nombre</label>
+                <input id="prodName" type="text" />
+              </div>
+            </div>
+            <div class="row-2">
+              <div class="field">
+                <label>Origen</label>
+                <input id="prodOrigin" type="text" />
+              </div>
+            </div>
+            <div class="row" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+              <div class="field">
+                <label>Código</label>
+                <input id="prodCode" type="text" />
+              </div>
+              <div class="field">
+                <label>U.M</label>
+                <select id="prodUm">
+                  <option value="">Seleccionar</option>
+                  <option value="BLS">BLS</option>
+                  <option value="SACO">SACO</option>
+                </select>
+              </div>
+            </div>
+            <div class="row-2">
+              <div class="field">
+                <label>Activo</label>
+                <div class="checkbox-inline">
+                  <input id="prodActive" type="checkbox" checked />
+                  <span>Activo</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="section-title" style="margin-top:12px;">Información de lote</div>
+            <div class="row-2">
+              <div class="field">
+                <label>Lote</label>
+                <input id="prodLot" type="text" />
+              </div>
+            </div>
+            <div class="row-2">
+              <div class="field">
+                <label>Fecha Producción (texto)</label>
+                <input id="prodProduction" type="text" placeholder="Ej: 01DIC25" />
+              </div>
+            </div>
+            <div class="row-2">
+              <div class="field">
+                <label>Fecha Vencimiento (texto)</label>
+                <input id="prodExpiration" type="text" placeholder="Ej: AGO26" />
+              </div>
+            </div>
+
+            <div class="section-title" style="margin-top:12px;">Parámetros de calidad</div>
+            <div class="row-3">
+              <div class="field">
+                <label>Porcentaje humedad</label>
+                <input id="prodHumidity" type="number" step="0.01" />
+              </div>
+            </div>
+            <div class="row-3">
+              <div class="field">
+                <label>Granos quebrados</label>
+                <input id="prodBroken" type="number" step="0.01" />
+              </div>
+            </div>
+            <div class="row-3">
+              <div class="field">
+                <label>Granos tizados 1</label>
+                <input id="prodChalky1" type="number" step="0.01" />
+              </div>
+            </div>
+            <div class="row-3">
+              <div class="field">
+                <label>Granos tizados 2</label>
+                <input id="prodChalky2" type="number" step="0.01" />
+              </div>
+            </div>
+            <div class="row-3">
+              <div class="field">
+                <label>Granos dañados</label>
+                <input id="prodDamaged" type="number" step="0.01" />
+              </div>
+            </div>
+            <div class="row-3">
+              <div class="field">
+                <label>Blancura</label>
+                <input id="prodWhiteness" type="number" step="0.01" />
+              </div>
+            </div>
+            <div class="actions">
+              <button class="btn btn-primary" id="saveProductBtn">Guardar</button>
+              <button class="btn btn-danger" id="deleteProductBtn">Eliminar</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-backdrop hidden" id="clientModal">
+          <div class="modal">
+            <div class="toolbar">
+              <div class="tag-muted">Nuevo cliente</div>
+              <div class="toolbar-right">
+                <button class="btn btn-outline" id="closeClientModal" type="button">Cerrar</button>
+              </div>
+            </div>
+            <div class="section-title">Información del cliente</div>
+            <div class="row-2">
+              <div class="field">
+                <label>Nombre</label>
+                <input id="clientName" type="text" />
+              </div>
+            </div>
+            <div class="row-2">
+              <div class="field">
+                <label>RUC (opcional)</label>
+                <input id="clientRuc" type="text" />
+              </div>
+            </div>
+            <div class="actions">
+              <button class="btn btn-primary" id="saveClientBtn">Guardar</button>
+              <button class="btn btn-danger" id="deleteClientBtn">Eliminar</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-backdrop hidden" id="transportModal">
+          <div class="modal">
+            <div class="toolbar">
+              <div class="tag-muted">Nueva matrícula</div>
+              <div class="toolbar-right">
+                <button class="btn btn-outline" id="closeTransportModal" type="button">Cerrar</button>
+              </div>
+            </div>
+            <div class="section-title">Unidad de transporte</div>
+            <div class="row-2">
+              <div class="field">
+                <label>Matrícula</label>
+                <input id="transportPlate" type="text" />
+              </div>
+            </div>
+            <div class="actions">
+              <button class="btn btn-primary" id="saveTransportBtn">Guardar</button>
+              <button class="btn btn-danger" id="deleteTransportBtn">Eliminar</button>
+            </div>
+          </div>
+        </div>
+
+        </div>
+      </main>
+      </div>
+    </div>
+
+    <div id="ocrBandejaTools" class="hidden" aria-hidden="true">
+      <a href="#" id="ocrBandejaBtn">OCR Bandeja <span class="caret" id="ocrCaret">▾</span></a>
+      <div id="ocrBandejaPanel" class="dropdown-panel hidden"></div>
+    </div>
+
+    <script>
+      const productsBody = document.getElementById("productsBody");
+      const addRowBtn = document.getElementById("addRowBtn");
+      const adminLayout = document.getElementById("adminLayout");
+      const sidebarToggle = document.getElementById("sidebarToggle");
+      const ocrBandejaBtn = document.getElementById("ocrBandejaBtn");
+      const ocrBandejaPanel = document.getElementById("ocrBandejaPanel");
+      let cachedResults = [];
+      const sections = {
+        ocr: document.getElementById("section-ocr"),
+        clients: document.getElementById("section-clients"),
+        products: document.getElementById("section-products"),
+        constancias: document.getElementById("section-constancias"),
+        transports: document.getElementById("section-transports"),
+        analisis: document.getElementById("section-analisis"),
+        trazabilidad: document.getElementById("section-trazabilidad"),
+        trasiegos: document.getElementById("section-trasiegos"),
+      };
+      const trasiegosBody = document.getElementById("trasiegosBody");
+      const addTrasiegoRowBtn = document.getElementById("addTrasiegoRowBtn");
+      const trasiegosCount = document.getElementById("trasiegosCount");
+      let trasiegosSaveTimers = new Map();
+      const navLinks = document.querySelectorAll(".sidebar-nav a[data-target]");
+
+      const prodName = document.getElementById("prodName");
+      const prodOrigin = document.getElementById("prodOrigin");
+      const prodCode = document.getElementById("prodCode");
+      const prodUm = document.getElementById("prodUm");
+      const prodActive = document.getElementById("prodActive");
+      const prodLot = document.getElementById("prodLot");
+      const prodProduction = document.getElementById("prodProduction");
+      const prodExpiration = document.getElementById("prodExpiration");
+      const prodHumidity = document.getElementById("prodHumidity");
+      const prodBroken = document.getElementById("prodBroken");
+      const prodChalky1 = document.getElementById("prodChalky1");
+      const prodChalky2 = document.getElementById("prodChalky2");
+      const prodDamaged = document.getElementById("prodDamaged");
+      const prodWhiteness = document.getElementById("prodWhiteness");
+      const saveProductBtn = document.getElementById("saveProductBtn");
+      const deleteProductBtn = document.getElementById("deleteProductBtn");
+      const productsList = document.getElementById("productsList");
+      const productSearch = document.getElementById("productSearch");
+      const addProductBtn = document.getElementById("addProductBtn");
+      const productFormCard = document.getElementById("productModal");
+      const productListCard = document.getElementById("productListCard");
+      const productBulkAction = document.getElementById("productBulkAction");
+      const applyBulkBtn = document.getElementById("applyBulkBtn");
+      const selectAllProducts = document.getElementById("selectAllProducts");
+      const prevPageBtn = document.getElementById("prevPageBtn");
+      const nextPageBtn = document.getElementById("nextPageBtn");
+      const productCount = document.getElementById("productCount");
+      const closeProductModalBtn = document.getElementById("closeProductModal");
+      const productFormTitle = document.getElementById("productFormTitle");
+      let currentProductId = null;
+      let allProducts = [];
+      let filteredProducts = [];
+      let selectedProductIds = new Set();
+      let currentPage = 1;
+      const pageSize = 12;
+      let sortKey = "id";
+      let sortDir = "desc";
+      const constanciaClienteInput = document.getElementById("constanciaClienteInput");
+      const constanciaTransporteInput = document.getElementById("constanciaTransporteInput");
+      const constanciaFumigacion = document.getElementById("constanciaFumigacion");
+      const constanciaCalidad = document.getElementById("constanciaCalidad");
+      const clientesList = document.getElementById("clientesList");
+      const transportesList = document.getElementById("transportesList");
+      const constanciaNumero = document.getElementById("constanciaNumero");
+      const constanciaFecha = document.getElementById("constanciaFecha");
+      const saveBtn = document.getElementById("saveBtn");
+      const reserveBtn = document.getElementById("reserveBtn");
+      const cancelBtn = document.getElementById("cancelBtn");
+      const constanciaSearch = document.getElementById("constanciaSearch");
+      const constanciaBulkAction = document.getElementById("constanciaBulkAction");
+      const constanciaApplyBtn = document.getElementById("constanciaApplyBtn");
+      const selectAllConstancias = document.getElementById("selectAllConstancias");
+      const constanciasList = document.getElementById("constanciasList");
+      const traceSearchInput = document.getElementById("traceSearchInput");
+      const traceSearchType = document.getElementById("traceSearchType");
+      const traceList = document.getElementById("traceList");
+      const traceCount = document.getElementById("traceCount");
+      let allConstancias = [];
+      let filteredConstancias = [];
+      let selectedConstancias = new Set();
+      let currentConstanciaStatus = "confirmada";
+      let currentConstanciaId = null;
+      let suppressOcrReset = false;
+
+      const addClientBtn = document.getElementById("addClientBtn");
+      const clientsList = document.getElementById("clientsList");
+      const clientModal = document.getElementById("clientModal");
+      const closeClientModalBtn = document.getElementById("closeClientModal");
+      const clientName = document.getElementById("clientName");
+      const clientRuc = document.getElementById("clientRuc");
+      const saveClientBtn = document.getElementById("saveClientBtn");
+      const deleteClientBtn = document.getElementById("deleteClientBtn");
+      let currentClientId = null;
+      let allClients = [];
+
+      const addTransportBtn = document.getElementById("addTransportBtn");
+      const transportsList = document.getElementById("transportsList");
+      const transportModal = document.getElementById("transportModal");
+      const closeTransportModalBtn = document.getElementById("closeTransportModal");
+      const transportPlate = document.getElementById("transportPlate");
+      const saveTransportBtn = document.getElementById("saveTransportBtn");
+      const deleteTransportBtn = document.getElementById("deleteTransportBtn");
+      let currentTransportId = null;
+      let allTransports = [];
+
+      const analysisFile = document.getElementById("analysisFile");
+      const analysisStore = document.getElementById("analysisStore");
+      const analysisRows = document.getElementById("analysisRows");
+      const analysisSummary = document.getElementById("analysisSummary");
+      const analysisSheetBtn = document.getElementById("analysisSheetBtn");
+      const analysisApplyBtn = document.getElementById("analysisApplyBtn");
+      let analysisData = [];
+      let analysisStores = [];
+      let analysisMeta = {};
+      let analysisStoreNames = {};
+
+      function addRow(productValue = "") {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td class="itemCell"></td>
+          <td><input type="text" class="product-input" value="${productValue.replace(/"/g, "&quot;")}" placeholder="Buscar producto..." autocomplete="off" /></td>
+          <td><input type="text" placeholder="-" /></td>
+          <td><input type="text" placeholder="Ej: DIC25" /></td>
+          <td><input type="text" placeholder="Ej: AGO26" /></td>
+          <td><input type="number" min="1" value="1" /></td>
+          <td><button class="btn btn-danger btn-sm">🗑</button></td>
+        `;
+        const itemCell = row.querySelector(".itemCell");
+        itemCell.innerHTML = `<span class="row-number"></span> <button class="btn btn-success btn-mini" type="button">+</button>`;
+        itemCell.querySelector(".btn-mini").addEventListener("click", () => {
+          insertRowAfter(row);
+        });
+        const deleteBtn = row.querySelector(".btn-danger");
+        deleteBtn.addEventListener("click", () => {
+          row.remove();
+          reindexRows();
+        });
+        productsBody.appendChild(row);
+        reindexRows();
+        return row;
+      }
+
+      function insertRowAfter(targetRow) {
+        const newRow = document.createElement("tr");
+        newRow.innerHTML = `
+          <td class="itemCell"></td>
+          <td><input type="text" class="product-input" placeholder="Buscar producto..." autocomplete="off" /></td>
+          <td><input type="text" placeholder="-" /></td>
+          <td><input type="text" placeholder="Ej: DIC25" /></td>
+          <td><input type="text" placeholder="Ej: AGO26" /></td>
+          <td><input type="number" min="1" value="1" /></td>
+          <td><button class="btn btn-danger btn-sm">🗑</button></td>
+        `;
+        const itemCell = newRow.querySelector(".itemCell");
+        itemCell.innerHTML = `<span class="row-number"></span> <button class="btn btn-success btn-mini" type="button">+</button>`;
+        itemCell.querySelector(".btn-mini").addEventListener("click", () => {
+          insertRowAfter(newRow);
+        });
+        const deleteBtn = newRow.querySelector(".btn-danger");
+        deleteBtn.addEventListener("click", () => {
+          newRow.remove();
+          reindexRows();
+        });
+        targetRow.insertAdjacentElement("afterend", newRow);
+        reindexRows();
+      }
+
+      function reindexRows() {
+        [...productsBody.querySelectorAll("tr")].forEach((tr, idx) => {
+          tr.querySelector(".row-number").textContent = String(idx + 1);
+        });
+      }
+
+      function normalizeHeader(value) {
+        return (value || "")
+          .toString()
+          .trim()
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+      }
+
+      function normalizeProductKey(value) {
+        return (value || "")
+          .toString()
+          .trim()
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "");
+      }
+
+      function normalizeSearchText(value) {
+        return (value || "")
+          .toString()
+          .trim()
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      function escapeRegExp(value) {
+        return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }
+
+      const productAutocomplete = {
+        input: null,
+        items: [],
+        activeIndex: -1,
+        dropdown: null,
+        blurTimer: null,
+      };
+
+      function getProductMatches(query) {
+        if (!allProducts.length) return [];
+        const rawQuery = (query || "").toString().trim();
+        if (!rawQuery) return [];
+        const normalizedQuery = normalizeSearchText(rawQuery);
+        if (!normalizedQuery) return [];
+        const isNumeric = /^[0-9]+([.,][0-9]+)?$/.test(rawQuery);
+        const numberToken = isNumeric ? rawQuery.replace(",", ".") : "";
+        const numberRegex = isNumeric
+          ? new RegExp(`\\b${escapeRegExp(numberToken)}\\s*(kg|kilo|kilos)\\b`, "i")
+          : null;
+        const exactNumberRegex = isNumeric ? new RegExp(`\\b${escapeRegExp(numberToken)}\\b`) : null;
+        const matches = [];
+        for (const prod of allProducts) {
+          const name = (prod.name || "").trim();
+          if (!name) continue;
+          const normalizedName = normalizeSearchText(name);
+          let ok = false;
+          if (isNumeric) {
+            ok = numberRegex?.test(normalizedName) || exactNumberRegex?.test(normalizedName);
+          } else {
+            ok = normalizedName.includes(normalizedQuery);
+          }
+          if (ok) matches.push(name);
+          if (matches.length >= 30) break;
+        }
+        return matches;
+      }
+
+      function ensureProductAutocompleteDropdown() {
+        if (productAutocomplete.dropdown) return productAutocomplete.dropdown;
+        const dropdown = document.createElement("div");
+        dropdown.id = "productAutocomplete";
+        dropdown.className = "product-autocomplete hidden";
+        dropdown.setAttribute("role", "listbox");
+        dropdown.addEventListener("mousedown", (event) => {
+          event.preventDefault();
+          const item = event.target.closest("[data-index]");
+          if (!item) return;
+          selectProductAutocompleteItem(Number(item.dataset.index));
+        });
+        document.body.appendChild(dropdown);
+        productAutocomplete.dropdown = dropdown;
+        return dropdown;
+      }
+
+      function hideProductAutocomplete() {
+        if (productAutocomplete.blurTimer) {
+          clearTimeout(productAutocomplete.blurTimer);
+          productAutocomplete.blurTimer = null;
+        }
+        if (productAutocomplete.dropdown) {
+          productAutocomplete.dropdown.classList.add("hidden");
+          productAutocomplete.dropdown.innerHTML = "";
+        }
+        productAutocomplete.input = null;
+        productAutocomplete.items = [];
+        productAutocomplete.activeIndex = -1;
+      }
+
+      function isProductAutocompleteOpen() {
+        return Boolean(
+          productAutocomplete.dropdown &&
+            !productAutocomplete.dropdown.classList.contains("hidden") &&
+            productAutocomplete.items.length
+        );
+      }
+
+      function renderProductAutocomplete() {
+        const dropdown = ensureProductAutocompleteDropdown();
+        dropdown.innerHTML = productAutocomplete.items
+          .map((name, index) => {
+            const active = index === productAutocomplete.activeIndex ? " active" : "";
+            const safe = name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+            return `<div class="product-autocomplete-item${active}" data-index="${index}" role="option">${safe}</div>`;
+          })
+          .join("");
+      }
+
+      function positionProductAutocomplete(input) {
+        const dropdown = ensureProductAutocompleteDropdown();
+        const rect = input.getBoundingClientRect();
+        dropdown.style.left = `${Math.max(8, rect.left)}px`;
+        dropdown.style.top = `${rect.bottom + 4}px`;
+        dropdown.style.width = `${Math.max(rect.width, 280)}px`;
+      }
+
+      function showProductAutocomplete(input) {
+        const matches = getProductMatches(input.value || "");
+        if (!matches.length) {
+          hideProductAutocomplete();
+          return;
+        }
+        productAutocomplete.input = input;
+        productAutocomplete.items = matches;
+        productAutocomplete.activeIndex = -1;
+        const dropdown = ensureProductAutocompleteDropdown();
+        renderProductAutocomplete();
+        positionProductAutocomplete(input);
+        dropdown.classList.remove("hidden");
+      }
+
+      function moveProductAutocompleteHighlight(delta) {
+        if (!productAutocomplete.items.length) return;
+        if (productAutocomplete.activeIndex < 0 && delta > 0) {
+          productAutocomplete.activeIndex = 0;
+        } else {
+          let next = productAutocomplete.activeIndex + delta;
+          if (next < 0) next = productAutocomplete.items.length - 1;
+          if (next >= productAutocomplete.items.length) next = 0;
+          productAutocomplete.activeIndex = next;
+        }
+        renderProductAutocomplete();
+        const dropdown = productAutocomplete.dropdown;
+        const activeEl = dropdown?.querySelector(".product-autocomplete-item.active");
+        activeEl?.scrollIntoView({ block: "nearest" });
+      }
+
+      function focusNextProductInput(currentInput) {
+        const row = currentInput.closest("tr");
+        if (!row) return;
+        let nextRow = row.nextElementSibling;
+        if (!nextRow || !nextRow.querySelector(".product-input")) {
+          nextRow = addRow();
+        }
+        const nextInput = nextRow.querySelector(".product-input");
+        if (nextInput) {
+          nextInput.focus();
+          nextInput.select?.();
+        }
+      }
+
+      function selectProductAutocompleteItem(index) {
+        const input = productAutocomplete.input;
+        if (!input || index < 0 || index >= productAutocomplete.items.length) return;
+        const selectedName = productAutocomplete.items[index];
+        input.value = selectedName;
+        hideProductAutocomplete();
+        const row = input.closest("tr");
+        if (row) applyProductDetailsForRow(row);
+        const value = input.value || "";
+        if (value.trim() && !isKnownProduct(value)) {
+          promptNewProduct(value, input);
+        }
+        focusNextProductInput(input);
+      }
+
+      function detectDelimiter(sample) {
+        const candidates = [",", ";", "\t", "|"];
+        let best = ",";
+        let bestCount = 0;
+        candidates.forEach((sep) => {
+          const count = (sample.match(new RegExp(`\\${sep}`, "g")) || []).length;
+          if (count > bestCount) {
+            bestCount = count;
+            best = sep;
+          }
+        });
+        return best;
+      }
+
+      function parseCSV(text) {
+        const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+        const nonEmpty = lines.filter((line) => line.trim().length > 0);
+        if (!nonEmpty.length) return [];
+        const delimiter = detectDelimiter(nonEmpty[0]);
+        const rows = [];
+        let row = [];
+        let field = "";
+        let inQuotes = false;
+        for (let i = 0; i < text.length; i++) {
+          const char = text[i];
+          const next = text[i + 1];
+          if (char === '"') {
+            if (inQuotes && next === '"') {
+              field += '"';
+              i++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (char === delimiter && !inQuotes) {
+            row.push(field);
+            field = "";
+          } else if ((char === "\n" || char === "\r") && !inQuotes) {
+            if (field.length || row.length) {
+              row.push(field);
+              rows.push(row);
+              row = [];
+              field = "";
+            }
+          } else {
+            field += char;
+          }
+        }
+        if (field.length || row.length) {
+          row.push(field);
+          rows.push(row);
+        }
+        return rows;
+      }
+
+      function extractStoreName(value) {
+        if (!value) return "";
+        let text = value.toString().trim();
+        if (!text) return "";
+        text = text.replace(/\b(JR\.?|AV\.?|CARRETERA|CALLE|URB\.?|S\/N)\b.*$/i, "").trim();
+        if (text.includes(",")) {
+          const parts = text.split(",").map((item) => item.trim()).filter(Boolean);
+          return parts[parts.length - 1] || text;
+        }
+        return text;
+      }
+
+      function extractStoreNameFromRow(row) {
+        if (!row) return "";
+        const joined = row.map((cell) => (cell || "").toString()).join(" ");
+        const match = joined.match(/"([^"]+)"\s*$/) || joined.match(/(MAKRO\s+[A-ZÑ\s]+|PLAZA\s+[A-ZÑ\s]+|METRO\s+[A-ZÑ\s]+|VIVANDA\s+[A-ZÑ\s]+)/i);
+        if (match && match[1]) {
+          return match[1].trim().replace(/\s{2,}/g, " ");
+        }
+        return "";
+      }
+
+      function buildAnalysisRows(rows, resetMeta = true) {
+        if (!rows.length) return [];
+        const headers = rows[0].map((cell) => normalizeHeader(cell));
+        const indexOf = (keywords) => headers.findIndex((h) => keywords.some((key) => h.includes(key)));
+        const hasHeader = headers.some((h) =>
+          [
+            "codigo",
+            "descripcion",
+            "producto",
+            "cantidad",
+            "cod_spsa",
+            "descripcion_producto",
+            "sku_empaque",
+            "empaque",
+            "precio_lista",
+            "precio_final_neto",
+            "cod_local_entrega",
+            "nom_local_entrega",
+          ].includes(h)
+        );
+        const storeIdx = indexOf(["tienda", "cliente", "coment", "sucursal", "local", "nom_local_entrega"]);
+        const storeCodeIdx = indexOf(["cod_local_entrega", "cod tienda", "codigo tienda", "cod. tienda", "tienda codigo"]);
+        const storeNameIdx = indexOf(["nom_local_entrega", "nombre tienda", "tienda nombre", "sucursal nombre", "local nombre", "tienda"]);
+        const codeIdx = indexOf(["codigo", "cod"]);
+        const productIdx = indexOf(["descripcion", "producto", "articulo", "detalle"]);
+        const qtyIdx = indexOf(["cantidad", "cant", "qty"]);
+        const unitIdx = indexOf(["unidad", "um", "und"]);
+        const priceIdx = indexOf(["p. unit", "precio", "precio unit", "precio u", "p unit"]);
+        const subtotalIdx = indexOf(["subtotal", "importe", "monto"]);
+        const orderIdx = indexOf(["orden", "orden venta", "ov"]);
+        const dateIdx = indexOf(["fecha"]);
+        const currencyIdx = indexOf(["moneda"]);
+        const paymentIdx = indexOf(["forma de pago", "pago"]);
+        const clientIdx = indexOf(["cliente"]);
+
+        const data = [];
+        if (resetMeta) {
+          analysisMeta = {
+            order: "",
+            date: "",
+            currency: "",
+            payment: "",
+            client: "",
+            oc: "",
+            storeName: "",
+          };
+          analysisStoreNames = {};
+        }
+        const startIndex = hasHeader ? 1 : 0;
+        for (let i = startIndex; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || row.length === 0) continue;
+          const fixedStoreCode = row[3] || "";
+          const fixedStoreName = row[4] || "";
+          const fallbackStoreCode = row[20] || "";
+          const fallbackStoreName = row[21] || "";
+          const storeRaw = hasHeader && storeIdx >= 0 ? row[storeIdx] : "";
+          const storeCode =
+            fixedStoreCode ||
+            (hasHeader && storeCodeIdx >= 0 ? row[storeCodeIdx] : fallbackStoreCode);
+          const storeName =
+            fixedStoreName ||
+            (hasHeader && storeNameIdx >= 0 ? row[storeNameIdx] : fallbackStoreName);
+          if (
+            (storeCode || "").toString().trim().toUpperCase() === "COD_LOCAL_ENTREGA" ||
+            (storeName || "").toString().trim().toUpperCase() === "NOM_LOCAL_ENTREGA"
+          ) {
+            continue;
+          }
+          const nameFromColumn = extractStoreName(storeName);
+          let store = extractStoreName(nameFromColumn || storeRaw || "Sin tienda");
+          if (storeCode) {
+            const cleanedCode = storeCode.toString().trim();
+            if (storeName && !analysisStoreNames[cleanedCode]) {
+              analysisStoreNames[cleanedCode] = extractStoreName(storeName);
+            }
+            if (cleanedCode) {
+              const named = analysisStoreNames[cleanedCode] || store;
+              store = `${named} ${cleanedCode}`;
+            }
+          }
+          let code = hasHeader && codeIdx >= 0 ? row[codeIdx] : row[8] || "";
+          let product = hasHeader && productIdx >= 0 ? row[productIdx] : row[11] || "";
+          let um = "";
+          if (product && allProducts.length) {
+            const target = normalizeProductKey(product);
+            const match = allProducts.find((prod) => {
+              const originKey = normalizeProductKey(prod.origin || "");
+              const nameKey = normalizeProductKey(prod.name || "");
+              return originKey === target || nameKey === target;
+            });
+            if (match && match.name) {
+              product = match.name;
+            }
+            if (match && match.code) {
+              code = match.code;
+            }
+            if (match && match.um) {
+              um = match.um;
+            }
+          }
+          if (storeCode && code && code.toString().trim() === storeCode.toString().trim()) {
+            code = "";
+          }
+          const rawQty = hasHeader && qtyIdx >= 0 ? row[qtyIdx] : row[22] || "";
+          const qty = extractQtyInt(rawQty);
+          const unit = hasHeader && unitIdx >= 0 ? row[unitIdx] : row[11] || "";
+          const price = hasHeader && priceIdx >= 0 ? row[priceIdx] : row[14] || "";
+          const subtotal = hasHeader && subtotalIdx >= 0 ? row[subtotalIdx] : row[18] || "";
+          if (hasHeader) {
+            if (orderIdx >= 0 && row[orderIdx] && !analysisMeta.order) analysisMeta.order = row[orderIdx];
+            if (dateIdx >= 0 && row[dateIdx] && !analysisMeta.date) analysisMeta.date = row[dateIdx];
+            if (currencyIdx >= 0 && row[currencyIdx] && !analysisMeta.currency) analysisMeta.currency = row[currencyIdx];
+            if (paymentIdx >= 0 && row[paymentIdx] && !analysisMeta.payment) analysisMeta.payment = row[paymentIdx];
+            if (clientIdx >= 0 && row[clientIdx] && !analysisMeta.client) analysisMeta.client = row[clientIdx];
+          } else {
+            if (!analysisMeta.oc && row[1]) analysisMeta.oc = row[1];
+            if (!analysisMeta.client && row[0]) analysisMeta.client = row[0];
+            if (!analysisMeta.date && row[6]) analysisMeta.date = row[6];
+            if (!analysisMeta.order && row[8]) analysisMeta.order = row[8];
+            if (!analysisMeta.storeName && (storeName || storeHint)) {
+              analysisMeta.storeName = extractStoreName(storeName || storeHint);
+            }
+          }
+          const hasContent = [code, product, qty, unit, price, subtotal].some((val) => (val || "").toString().trim());
+          if (!hasContent) continue;
+          data.push({ store, code, product, um, qty, unit, price, subtotal });
+        }
+        const merged = new Map();
+        data.forEach((row) => {
+          const key = `${row.store}||${(row.product || "").toString().trim().toLowerCase()}||${(row.code || "").toString().trim().toLowerCase()}`;
+          const existing = merged.get(key);
+          if (!existing) {
+            merged.set(key, { ...row });
+            return;
+          }
+          const qtySum = qtyToNumber(existing.qty) + qtyToNumber(row.qty);
+          existing.qty = qtySum ? String(qtySum) : row.qty;
+          if (!existing.um && row.um) {
+            existing.um = row.um;
+          }
+        });
+        return Array.from(merged.values());
+      }
+
+      function renderAnalysisStores() {
+        analysisStore.innerHTML = `<option value="">Selecciona una tienda</option>`;
+        analysisStores.forEach((store) => {
+          const option = document.createElement("option");
+          option.value = store;
+          const match = store.match(/^(.+)\s+(\d+)$/);
+          if (match) {
+            option.textContent = `${match[1]} ${match[2]}`;
+          } else if (/^\d+$/.test(store) && analysisStoreNames[store]) {
+            option.textContent = `${analysisStoreNames[store]} ${store}`;
+          } else {
+            option.textContent = store;
+          }
+          analysisStore.appendChild(option);
+        });
+      }
+
+      function renderAnalysisRows() {
+        const selectedStore = analysisStore.value;
+        const rows = analysisData.filter((row) => !selectedStore || row.store === selectedStore);
+        analysisRows.innerHTML = "";
+        rows.forEach((row, idx) => {
+          const tr = document.createElement("tr");
+          const qtyValue = row.qty ? String(qtyToNumber(row.qty)) : "";
+          tr.innerHTML = `
+            <td style="text-align:center;">${idx + 1}</td>
+            <td>${row.code || ""}</td>
+            <td>${row.product || ""}</td>
+            <td>${row.um || ""}</td>
+            <td>${qtyValue}</td>
+            <td>${row.price || ""}</td>
+          `;
+          analysisRows.appendChild(tr);
+        });
+        const totalStores = analysisStores.length;
+        analysisSummary.textContent = `Tiendas: ${totalStores} · Registros: ${rows.length}`;
+      }
+
+      function extractStoreNameOnly(value) {
+        if (!value) return "";
+        const text = value.toString().trim();
+        const match = text.match(/^(.+?)\s+\d+$/);
+        return match ? match[1].trim() : text;
+      }
+
+      function formatClientFromStore(name) {
+        const clean = extractStoreNameOnly(name);
+        if (!clean) return "";
+        const upper = clean.toUpperCase();
+        const parts = clean.split(/\s+/);
+        if (parts.length >= 2 && parts[0].toUpperCase() === "MAKRO") {
+          const rest = parts.slice(1).join(" ");
+          const base = `MAKRO - ${rest}`;
+          return upper.includes("SPSA") ? base : `${base} - SPSA`;
+        }
+        return upper.includes("SPSA") ? clean : `${clean} - SPSA`;
+      }
+
+      function toNumber(value) {
+        if (value === null || value === undefined) return 0;
+        const cleaned = value.toString().replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", ".");
+        const num = Number(cleaned);
+        return Number.isFinite(num) ? num : 0;
+      }
+
+      function formatNumber(value) {
+        return value.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+
+      function extractQtyInt(value) {
+        if (value === null || value === undefined) return "";
+        const text = value.toString().trim();
+        if (!text) return "";
+        const normalized = text.replace(",", ".");
+        const match = normalized.match(/-?\d+/);
+        if (!match) return "";
+        return String(parseInt(match[0], 10));
+      }
+
+      function qtyToNumber(value) {
+        const parsed = extractQtyInt(value);
+        if (!parsed) return 0;
+        const num = Number(parsed);
+        return Number.isFinite(num) ? num : 0;
+      }
+
+      function openAnalysisSheet() {
+        const selectedStore = analysisStore.value;
+        if (!selectedStore) {
+          alert("Selecciona una tienda para abrir la hoja.");
+          return;
+        }
+        const rows = analysisData.filter((row) => row.store === selectedStore);
+        if (!rows.length) {
+          alert("No hay registros para esa tienda.");
+          return;
+        }
+        const subtotalSum = rows.reduce((acc, row) => acc + toNumber(row.subtotal), 0);
+        const igv = subtotalSum * 0.18;
+        const total = subtotalSum + igv;
+        const meta = {
+          store: selectedStore,
+          date: new Date().toLocaleDateString("es-PE"),
+        };
+
+        const sheetHtml = `
+          <!doctype html>
+          <html lang="es">
+            <head>
+              <meta charset="utf-8" />
+              <title>Hoja de venta</title>
+              <style>
+                body { font-family: Arial, sans-serif; margin: 0; color: #111; background: #f3f4f6; }
+                .page { width: 210mm; height: 297mm; margin: 16px auto; background: #fff; box-shadow: 0 10px 30px rgba(0,0,0,0.12); padding: 18mm 16mm; box-sizing: border-box; }
+                .top { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+                .box { border: 1px solid #111; padding: 6px 8px; font-size: 10px; }
+                table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; }
+                th, td { border: 1px solid #111; padding: 3px 4px; }
+                th:nth-child(1), td:nth-child(1) { text-align: center; white-space: nowrap; }
+                th:nth-child(2), td:nth-child(2) { white-space: nowrap; }
+                th:nth-child(3), td:nth-child(3) { word-break: break-word; }
+                th:nth-child(4), td:nth-child(4) { text-align: center; white-space: nowrap; }
+                th:nth-child(5), td:nth-child(5) { text-align: right; white-space: nowrap; }
+                th:nth-child(6), td:nth-child(6) { text-align: right; white-space: nowrap; }
+                th { background: #f3f4f6; text-align: center; }
+                .print-bar { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px; position: sticky; top: 0; background: #f3f4f6; z-index: 10; }
+                .btn { padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; font-weight: 600; }
+                @media print {
+                  body { background: #fff; }
+                  .print-bar { display: none; }
+                  .page { margin: 0; box-shadow: none; }
+                }
+              </style>
+            </head>
+            <body>
+              <div class="print-bar">
+                <button class="btn" onclick="window.print()">Imprimir</button>
+              </div>
+              <div class="page">
+                <div class="top">
+                  <div class="box">
+                    <div><strong>Tienda:</strong> ${meta.store}</div>
+                  </div>
+                  <div class="box">
+                    <div><strong>Fecha:</strong> ${meta.date}</div>
+                  </div>
+                </div>
+                <table>
+                  <colgroup>
+                    <col style="width: 24px;" />
+                    <col style="width: 60px;" />
+                    <col />
+                    <col style="width: 36px;" />
+                    <col style="width: 40px;" />
+                    <col style="width: 60px;" />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th style="width:24px;">N°</th>
+                      <th style="width:60px;">Código</th>
+                      <th>Descripción</th>
+                      <th style="width:36px;">U.M</th>
+                      <th style="width:40px;">Cant.</th>
+                      <th style="width:60px;">P. Unit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${rows
+                      .map(
+                        (row, idx) => `
+                      <tr>
+                        <td style="text-align:center;">${idx + 1}</td>
+                        <td>${row.code || ""}</td>
+                        <td>${row.product || ""}</td>
+                        <td style="text-align:center;">${row.um || ""}</td>
+                        <td style="text-align:right;">${row.qty || ""}</td>
+                        <td style="text-align:right;">${row.price || ""}</td>
+                      </tr>
+                    `
+                      )
+                      .join("")}
+                  </tbody>
+                </table>
+              </div>
+            </body>
+          </html>
+        `;
+        const win = window.open("", "_blank");
+        if (!win) {
+          alert("El navegador bloqueó la ventana emergente.");
+          return;
+        }
+        win.document.open();
+        win.document.write(sheetHtml);
+        win.document.close();
+      }
+
+      if (analysisFile) {
+        analysisFile.addEventListener("change", async (event) => {
+          const files = Array.from(event.target.files || []);
+          if (!files.length) return;
+          if (files.length > 3) {
+            alert("Máximo 3 archivos CSV.");
+            analysisFile.value = "";
+            return;
+          }
+          analysisData = [];
+          let isFirst = true;
+          for (const file of files) {
+            const text = await file.text();
+            const rows = parseCSV(text);
+            const parsed = buildAnalysisRows(rows, isFirst);
+            analysisData = analysisData.concat(parsed);
+            isFirst = false;
+          }
+          analysisStores = [...new Set(analysisData.map((row) => row.store))].filter(Boolean);
+          analysisStores = analysisStores.map((store) => {
+            if (/^\d+$/.test(store) && analysisStoreNames[store]) {
+              return `${analysisStoreNames[store]} ${store}`;
+            }
+            return store;
+          });
+          renderAnalysisStores();
+          renderAnalysisRows();
+        });
+      }
+
+      if (analysisStore) {
+        analysisStore.addEventListener("change", () => {
+          renderAnalysisRows();
+        });
+      }
+
+      if (analysisSheetBtn) {
+        analysisSheetBtn.addEventListener("click", () => {
+          openAnalysisSheet();
+        });
+      }
+
+      if (analysisApplyBtn) {
+        analysisApplyBtn.addEventListener("click", () => {
+          const selectedStore = analysisStore.value;
+          if (!selectedStore) {
+            alert("Selecciona una tienda para aplicar a la constancia.");
+            return;
+          }
+          const rows = analysisData.filter((row) => row.store === selectedStore);
+          if (!rows.length) {
+            alert("No hay productos para esa tienda.");
+            return;
+          }
+          const clientName = formatClientFromStore(selectedStore);
+          const products = rows
+            .map((row) => ({ name: row.product, qty: row.qty }))
+            .filter((row) => row.name);
+          suppressOcrReset = true;
+          showSection("section-ocr");
+          resetConstanciaForm();
+          constanciaClienteInput.value = clientName;
+          fillProductsWithQty(products);
+        });
+      }
+
+      function fillProducts(lines) {
+        productsBody.innerHTML = "";
+        lines.forEach((line) => addRow(line));
+        applyProductDetailsFromCatalog();
+      }
+
+      function fillProductsWithQty(items) {
+        productsBody.innerHTML = "";
+        items.forEach((item) => {
+          const row = addRow(item.name || "");
+          if (row && item.qty) {
+            const qtyInput = row.querySelector('input[type="number"]');
+            if (qtyInput) {
+              qtyInput.value = item.qty;
+            }
+          }
+        });
+        applyProductDetailsFromCatalog();
+      }
+
+      function getProductByName(name) {
+        const target = name.trim().toLowerCase();
+        if (!target) return null;
+        return allProducts.find((prod) => (prod.name || "").trim().toLowerCase() === target) || null;
+      }
+
+      function isKnownProduct(value) {
+        const key = normalizeProductKey(value || "");
+        if (!key) return false;
+        return allProducts.some((prod) => {
+          const nameKey = normalizeProductKey(prod.name || "");
+          const originKey = normalizeProductKey(prod.origin || "");
+          return key === nameKey || key === originKey;
+        });
+      }
+
+      function promptNewProduct(productName, inputEl) {
+        const trimmed = (productName || "").trim();
+        if (!trimmed) return;
+        const normalized = normalizeProductKey(trimmed);
+        if (inputEl?.dataset.promptedValue === normalized) return;
+        inputEl.dataset.promptedValue = normalized;
+        showConfirmModal(`Este producto es nuevo: "${trimmed}". ¿Deseas guardarlo en el catálogo?`, () => {
+          clearProductForm();
+          prodName.value = trimmed;
+          openProductModal();
+          prodName.focus();
+        });
+      }
+
+      function applyProductDetailsForRow(tr) {
+        if (!allProducts.length) return;
+        if (currentConstanciaId) return;
+        const inputs = tr.querySelectorAll("input");
+        const productInput = inputs[0];
+        if (!productInput) return;
+        const match = getProductByName(productInput.value || "");
+        if (!match) return;
+        if (inputs[1] && !inputs[1].value) inputs[1].value = match.lot || "";
+        if (inputs[2] && !inputs[2].value) inputs[2].value = match.production_text || "";
+        if (inputs[3] && !inputs[3].value) inputs[3].value = match.expiration_text || "";
+      }
+
+      function applyProductDetailsFromCatalog() {
+        if (!allProducts.length) return;
+        if (currentConstanciaId) return;
+        [...productsBody.querySelectorAll("tr")].forEach((tr) => {
+          applyProductDetailsForRow(tr);
+        });
+      }
+
+      function moveToCell(currentInput, rowDelta, colDelta) {
+        const row = currentInput.closest("tr");
+        if (!row) return;
+        const inputs = Array.from(row.querySelectorAll("input"));
+        const colIndex = inputs.indexOf(currentInput);
+        if (colIndex === -1) return;
+        const targetRow = rowDelta === 0 ? row : (rowDelta > 0 ? row.nextElementSibling : row.previousElementSibling);
+        if (!targetRow) return;
+        const targetInputs = Array.from(targetRow.querySelectorAll("input"));
+        const targetIndex = Math.min(Math.max(colIndex + colDelta, 0), targetInputs.length - 1);
+        const target = targetInputs[targetIndex];
+        if (target) {
+          target.focus();
+          target.select?.();
+        }
+      }
+
+      productsBody.addEventListener("keydown", (event) => {
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement)) return;
+
+        if (input.classList.contains("product-input") && isProductAutocompleteOpen()) {
+          const key = event.key;
+          if (key === "ArrowDown") {
+            event.preventDefault();
+            moveProductAutocompleteHighlight(1);
+            return;
+          }
+          if (key === "ArrowUp") {
+            event.preventDefault();
+            moveProductAutocompleteHighlight(-1);
+            return;
+          }
+          if (key === "Enter") {
+            event.preventDefault();
+            const index =
+              productAutocomplete.activeIndex >= 0 ? productAutocomplete.activeIndex : 0;
+            selectProductAutocompleteItem(index);
+            return;
+          }
+          if (key === "Escape") {
+            event.preventDefault();
+            hideProductAutocomplete();
+            return;
+          }
+        }
+
+        const key = event.key;
+        if (key === "Enter") {
+          event.preventDefault();
+          moveToCell(input, 1, 0);
+        } else if (key === "ArrowDown") {
+          if (input.classList.contains("product-input")) {
+            const matches = getProductMatches(input.value || "");
+            if (matches.length) {
+              event.preventDefault();
+              showProductAutocomplete(input);
+              moveProductAutocompleteHighlight(1);
+              return;
+            }
+          }
+          event.preventDefault();
+          moveToCell(input, 1, 0);
+        } else if (key === "ArrowUp") {
+          if (input.classList.contains("product-input")) {
+            const matches = getProductMatches(input.value || "");
+            if (matches.length) {
+              event.preventDefault();
+              showProductAutocomplete(input);
+              moveProductAutocompleteHighlight(-1);
+              return;
+            }
+          }
+          event.preventDefault();
+          moveToCell(input, -1, 0);
+        } else if (key === "ArrowRight") {
+          event.preventDefault();
+          moveToCell(input, 0, 1);
+        } else if (key === "ArrowLeft") {
+          event.preventDefault();
+          moveToCell(input, 0, -1);
+        }
+      });
+
+      productsBody.addEventListener("input", (event) => {
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement)) return;
+        if (!input.classList.contains("product-input")) return;
+        showProductAutocomplete(input);
+      });
+
+      productsBody.addEventListener("focusin", (event) => {
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement)) return;
+        if (!input.classList.contains("product-input")) return;
+        showProductAutocomplete(input);
+      });
+
+      productsBody.addEventListener("focusout", (event) => {
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement)) return;
+        if (!input.classList.contains("product-input")) return;
+        productAutocomplete.blurTimer = setTimeout(() => {
+          hideProductAutocomplete();
+        }, 120);
+      });
+
+      window.addEventListener("resize", () => {
+        if (productAutocomplete.input && isProductAutocompleteOpen()) {
+          positionProductAutocomplete(productAutocomplete.input);
+        }
+      });
+
+      productsBody.addEventListener("change", (event) => {
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement)) return;
+        if (!input.classList.contains("product-input")) return;
+        const row = input.closest("tr");
+        if (row) applyProductDetailsForRow(row);
+        const value = input.value || "";
+        if (value.trim() && !isKnownProduct(value)) {
+          promptNewProduct(value, input);
+        }
+      });
+
+      async function loadResults() {
+        try {
+          const res = await fetch("/api/results");
+          const data = await res.json();
+          if (!res.ok) {
+            return;
+          }
+          cachedResults = data.results || [];
+          renderBandeja(cachedResults);
+        } catch (err) {
+        }
+      }
+
+      function renderBandeja(results) {
+        ocrBandejaPanel.innerHTML = "";
+        if (!results.length) {
+          ocrBandejaPanel.textContent = "Sin resultados.";
+          return;
+        }
+        results.forEach((item, index) => {
+          const row = document.createElement("div");
+          row.className = "ocr-id-item";
+          const left = document.createElement("div");
+          const labelText = item.label_text || item.label || item.labelText || "";
+          const label = labelText ? ` (<span class="label-red">${labelText}</span>)` : "";
+          left.innerHTML = `<strong>ID ${item.id}${label}</strong><div class="small">${item.created_at}</div>`;
+          const right = document.createElement("div");
+          const viewBtn = document.createElement("button");
+          viewBtn.className = "btn btn-outline";
+          viewBtn.textContent = "Ver";
+          viewBtn.addEventListener("click", () => openModal(item));
+          right.appendChild(viewBtn);
+          row.appendChild(left);
+          row.appendChild(right);
+          ocrBandejaPanel.appendChild(row);
+        });
+      }
+
+      addRowBtn.addEventListener("click", () => addRow());
+      const ocrCaret = document.getElementById("ocrCaret");
+      function toggleBandeja(event) {
+        if (event) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        loadResults();
+        const isHidden = ocrBandejaPanel.classList.toggle("hidden");
+        if (isHidden) {
+          ocrBandejaBtn.classList.remove("open");
+          ocrCaret.textContent = "▾";
+        } else {
+          ocrBandejaBtn.classList.add("open");
+          ocrCaret.textContent = "▴";
+        }
+      }
+
+      ocrBandejaBtn.addEventListener("click", toggleBandeja);
+      ocrCaret.addEventListener("click", toggleBandeja);
+      document.addEventListener("click", (event) => {
+        if (!ocrBandejaPanel.contains(event.target) && !ocrBandejaBtn.contains(event.target)) {
+          ocrBandejaPanel.classList.add("hidden");
+          ocrBandejaBtn.classList.remove("open");
+          ocrCaret.textContent = "▾";
+        }
+      });
+      loadResults();
+
+      saveBtn.addEventListener("click", () => saveConstancia("confirmada"));
+      reserveBtn.addEventListener("click", () => saveConstancia("por_confirmar"));
+      cancelBtn.addEventListener("click", () => {
+        resetConstanciaForm();
+        showSection("section-constancias");
+      });
+
+      constanciaSearch.addEventListener("input", applyConstanciaFilters);
+      if (traceSearchInput) {
+        traceSearchInput.addEventListener("input", applyTraceFilters);
+      }
+      if (traceSearchType) {
+        traceSearchType.addEventListener("change", applyTraceFilters);
+      }
+      constanciaApplyBtn.addEventListener("click", async () => {
+        if (constanciaBulkAction.value !== "delete") return;
+        if (!selectedConstancias.size) return;
+        showConfirmModal("¿Desea eliminar las constancias seleccionadas?", async () => {
+          const idsToDelete = new Set(selectedConstancias);
+          for (const id of idsToDelete) {
+            await fetch(`/api/constancias/${id}`, { method: "DELETE" });
+          }
+          allConstancias = allConstancias.filter((c) => !idsToDelete.has(c.id));
+          filteredConstancias = filteredConstancias.filter((c) => !idsToDelete.has(c.id));
+          selectedConstancias.clear();
+          selectAllConstancias.checked = false;
+          renderConstancias(filteredConstancias);
+        });
+      });
+      selectAllConstancias.addEventListener("change", () => {
+        if (selectAllConstancias.checked) {
+          filteredConstancias.forEach((c) => selectedConstancias.add(c.id));
+        } else {
+          selectedConstancias.clear();
+        }
+        renderConstancias(filteredConstancias);
+      });
+
+      let currentSectionId = null;
+
+      function hideAllSections() {
+        document.querySelectorAll("section[id^='section-']").forEach((section) => {
+          section.classList.add("hidden");
+        });
+        navLinks.forEach((link) => link.classList.remove("active"));
+      }
+
+      function showSection(targetId, toggle = false) {
+        if (toggle && currentSectionId === targetId) {
+          hideAllSections();
+          currentSectionId = null;
+          return;
+        }
+        hideAllSections();
+        const section = document.getElementById(targetId);
+        if (section) section.classList.remove("hidden");
+        navLinks.forEach((link) => {
+          link.classList.toggle("active", link.dataset.target === targetId);
+        });
+        currentSectionId = targetId;
+        if (targetId === "section-ocr" && !currentConstanciaId && !suppressOcrReset) {
+          resetConstanciaForm();
+        }
+        if (targetId === "section-trasiegos") {
+          loadTrasiegos();
+        }
+        suppressOcrReset = false;
+      }
+
+      const navContainer = document.querySelector(".sidebar-nav");
+      if (navContainer) {
+        navContainer.addEventListener("click", (event) => {
+          const link = event.target.closest("a[data-target]");
+          if (!link) return;
+          event.preventDefault();
+          showSection(link.dataset.target, true);
+        });
+      }
+
+      if (adminLayout && sidebarToggle) {
+        sidebarToggle.addEventListener("click", () => {
+          const open = adminLayout.classList.toggle("sidebar-open");
+          const label = open ? "Ocultar menú" : "Mostrar menú";
+          sidebarToggle.setAttribute("aria-label", label);
+          sidebarToggle.setAttribute("title", label);
+          sidebarToggle.setAttribute("aria-expanded", open ? "true" : "false");
+        });
+      }
+
+      function readTrasiegoRow(tr) {
+        const payload = {};
+        tr.querySelectorAll("input[data-field]").forEach((input) => {
+          payload[input.dataset.field] = input.value.trim();
+        });
+        return payload;
+      }
+
+      function updateTrasiegosCount() {
+        if (!trasiegosCount || !trasiegosBody) return;
+        const count = trasiegosBody.querySelectorAll("tr").length;
+        trasiegosCount.textContent = `${count} fila${count === 1 ? "" : "s"}`;
+      }
+
+      function scheduleTrasiegoSave(tr) {
+        if (trasiegosSaveTimers.has(tr)) {
+          clearTimeout(trasiegosSaveTimers.get(tr));
+        }
+        trasiegosSaveTimers.set(
+          tr,
+          setTimeout(() => {
+            trasiegosSaveTimers.delete(tr);
+            saveTrasiegoRow(tr);
+          }, 450)
+        );
+      }
+
+      async function saveTrasiegoRow(tr) {
+        const payload = readTrasiegoRow(tr);
+        const rowId = tr.dataset.id;
+        try {
+          if (rowId) {
+            await fetch(`/api/trasiegos/${rowId}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+          } else {
+            const res = await fetch("/api/trasiegos", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (res.ok && data.id) {
+              tr.dataset.id = String(data.id);
+            }
+          }
+        } catch (err) {
+        }
+        updateTrasiegosCount();
+      }
+
+      async function deleteTrasiegoRow(tr) {
+        const rowId = tr.dataset.id;
+        if (rowId) {
+          try {
+            await fetch(`/api/trasiegos/${rowId}`, { method: "DELETE" });
+          } catch (err) {
+          }
+        }
+        if (trasiegosSaveTimers.has(tr)) {
+          clearTimeout(trasiegosSaveTimers.get(tr));
+          trasiegosSaveTimers.delete(tr);
+        }
+        tr.remove();
+        if (!trasiegosBody.querySelector("tr")) {
+          trasiegosBody.appendChild(buildTrasiegoRow({ fecha: formatToday() }));
+        }
+        updateTrasiegosCount();
+      }
+
+      function formatIsoToDisplayDate(isoDate) {
+        if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return "";
+        const [year, month, day] = isoDate.split("-");
+        return `${day}/${month}/${year}`;
+      }
+
+      function parseTextToIsoDate(value) {
+        const raw = (value || "").trim();
+        if (!raw) return "";
+        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+        const spaced = raw.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{4})$/);
+        if (spaced) {
+          const day = spaced[1].padStart(2, "0");
+          const month = spaced[2].padStart(2, "0");
+          const year = spaced[3];
+          return `${year}-${month}-${day}`;
+        }
+        const compact = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+        if (compact) {
+          const day = compact[1].padStart(2, "0");
+          const month = compact[2].padStart(2, "0");
+          let year = compact[3];
+          if (year.length === 2) year = `20${year}`;
+          return `${year}-${month}-${day}`;
+        }
+        return "";
+      }
+
+      function syncTrasiegoDatePicker(textInput, picker) {
+        const iso = parseTextToIsoDate(textInput.value || "");
+        picker.value = iso;
+      }
+
+      function wireTrasiegoDualDate(tr, field) {
+        const textInput = tr.querySelector(`[data-field="${field}"]`);
+        const picker = tr.querySelector(`[data-picker="${field}"]`);
+        if (!textInput || !picker) return;
+        picker.addEventListener("change", () => {
+          if (!picker.value) return;
+          textInput.value = formatIsoToDisplayDate(picker.value);
+          scheduleTrasiegoSave(tr);
+        });
+        textInput.addEventListener("input", () => syncTrasiegoDatePicker(textInput, picker));
+        textInput.addEventListener("blur", () => syncTrasiegoDatePicker(textInput, picker));
+      }
+
+      function buildTrasiegoRow(data = {}) {
+        const tr = document.createElement("tr");
+        if (data.id) tr.dataset.id = String(data.id);
+        tr.innerHTML = `
+          <td><input type="date" class="trasiego-date" data-field="fecha" title="Fecha" /></td>
+          <td><input type="text" data-field="mp" placeholder="M.P" /></td>
+          <td><input type="date" class="trasiego-date" data-field="f_ingreso" title="F. Ingreso" /></td>
+          <td><input type="text" data-field="estado" placeholder="Estado" /></td>
+          <td><input type="text" data-field="lote" placeholder="Lote" /></td>
+          <td>
+            <div class="trasiego-dual-date">
+              <input type="text" data-field="f_p" placeholder="15/05/2026 o May26" title="Fecha completa o solo mes/año" />
+              <input type="date" data-picker="f_p" class="trasiego-date-picker" title="Calendario (día/mes/año)" />
+            </div>
+          </td>
+          <td>
+            <div class="trasiego-dual-date">
+              <input type="text" data-field="f_v" placeholder="15/05/2026 o May26" title="Fecha completa o solo mes/año" />
+              <input type="date" data-picker="f_v" class="trasiego-date-picker" title="Calendario F.V" />
+            </div>
+          </td>
+          <td><input type="text" data-field="cantidad" placeholder="Cantidad" /></td>
+          <td><button type="button" class="btn btn-danger btn-mini trasiego-delete" title="Eliminar fila">🗑</button></td>
+        `;
+        const fields = ["fecha", "mp", "f_ingreso", "estado", "lote", "cantidad"];
+        fields.forEach((field) => {
+          const input = tr.querySelector(`[data-field="${field}"]`);
+          if (!input) return;
+          if (input.type === "date") {
+            input.value = toInputDateValue(data[field]) || (field === "fecha" ? formatToday() : "");
+          } else {
+            input.value = data[field] || "";
+          }
+        });
+        ["f_p", "f_v"].forEach((field) => {
+          const textInput = tr.querySelector(`[data-field="${field}"]`);
+          const picker = tr.querySelector(`[data-picker="${field}"]`);
+          if (!textInput || !picker) return;
+          textInput.value = data[field] || "";
+          syncTrasiegoDatePicker(textInput, picker);
+          wireTrasiegoDualDate(tr, field);
+        });
+        tr.querySelectorAll("input[data-field]").forEach((input) => {
+          input.addEventListener("change", () => scheduleTrasiegoSave(tr));
+          input.addEventListener("blur", () => scheduleTrasiegoSave(tr));
+        });
+        tr.querySelector(".trasiego-delete").addEventListener("click", () => deleteTrasiegoRow(tr));
+        return tr;
+      }
+
+      async function loadTrasiegos() {
+        if (!trasiegosBody) return;
+        trasiegosBody.innerHTML = "";
+        trasiegosSaveTimers.forEach((timer) => clearTimeout(timer));
+        trasiegosSaveTimers.clear();
+        try {
+          const res = await fetch("/api/trasiegos");
+          const data = await res.json();
+          const rows = res.ok ? data.trasiegos || [] : [];
+          if (!rows.length) {
+            trasiegosBody.appendChild(buildTrasiegoRow({ fecha: formatToday() }));
+          } else {
+            rows.forEach((item) => trasiegosBody.appendChild(buildTrasiegoRow(item)));
+          }
+        } catch (err) {
+          trasiegosBody.appendChild(buildTrasiegoRow({ fecha: formatToday() }));
+        }
+        updateTrasiegosCount();
+      }
+
+      if (addTrasiegoRowBtn) {
+        addTrasiegoRowBtn.addEventListener("click", () => {
+          const tr = buildTrasiegoRow({ fecha: formatToday() });
+          trasiegosBody.appendChild(tr);
+          updateTrasiegosCount();
+          const fechaInput = tr.querySelector('[data-field="fecha"]');
+          fechaInput?.focus();
+        });
+      }
+
+      hideAllSections();
+
+      function getProductPayload() {
+        return {
+          name: prodName.value.trim(),
+          origin: prodOrigin.value.trim(),
+          code: prodCode.value.trim(),
+          um: prodUm.value.trim(),
+          active: prodActive.checked,
+          lot: prodLot.value.trim(),
+          production_text: prodProduction.value.trim(),
+          expiration_text: prodExpiration.value.trim(),
+          humidity: prodHumidity.value ? Number(prodHumidity.value) : null,
+          broken_grains: prodBroken.value ? Number(prodBroken.value) : null,
+          chalky_1: prodChalky1.value ? Number(prodChalky1.value) : null,
+          chalky_2: prodChalky2.value ? Number(prodChalky2.value) : null,
+          damaged_grains: prodDamaged.value ? Number(prodDamaged.value) : null,
+          whiteness: prodWhiteness.value ? Number(prodWhiteness.value) : null,
+        };
+      }
+
+      function clearProductForm() {
+        prodName.value = "";
+        prodOrigin.value = "";
+        prodCode.value = "";
+        prodUm.value = "";
+        prodActive.checked = true;
+        prodLot.value = "";
+        prodProduction.value = "";
+        prodExpiration.value = "";
+        prodHumidity.value = "";
+        prodBroken.value = "";
+        prodChalky1.value = "";
+        prodChalky2.value = "";
+        prodDamaged.value = "";
+        prodWhiteness.value = "";
+        currentProductId = null;
+        productFormTitle.textContent = "Nuevo producto";
+      }
+
+      function closeAllModals() {
+        [productFormCard, clientModal, transportModal].forEach((modal) => {
+          modal.classList.remove("show");
+          modal.classList.add("hidden");
+        });
+      }
+
+      function openProductModal() {
+        closeAllModals();
+        productFormCard.classList.remove("hidden");
+        productFormCard.classList.add("show");
+      }
+
+      function closeProductModal() {
+        productFormCard.classList.remove("show");
+        productFormCard.classList.add("hidden");
+      }
+
+      function openClientModal() {
+        closeAllModals();
+        clientModal.classList.remove("hidden");
+        clientModal.classList.add("show");
+      }
+
+      function closeClientModal() {
+        clientModal.classList.remove("show");
+        clientModal.classList.add("hidden");
+      }
+
+      function openTransportModal() {
+        closeAllModals();
+        transportModal.classList.remove("hidden");
+        transportModal.classList.add("show");
+      }
+
+      function closeTransportModal() {
+        transportModal.classList.remove("show");
+        transportModal.classList.add("hidden");
+      }
+
+      closeAllModals();
+
+      async function saveProduct(clearAfter) {
+        const payload = getProductPayload();
+        if (!payload.name) {
+          return;
+        }
+        const url = currentProductId ? `/api/products/${currentProductId}` : "/api/products";
+        const method = currentProductId ? "PUT" : "POST";
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          await loadProducts();
+          if (clearAfter) {
+            clearProductForm();
+          } else {
+            currentProductId = null;
+          }
+          productFormCard.classList.add("hidden");
+          productListCard.classList.remove("hidden");
+        }
+      }
+
+      function renderProducts(list) {
+        productsList.innerHTML = "";
+        list.forEach((prod) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td><input type="checkbox" class="row-check" data-id="${prod.id}" /></td>
+            <td>${prod.id}</td>
+            <td><a href="#" class="prod-link">${prod.name}</a></td>
+            <td>${prod.code || ""}</td>
+            <td>${prod.um || ""}</td>
+            <td>${prod.lot || ""}</td>
+            <td>${prod.production_text || ""}</td>
+            <td>${prod.expiration_text || ""}</td>
+            <td>${prod.active ? "Sí" : "No"}</td>
+            <td><button class="btn btn-danger btn-mini" type="button">Eliminar</button></td>
+          `;
+          row.querySelector(".prod-link").addEventListener("click", (event) => {
+            event.preventDefault();
+            currentProductId = prod.id;
+            prodName.value = prod.name || "";
+            prodOrigin.value = prod.origin || "";
+            prodCode.value = prod.code || "";
+            prodUm.value = prod.um || "";
+            prodActive.checked = !!prod.active;
+            prodLot.value = prod.lot || "";
+            prodProduction.value = prod.production_text || "";
+            prodExpiration.value = prod.expiration_text || "";
+            prodHumidity.value = prod.humidity ?? "";
+            prodBroken.value = prod.broken_grains ?? "";
+            prodChalky1.value = prod.chalky_1 ?? "";
+            prodChalky2.value = prod.chalky_2 ?? "";
+            prodDamaged.value = prod.damaged_grains ?? "";
+            prodWhiteness.value = prod.whiteness ?? "";
+            productFormTitle.textContent = `Editar producto #${prod.id}`;
+            openProductModal();
+          });
+          row.querySelector("button").addEventListener("click", async (event) => {
+            event.stopPropagation();
+            await fetch(`/api/products/${prod.id}`, { method: "DELETE" });
+            await loadProducts();
+            if (currentProductId === prod.id) {
+              clearProductForm();
+            }
+          });
+          const check = row.querySelector(".row-check");
+          check.checked = selectedProductIds.has(prod.id);
+          check.addEventListener("change", () => {
+            if (check.checked) {
+              selectedProductIds.add(prod.id);
+            } else {
+              selectedProductIds.delete(prod.id);
+            }
+          });
+          productsList.appendChild(row);
+        });
+      }
+
+      function applyFilters() {
+        const query = productSearch.value.toLowerCase().trim();
+        if (!query) {
+          filteredProducts = [...allProducts];
+        } else {
+          filteredProducts = allProducts.filter((prod) =>
+            `${prod.name} ${prod.code || ""}`.toLowerCase().includes(query)
+          );
+        }
+        sortProducts();
+        paginateProducts();
+      }
+
+      function sortProducts() {
+        const dir = sortDir === "asc" ? 1 : -1;
+        filteredProducts.sort((a, b) => {
+          const av = a[sortKey];
+          const bv = b[sortKey];
+          if (av === bv) return 0;
+          if (av === null || av === undefined) return 1 * dir;
+          if (bv === null || bv === undefined) return -1 * dir;
+          if (typeof av === "string") {
+            return av.localeCompare(bv) * dir;
+          }
+          return (av > bv ? 1 : -1) * dir;
+        });
+      }
+
+      function paginateProducts() {
+        const total = filteredProducts.length;
+        const maxPage = Math.max(1, Math.ceil(total / pageSize));
+        currentPage = Math.min(currentPage, maxPage);
+        const start = (currentPage - 1) * pageSize;
+        const pageItems = filteredProducts.slice(start, start + pageSize);
+        renderProducts(pageItems);
+        productCount.textContent = total
+          ? `${start + 1}-${Math.min(start + pageSize, total)} de ${total}`
+          : "0";
+        prevPageBtn.disabled = currentPage === 1;
+        nextPageBtn.disabled = currentPage === maxPage;
+      }
+
+      async function loadProducts() {
+        const res = await fetch("/api/products");
+        const data = await res.json();
+        if (!res.ok) {
+          return;
+        }
+        allProducts = data.products || [];
+        applyFilters();
+      }
+
+      saveProductBtn.addEventListener("click", () => saveProduct(true));
+      deleteProductBtn.addEventListener("click", async () => {
+        if (!currentProductId) return;
+        await fetch(`/api/products/${currentProductId}`, { method: "DELETE" });
+        await loadProducts();
+        clearProductForm();
+          productFormCard.classList.add("hidden");
+      });
+
+      addProductBtn.addEventListener("click", () => {
+        clearProductForm();
+        openProductModal();
+        prodName.focus();
+      });
+
+      productSearch.addEventListener("input", () => {
+        currentPage = 1;
+        applyFilters();
+      });
+
+      applyBulkBtn.addEventListener("click", async () => {
+        if (productBulkAction.value !== "delete") return;
+        if (!selectedProductIds.size) return;
+        for (const id of selectedProductIds) {
+          await fetch(`/api/products/${id}`, { method: "DELETE" });
+        }
+        selectedProductIds.clear();
+        selectAllProducts.checked = false;
+        await loadProducts();
+      });
+
+      selectAllProducts.addEventListener("change", () => {
+        if (selectAllProducts.checked) {
+          filteredProducts.forEach((prod) => selectedProductIds.add(prod.id));
+        } else {
+          selectedProductIds.clear();
+        }
+        paginateProducts();
+      });
+
+      prevPageBtn.addEventListener("click", () => {
+        if (currentPage > 1) {
+          currentPage -= 1;
+          paginateProducts();
+        }
+      });
+      nextPageBtn.addEventListener("click", () => {
+        currentPage += 1;
+        paginateProducts();
+      });
+
+      document.querySelectorAll("th[data-sort]").forEach((th) => {
+        th.style.cursor = "pointer";
+        th.addEventListener("click", () => {
+          const key = th.dataset.sort;
+          if (sortKey === key) {
+            sortDir = sortDir === "asc" ? "desc" : "asc";
+          } else {
+            sortKey = key;
+            sortDir = "asc";
+          }
+          applyFilters();
+        });
+      });
+
+      closeProductModalBtn.addEventListener("click", () => {
+        closeProductModal();
+      });
+
+      productFormCard.addEventListener("click", (event) => {
+        if (event.target === productFormCard) {
+          closeProductModal();
+        }
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          closeProductModal();
+          closeClientModal();
+          closeTransportModal();
+        }
+      });
+
+      window.closeProductModal = closeProductModal;
+
+      loadProducts();
+
+      function collectConstanciaItems() {
+        const items = [];
+        [...productsBody.querySelectorAll("tr")].forEach((tr) => {
+          const inputs = tr.querySelectorAll("input");
+          const product = inputs[0]?.value?.trim() || "";
+          const lot = inputs[1]?.value?.trim() || "";
+          const prodDate = inputs[2]?.value?.trim() || "";
+          const expDate = inputs[3]?.value?.trim() || "";
+          const qty = inputs[4]?.value || "1";
+          if (product) {
+            items.push({
+              product,
+              lot,
+              production_text: prodDate,
+              expiration_text: expDate,
+              quantity: Number(qty) || 1,
+            });
+          }
+        });
+        return items;
+      }
+
+      function formatToday() {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, "0");
+        const dd = String(now.getDate()).padStart(2, "0");
+        return `${yyyy}-${mm}-${dd}`;
+      }
+
+      function toInputDateValue(rawDate) {
+        const value = (rawDate || "").trim();
+        if (!value) return "";
+        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+        const slashMatch = value.match(/^(\d{2})\s*\/\s*(\d{2})\s*\/\s*(\d{4})$/);
+        if (slashMatch) {
+          const [, dd, mm, yyyy] = slashMatch;
+          return `${yyyy}-${mm}-${dd}`;
+        }
+        return "";
+      }
+
+      function resetConstanciaForm() {
+        constanciaNumero.value = "";
+        constanciaFecha.value = formatToday();
+        constanciaClienteInput.value = "";
+        constanciaTransporteInput.value = "";
+        constanciaFumigacion.checked = true;
+        constanciaCalidad.checked = true;
+        productsBody.innerHTML = "";
+        addRow();
+        currentConstanciaId = null;
+        currentConstanciaStatus = "confirmada";
+      }
+
+      async function saveConstancia(status) {
+        const isEditing = Boolean(currentConstanciaId);
+        const keepReserved = isEditing && currentConstanciaStatus === "por_confirmar" && status === "confirmada";
+        if (keepReserved) {
+          showInfoModal("Esta constancia está en reserva. Para confirmarla use el botón Confirmar.");
+        }
+        if (!constanciaFumigacion.checked && !constanciaCalidad.checked) {
+          alert("Selecciona al menos una constancia (Fumigación o Calidad).");
+          return;
+        }
+        const effectiveStatus =
+          keepReserved
+            ? "por_confirmar"
+            : status;
+        const payload = {
+          number: constanciaNumero.value.trim(),
+          issue_date: constanciaFecha.value.trim(),
+          client_name: constanciaClienteInput.value.trim(),
+          transport_plate: constanciaTransporteInput.value.trim(),
+          fumigacion: constanciaFumigacion.checked,
+          calidad: constanciaCalidad.checked,
+          status: effectiveStatus,
+          items: collectConstanciaItems(),
+        };
+        if (!payload.client_name) return;
+        const url = currentConstanciaId ? `/api/constancias/${currentConstanciaId}` : "/api/constancias";
+        const method = currentConstanciaId ? "PUT" : "POST";
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          await loadConstancias();
+          currentConstanciaId = null;
+          currentConstanciaStatus = "confirmada";
+          resetConstanciaForm();
+          showSection("section-constancias");
+        }
+      }
+
+      function renderConstancias(list) {
+        constanciasList.innerHTML = "";
+        list.forEach((item) => {
+          const row = document.createElement("tr");
+          const statusLabel = item.status === "confirmada" ? "Confirmada" : "Por confirmar";
+          const statusClass = item.status === "confirmada" ? "confirmada" : "por_confirmar";
+          row.innerHTML = `
+            <td><input type="checkbox" class="const-check" data-id="${item.id}" /></td>
+            <td>${item.number || item.id}</td>
+            <td>${item.issue_date || ""}</td>
+            <td>${item.client_name || ""}</td>
+            <td>${item.transport_plate || ""}</td>
+            <td><span class="status ${statusClass}">${statusLabel}</span></td>
+            <td><button class="btn btn-outline btn-mini edit-btn">Editar</button></td>
+            <td>
+              ${item.status === "por_confirmar" ? '<button class="btn btn-success btn-mini confirm-btn">Confirmar</button>' : "-"}
+            </td>
+            <td><button class="btn btn-outline btn-mini view-btn">Ver</button></td>
+          `;
+          const check = row.querySelector(".const-check");
+          check.checked = selectedConstancias.has(item.id);
+          check.addEventListener("change", () => {
+            if (check.checked) selectedConstancias.add(item.id);
+            else selectedConstancias.delete(item.id);
+          });
+          const editBtn = row.querySelector(".edit-btn");
+          editBtn.addEventListener("click", async () => {
+            const res = await fetch(`/api/constancias/${item.id}`);
+            const data = await res.json();
+            if (!res.ok) return;
+            currentConstanciaId = data.id;
+            currentConstanciaStatus = data.status || "confirmada";
+            constanciaNumero.value = data.number || "";
+            constanciaFecha.value = toInputDateValue(data.issue_date);
+            constanciaClienteInput.value = data.client_name || "";
+            constanciaTransporteInput.value = data.transport_plate || "";
+            constanciaFumigacion.checked = data.fumigacion !== 0 && data.fumigacion !== false;
+            constanciaCalidad.checked = data.calidad !== 0 && data.calidad !== false;
+            fillProducts(data.items?.map((i) => i.product) || []);
+            const rows = productsBody.querySelectorAll("tr");
+            data.items?.forEach((itm, idx) => {
+              const inputs = rows[idx]?.querySelectorAll("input") || [];
+              if (inputs[1]) inputs[1].value = itm.lot || "";
+              if (inputs[2]) inputs[2].value = itm.production_text || "";
+              if (inputs[3]) inputs[3].value = itm.expiration_text || "";
+              if (inputs[4]) inputs[4].value = itm.quantity || 1;
+            });
+            showSection("section-ocr");
+          });
+          const confirmBtn = row.querySelector(".confirm-btn");
+          if (confirmBtn) {
+            confirmBtn.addEventListener("click", async () => {
+              showConfirmModal("¿Desea confirmar la constancia?", async () => {
+                await fetch(`/api/constancias/${item.id}/confirm`, { method: "POST" });
+                await loadConstancias();
+              });
+            });
+          }
+          const viewBtn = row.querySelector(".view-btn");
+          if (viewBtn) {
+            viewBtn.addEventListener("click", async () => {
+              window.open(`/constancia-view?id=${item.id}`, "_blank");
+            });
+          }
+          constanciasList.appendChild(row);
+        });
+      }
+
+      function applyConstanciaFilters() {
+        const query = constanciaSearch.value.toLowerCase().trim();
+        if (!query) {
+          filteredConstancias = [...allConstancias];
+        } else {
+          filteredConstancias = allConstancias.filter((c) =>
+            `${c.number || ""} ${c.client_name || ""} ${c.transport_plate || ""}`
+              .toLowerCase()
+              .includes(query)
+          );
+        }
+        renderConstancias(filteredConstancias);
+      }
+
+      function collectTraceRows() {
+        const rows = [];
+        (allConstancias || []).forEach((constancia) => {
+          const fecha = constancia.issue_date || "";
+          const cliente = constancia.client_name || "";
+          const items = Array.isArray(constancia.items) ? constancia.items : [];
+          items.forEach((item) => {
+            rows.push({
+              fecha,
+              cliente,
+              product: item.product || "",
+              lot: item.lot || "",
+              production: item.production_text || "",
+              expiration: item.expiration_text || "",
+              quantity: item.quantity || "",
+            });
+          });
+        });
+        return rows;
+      }
+
+      function renderTraceRows(list) {
+        if (!traceList) return;
+        traceList.innerHTML = "";
+        const total = list.length;
+        if (traceCount) traceCount.textContent = String(total);
+        if (!total) {
+          traceList.innerHTML = `<tr><td colspan="8" class="empty">Sin resultados</td></tr>`;
+          return;
+        }
+        list.forEach((row, idx) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${idx + 1}</td>
+            <td>${row.fecha}</td>
+            <td>${row.cliente}</td>
+            <td>${row.product}</td>
+            <td>${row.lot}</td>
+            <td>${row.production}</td>
+            <td>${row.expiration}</td>
+            <td>${row.quantity}</td>
+          `;
+          traceList.appendChild(tr);
+        });
+      }
+
+      function applyTraceFilters() {
+        if (!traceList || !traceSearchInput || !traceSearchType) return;
+        const query = normalizeSearchText(traceSearchInput.value || "");
+        const mode = traceSearchType.value || "product";
+        const allRows = collectTraceRows();
+        const filtered = !query
+          ? []
+          : allRows.filter((row) => {
+              const target = mode === "lot" ? row.lot : row.product;
+              return normalizeSearchText(target).includes(query);
+            });
+        renderTraceRows(filtered);
+      }
+
+      async function loadConstancias() {
+        const res = await fetch("/api/constancias");
+        const data = await res.json();
+        if (!res.ok) return;
+        allConstancias = data.constancias || [];
+        applyConstanciaFilters();
+        applyTraceFilters();
+      }
+
+      function renderClients(list) {
+        clientsList.innerHTML = "";
+        list.forEach((client) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${client.id}</td>
+            <td><a href="#" class="client-link">${client.name}</a></td>
+            <td>${client.ruc || ""}</td>
+            <td><button class="btn btn-danger btn-mini" type="button">Eliminar</button></td>
+          `;
+          row.querySelector(".client-link").addEventListener("click", (event) => {
+            event.preventDefault();
+            currentClientId = client.id;
+            clientName.value = client.name || "";
+            clientRuc.value = client.ruc || "";
+            openClientModal();
+          });
+          row.querySelector("button").addEventListener("click", async (event) => {
+            event.stopPropagation();
+            await fetch(`/api/clients/${client.id}`, { method: "DELETE" });
+            await loadClients();
+            if (currentClientId === client.id) {
+              currentClientId = null;
+            }
+          });
+          clientsList.appendChild(row);
+        });
+      }
+
+      async function loadClients() {
+        const res = await fetch("/api/clients");
+        const data = await res.json();
+        if (!res.ok) return;
+        allClients = data.clients || [];
+        renderClients(allClients);
+        if (clientesList) {
+          clientesList.innerHTML = "";
+          allClients.forEach((client) => {
+            const opt = document.createElement("option");
+            opt.value = client.name;
+            opt.dataset.id = String(client.id);
+            clientesList.appendChild(opt);
+          });
+        }
+      }
+
+
+      addClientBtn.addEventListener("click", () => {
+        currentClientId = null;
+        clientName.value = "";
+        clientRuc.value = "";
+        openClientModal();
+        clientName.focus();
+      });
+
+      saveClientBtn.addEventListener("click", async () => {
+        const payload = { name: clientName.value.trim(), ruc: clientRuc.value.trim() };
+        if (!payload.name) return;
+        const res = await fetch("/api/clients", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          await loadClients();
+          closeClientModal();
+        }
+      });
+
+      deleteClientBtn.addEventListener("click", async () => {
+        if (!currentClientId) return;
+        await fetch(`/api/clients/${currentClientId}`, { method: "DELETE" });
+        await loadClients();
+        closeClientModal();
+      });
+
+      closeClientModalBtn.addEventListener("click", () => {
+        closeClientModal();
+      });
+
+      clientModal.addEventListener("click", (event) => {
+        if (event.target === clientModal) {
+          closeClientModal();
+        }
+      });
+
+      loadClients();
+
+      function renderTransports(list) {
+        transportsList.innerHTML = "";
+        list.forEach((item) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${item.id}</td>
+            <td><a href="#" class="transport-link">${item.plate}</a></td>
+            <td><button class="btn btn-danger btn-mini" type="button">Eliminar</button></td>
+          `;
+          row.querySelector(".transport-link").addEventListener("click", (event) => {
+            event.preventDefault();
+            currentTransportId = item.id;
+            transportPlate.value = item.plate || "";
+            openTransportModal();
+          });
+          row.querySelector("button").addEventListener("click", async (event) => {
+            event.stopPropagation();
+            await fetch(`/api/transports/${item.id}`, { method: "DELETE" });
+            await loadTransports();
+            if (currentTransportId === item.id) {
+              currentTransportId = null;
+            }
+          });
+          transportsList.appendChild(row);
+        });
+      }
+
+      async function loadTransports() {
+        const res = await fetch("/api/transports");
+        const data = await res.json();
+        if (!res.ok) return;
+        allTransports = data.transports || [];
+        renderTransports(allTransports);
+        if (transportesList) {
+          transportesList.innerHTML = "";
+          allTransports.forEach((item) => {
+            const opt = document.createElement("option");
+            opt.value = item.plate;
+            opt.dataset.id = String(item.id);
+            transportesList.appendChild(opt);
+          });
+        }
+      }
+
+
+      addTransportBtn.addEventListener("click", () => {
+        currentTransportId = null;
+        transportPlate.value = "";
+        openTransportModal();
+        transportPlate.focus();
+      });
+
+      saveTransportBtn.addEventListener("click", async () => {
+        const payload = { plate: transportPlate.value.trim() };
+        if (!payload.plate) return;
+        const res = await fetch("/api/transports", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          await loadTransports();
+          closeTransportModal();
+        }
+      });
+
+      deleteTransportBtn.addEventListener("click", async () => {
+        if (!currentTransportId) return;
+        await fetch(`/api/transports/${currentTransportId}`, { method: "DELETE" });
+        await loadTransports();
+        closeTransportModal();
+      });
+
+      closeTransportModalBtn.addEventListener("click", () => {
+        closeTransportModal();
+      });
+
+      transportModal.addEventListener("click", (event) => {
+        if (event.target === transportModal) {
+          closeTransportModal();
+        }
+      });
+
+      loadTransports();
+      loadConstancias();
+
+      function openModal(item) {
+        const backdrop = document.createElement("div");
+        backdrop.className = "modal-backdrop show";
+        const modal = document.createElement("div");
+        modal.className = "modal";
+        modal.innerHTML = `
+          <div class="title">OCR ID ${item.id}</div>
+          <div class="sub">${item.created_at}${(item.label_text || item.label || item.labelText) ? ` · <span class="label-red">${item.label_text || item.label || item.labelText}</span>` : ""}</div>
+          <div class="preview-box" style="margin-top:12px;">${(item.lines || []).join("\n")}</div>
+          <div class="actions" style="margin-top:12px;">
+            <button class="btn btn-primary" id="useModalBtn">Usar</button>
+            <button class="btn btn-outline" id="cancelModalBtn">Cancelar</button>
+          </div>
+        `;
+        backdrop.appendChild(modal);
+        document.body.appendChild(backdrop);
+
+        modal.querySelector("#useModalBtn").addEventListener("click", () => {
+          fillProducts(item.lines || []);
+          document.body.removeChild(backdrop);
+        });
+        modal.querySelector("#cancelModalBtn").addEventListener("click", () => {
+          document.body.removeChild(backdrop);
+        });
+        backdrop.addEventListener("click", (e) => {
+          if (e.target === backdrop) {
+            document.body.removeChild(backdrop);
+          }
+        });
+      }
+
+      function showInfoModal(message) {
+        const backdrop = document.createElement("div");
+        backdrop.className = "modal-backdrop show";
+        const modal = document.createElement("div");
+        modal.className = "modal";
+        modal.innerHTML = `
+          <div class="title">Aviso</div>
+          <div class="sub">${message}</div>
+          <div class="actions" style="margin-top:12px;">
+            <button class="btn btn-primary" id="infoOkBtn">OK</button>
+          </div>
+        `;
+        backdrop.appendChild(modal);
+        document.body.appendChild(backdrop);
+        modal.querySelector("#infoOkBtn").addEventListener("click", () => {
+          document.body.removeChild(backdrop);
+        });
+        backdrop.addEventListener("click", (e) => {
+          if (e.target === backdrop) {
+            document.body.removeChild(backdrop);
+          }
+        });
+      }
+
+      function showConfirmModal(message, onConfirm) {
+        const backdrop = document.createElement("div");
+        backdrop.className = "modal-backdrop show";
+        const modal = document.createElement("div");
+        modal.className = "modal";
+        modal.innerHTML = `
+          <div class="title">Confirmación</div>
+          <div class="sub">${message}</div>
+          <div class="actions" style="margin-top:12px;">
+            <button class="btn btn-success" id="confirmOkBtn">OK</button>
+            <button class="btn btn-outline" id="confirmCancelBtn">Cancelar</button>
+          </div>
+        `;
+        backdrop.appendChild(modal);
+        document.body.appendChild(backdrop);
+        const close = () => {
+          if (document.body.contains(backdrop)) {
+            document.body.removeChild(backdrop);
+          }
+        };
+        modal.querySelector("#confirmOkBtn").addEventListener("click", () => {
+          close();
+          onConfirm?.();
+        });
+        modal.querySelector("#confirmCancelBtn").addEventListener("click", close);
+        backdrop.addEventListener("click", (e) => {
+          if (e.target === backdrop) close();
+        });
+      }
+
+      function formatDateMinusDays(dateText, days) {
+        const parts = (dateText || "").split("/").map((p) => p.trim());
+        const hasParts = parts.length === 3 && parts.every((p) => p.length >= 1);
+        let baseDate = new Date();
+        if (hasParts) {
+          const [dd, mm, yyyy] = parts.map((p) => parseInt(p, 10));
+          if (!Number.isNaN(dd) && !Number.isNaN(mm) && !Number.isNaN(yyyy)) {
+            baseDate = new Date(yyyy, mm - 1, dd);
+          }
+        }
+        baseDate.setDate(baseDate.getDate() - days);
+        const dd = String(baseDate.getDate()).padStart(2, "0");
+        const mm = String(baseDate.getMonth() + 1).padStart(2, "0");
+        const yyyy = baseDate.getFullYear();
+        return `${dd}/${mm}/${yyyy}`;
+      }
+
+      function formatShortDate(dateText) {
+        const parts = (dateText || "").split("/").map((p) => p.trim());
+        if (parts.length !== 3) return dateText || "";
+        const [dd, mm, yyyy] = parts;
+        if (!dd || !mm || !yyyy) return dateText || "";
+        const yy = yyyy.slice(-2);
+        return `${dd}/${mm}/${yy}`;
+      }
+
+      function buildConstanciaHtml(constancia, catalog, clients = null) {
+        const numero = constancia.number || constancia.id || "";
+        const fecha = constancia.issue_date || "";
+        const cliente = constancia.client_name || "";
+        const clientList = Array.isArray(clients) ? clients : (Array.isArray(allClients) ? allClients : []);
+        const clientKey = normalizeSearchText(cliente);
+        const clientMatch = clientList.find((item) => normalizeSearchText(item.name) === clientKey);
+        const clientRuc = (clientMatch?.ruc || "").toString().trim();
+        const clientRucLine = clientRuc ? `<div style="margin-top:2px;">RUC: ${clientRuc}</div>` : "";
+        const fileDate = formatShortDate(fecha).replaceAll("/", "-") || "constancia";
+        const safeCliente = (cliente || "cliente")
+          .replace(/[^a-zA-Z0-9 -]/g, "")
+          .trim()
+          .replace(/\s+/g, " ");
+        const fileName = `${fileDate} ${safeCliente}`.trim();
+        const transporte = constancia.transport_plate || "";
+        const fumigacion = formatDateMinusDays(fecha, 9);
+        const liberacion = formatDateMinusDays(fecha, 2);
+        const showFumigacion = constancia.fumigacion !== 0 && constancia.fumigacion !== false;
+        const showCalidad = constancia.calidad !== 0 && constancia.calidad !== false;
+        const items = constancia.items || [];
+        const byName = new Map(
+          (catalog || []).map((p) => [(p.name || "").trim().toLowerCase(), p])
+        );
+        const rows = items
+          .map((item, idx) => `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>${formatShortDate(fecha)}</td>
+              <td>${item.product || ""}</td>
+              <td>${item.lot || "-"}</td>
+              <td>${item.quantity || ""}</td>
+              <td>${item.production_text || "-"}</td>
+              <td>${item.expiration_text || "-"}</td>
+            <td>${formatShortDate(fumigacion)}</td>
+            <td>${formatShortDate(liberacion)}</td>
+              <td>400</td>
+              <td>100</td>
+              <td>1800</td>
+              ${
+                idx === 0
+                  ? `<td rowspan="${Math.max(items.length, 1)}" style="text-align:center; vertical-align:middle;">${transporte}</td>`
+                  : ""
+              }
+            </tr>
+          `)
+          .join("");
+        const qualityRows = items
+          .map((item, idx) => {
+            const key = (item.product || "").trim().toLowerCase();
+            const prod = byName.get(key);
+            return `
+              <tr>
+                <td>${idx + 1}</td>
+                <td>${item.product || ""}</td>
+                <td>${item.lot || "-"}</td>
+                <td>${item.quantity || ""}</td>
+                <td>${item.production_text || "-"}</td>
+                <td>${item.expiration_text || "-"}</td>
+                <td>${prod?.humidity ?? ""}</td>
+                <td>${prod?.broken_grains ?? ""}</td>
+                <td>${prod?.chalky_1 ?? ""}</td>
+                <td>${prod?.chalky_2 ?? ""}</td>
+                <td>${prod?.damaged_grains ?? ""}</td>
+                <td>${prod?.whiteness ?? ""}</td>
+              </tr>
+            `;
+          })
+          .join("");
+        const pageContent = `
+          <div class="page first-page">
+            <div class="header">
+              <img class="logo" src="/static/logo.png" alt="Induamerica" />
+            </div>
+            <div class="box">
+              <div class="title">CONSTANCIA DE FUMIGACIÓN N° ${numero}</div>
+              <table class="meta quality-meta">
+                <tbody>
+                  <tr>
+                    <td class="label">FECHA DE EMISIÓN</td>
+                    <td class="value">${fecha}</td>
+                  </tr>
+                  <tr>
+                    <td class="label">CLIENTE</td>
+                    <td class="value">${cliente}${clientRucLine}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="note">
+                Mediante el presente documento dejamos constancia que los lotes de arroz pilado, detallados han sido tratados con Fosfuro de Aluminio (PHOSFIN) en nuestro almacén principal, en dosis de 5 tab/ton.
+              </div>
+              <table class="data">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Fecha de Envío</th>
+                    <th>Producto</th>
+                    <th>Lote</th>
+                    <th>Cant.<br>env<br>(u)</th>
+                    <th>Fecha de Producción</th>
+                    <th>Fecha de Vencimiento</th>
+                    <th>Fecha de Fumigación</th>
+                    <th>Fecha de Liberación</th>
+                    <th>Cantidad Fumigada</th>
+                    <th>N° de tabletas</th>
+                    <th>Nivel de fosfina</th>
+                    <th>Unidad Transporte</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows || "<tr><td colspan='13' class='empty'>Sin productos</td></tr>"}
+                </tbody>
+              </table>
+            </div>
+            <div class="footer">
+              <div class="firma-wrap">
+                <img class="firma" src="/static/firma.png" alt="Firma" />
+              </div>
+              <div class="footer-text">
+                <div>Av. Camino Real N° 931 Dpto. 201 San Isidro - Lima.</div>
+                <div class="email">induamerica@induamerica.com.pe</div>
+              </div>
+            </div>
+          </div>
+        `;
+        const pageQuality = `
+          <div class="page last-page">
+            <div class="header">
+              <img class="logo" src="/static/logo.png" alt="Induamerica" />
+            </div>
+            <div class="box">
+              <div class="title">CONSTANCIA DE CALIDAD N° ${numero}</div>
+              <table class="meta">
+                <tbody>
+                  <tr>
+                    <td class="label">FECHA DE EMISION</td>
+                    <td class="value">${fecha}</td>
+                    <td class="label">RAZON SOCIAL</td>
+                    <td class="value">INDUAMERICA INTERNACIONAL S.A.C</td>
+                  </tr>
+                  <tr>
+                    <td class="label">PRODUCTOS</td>
+                    <td class="value">VARIOS</td>
+                    <td class="label">RUC</td>
+                    <td class="value">20602740278</td>
+                  </tr>
+                  <tr>
+                    <td class="value" colspan="4" style="text-align:center;">
+                      El área de control de calidad de la Empresa Induamerica Internacional S.A.C., da constancia que el producto con denominación
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="value" colspan="4" style="text-align:center;">
+                      Cumple con las especificaciones de calidad de acuerdo a la Ficha Técnica, por lo que garantiza la conformidad del producto entregado a :
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="value" colspan="4" style="text-align:center; font-weight:600;">${cliente}</td>
+                  </tr>
+                  ${
+                    clientRuc
+                      ? `<tr><td class="value" colspan="4" style="text-align:center;">RUC: ${clientRuc}</td></tr>`
+                      : ""
+                  }
+                </tbody>
+              </table>
+              <table class="data quality">
+                <thead>
+                  <tr>
+                    <th rowspan="2">Item</th>
+                    <th rowspan="2">Presentación</th>
+                    <th rowspan="2">Código lote</th>
+                    <th rowspan="2">Cantidad (Unid)</th>
+                    <th rowspan="2">Fecha de Producción</th>
+                    <th rowspan="2">Fecha de Vencimiento</th>
+                    <th rowspan="2">%H</th>
+                    <th rowspan="2">Granos<br>Quebrados<br>(%)</th>
+                    <th colspan="2">Granos Tizosos (%)</th>
+                    <th rowspan="2">Granos Dañados<br>(%)</th>
+                    <th rowspan="2">° Blancura</th>
+                  </tr>
+                  <tr>
+                    <th>Tizosos Totales (%)</th>
+                    <th>Tizosos Parciales (%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${qualityRows || "<tr><td colspan='12' class='empty'>Sin productos</td></tr>"}
+                </tbody>
+              </table>
+              <table class="meta" style="margin-top:8px; table-layout: fixed;">
+                <tbody>
+                  <tr>
+                    <td class="value" rowspan="3" style="width:55%;"></td>
+                    <td class="label" colspan="3" style="width:45%; text-align:center;">Características Organolépticas</td>
+                  </tr>
+                  <tr>
+                    <td class="label">Sabores y Olores</td>
+                    <td class="label">Color</td>
+                    <td class="label">Grado de Lustre</td>
+                  </tr>
+                  <tr>
+                    <td class="value">Exento de sabores y olores extraños.</td>
+                    <td class="value">Ligeramente cremoso</td>
+                    <td class="value">Bien pulido</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="footer">
+              <div class="firma-wrap">
+                <img class="firma" src="/static/firma.png" alt="Firma" />
+              </div>
+              <div class="footer-text">
+                <div>Av. Camino Real N° 931 Dpto. 201 San Isidro - Lima.</div>
+                <div class="email">induamerica@induamerica.com.pe</div>
+              </div>
+            </div>
+          </div>
+        `;
+        const selectedPages = [showFumigacion ? pageContent : "", showCalidad ? pageQuality : ""]
+          .filter((page) => page)
+          .join("");
+        const emptyMessage = `
+          <div style="font-family: Arial, sans-serif; padding: 16px;">
+            No hay constancias seleccionadas para mostrar.
+          </div>
+        `;
+        const html2pdfScript =
+          '<scr' +
+          'ipt src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></scr' +
+          'ipt>' +
+          '<scr' +
+          'ipt src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></scr' +
+          'ipt>';
+        const inlineScript =
+          '<scr' +
+          'ipt>' +
+          `const pdfName = ${JSON.stringify(fileName || `Constancia ${numero}`)};
+function printDoc(){window.print();}
+async function savePdf(){
+  const pages = Array.from(document.querySelectorAll(".page"));
+  if (!pages.length || !window.html2canvas || !window.jspdf) return;
+  document.body.classList.add("pdf-export");
+  const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  for (let i = 0; i < pages.length; i += 1) {
+    const canvas = await window.html2canvas(pages[i], { scale: 2, useCORS: true });
+    const imgData = canvas.toDataURL("image/jpeg", 0.98);
+    if (i > 0) pdf.addPage();
+    pdf.addImage(imgData, "JPEG", 0, 0, 210, 297);
+  }
+  pdf.save(pdfName + ".pdf");
+  document.body.classList.remove("pdf-export");
+}` +
+          '</scr' +
+          'ipt>';
+        return `
+          <html>
+            <head>
+              <title>${fileName || `Constancia ${numero}`}</title>
+              <style>
+                body { margin: 0; background: #e5e7eb; font-family: "Segoe UI", Arial, sans-serif; }
+                .actions { position: sticky; top: 0; background: #e5e7eb; padding: 10px 16px; display: flex; justify-content: flex-end; gap: 8px; z-index: 2; }
+                .btn { background: #2563eb; color: #fff; border: none; border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: 12px; }
+                .page { width: 210mm; height: 297mm; background: #fff; margin: 16px auto; padding: 10mm 12mm 18mm; box-sizing: border-box; box-shadow: 0 10px 30px rgba(15,23,42,0.12); display: flex; flex-direction: column; page-break-inside: avoid; }
+                .first-page { page-break-after: always; }
+                .last-page { page-break-after: auto; }
+                .pdf-export .page { margin: 0; box-shadow: none; }
+                .pdf-export @page { margin: 0; }
+                .header { height: 30mm; display: flex; align-items: center; justify-content: flex-start; }
+                .logo { max-height: 30mm; max-width: 100%; object-fit: contain; }
+                .box { border: 1px solid #111827; padding: 6px; box-sizing: border-box; flex: 1; }
+                .title { text-align: center; font-weight: 700; font-size: 12px; padding: 2px 0; }
+                .meta { width: 100%; border-collapse: collapse; font-size: 10px; }
+                .meta td { border: 1px solid #111827; padding: 4px; text-align: center; }
+                .meta .label { font-weight: 600; }
+                .quality-meta { table-layout: fixed; }
+                .quality-meta td { width: 25%; }
+                .quality-meta td.value { white-space: normal; }
+                .note { border: 1px solid #111827; border-top: none; padding: 4px; font-size: 10px; text-align: center; }
+                .data { width: 100%; border-collapse: collapse; font-size: 8px; table-layout: fixed; }
+                .data th, .data td { border: 1px solid #111827; padding: 3px; word-break: break-word; }
+                .data th { text-align: center; font-weight: 600; }
+                .data td { text-align: center; }
+                .data td:nth-child(3) { text-align: center; }
+                .data th:nth-child(1) { width: 3%; }
+                .data th:nth-child(2) { width: 6%; }
+                .data th:nth-child(3) { width: 30%; }
+                .data th:nth-child(4) { width: 7%; }
+                .data th:nth-child(5) { width: 5%; }
+                .data th:nth-child(6) { width: 8%; }
+                .data th:nth-child(7) { width: 8%; }
+                .data th:nth-child(8) { width: 6%; }
+                .data th:nth-child(9) { width: 6%; }
+                .data th:nth-child(10) { width: 5%; }
+                .data th:nth-child(11) { width: 5%; }
+                .data th:nth-child(12) { width: 5%; }
+                .data th:nth-child(13) { width: 7%; }
+                .data.quality th, .data.quality td { font-size: 8px; }
+                .data.quality th:nth-child(1) { width: 4%; }
+                .data.quality th:nth-child(2) { width: 26%; }
+                .data.quality th:nth-child(3) { width: 8%; }
+                .data.quality th:nth-child(4) { width: 6%; }
+                .data.quality th:nth-child(5) { width: 8%; }
+                .data.quality th:nth-child(6) { width: 8%; }
+                .data.quality th:nth-child(7) { width: 5%; }
+                .data.quality th:nth-child(8) { width: 6.5%; }
+                .data.quality th:nth-child(9) { width: 7.5%; }
+                .data.quality th:nth-child(10) { width: 7.5%; }
+                .data.quality th:nth-child(11) { width: 6%; }
+                .data.quality th:nth-child(12) { width: 6%; }
+                .empty { text-align: center; padding: 6px; }
+                .footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 4px; gap: 12px; }
+                .firma-wrap { width: 55%; min-height: 104px; display: flex; align-items: flex-end; }
+                .firma { max-height: 104px; max-width: 100%; object-fit: contain; }
+                .footer-text { width: 45%; font-size: 10px; text-align: right; line-height: 1.3; }
+                .footer-text .email { color: #2563eb; text-decoration: underline; }
+                @media print {
+                  body { background: #fff; }
+                  .actions { display: none; }
+                  .page { margin: 0; box-shadow: none; }
+                }
+              </style>
+            </head>
+            <body>
+              <div class="actions">
+                <button class="btn" onclick="printDoc()">Imprimir</button>
+                <button class="btn" onclick="savePdf()">Guardar PDF</button>
+              </div>
+              <div id="doc">
+                ${selectedPages || emptyMessage}
+              </div>
+              ${html2pdfScript}
+              ${inlineScript}
+            </body>
+          </html>
+        `;
+      }
+
+    </script>
+    <script src="/static/auth-gate.js"></script>
+  </body>
+</html>

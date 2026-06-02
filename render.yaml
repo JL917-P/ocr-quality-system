@@ -1,0 +1,20 @@
+# Blueprint Render: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: control-calidad-ocr
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: DATA_DIR
+        value: /var/data
+      - key: DATABASE_PATH
+        value: /var/data/results.db
+      - key: PYTHONUNBUFFERED
+        value: "true"
+    disk:
+      name: ocr-data
+      mountPath: /var/data
+      sizeGB: 1

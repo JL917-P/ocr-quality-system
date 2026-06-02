@@ -1,0 +1,9 @@
+backend/.venv
+backend/__pycache__
+backend/results.db
+backend/*.db
+.git
+.cursor
+.env
+*.md
+!README.md

@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Entorno virtual
+backend/.venv/
+.venv/
+venv/
+
+# Base de datos local (no subir datos reales)
+backend/results.db
+backend/*.db
+*.db-journal
+
+# Secretos y entorno
+.env
+.env.local
+.env.*.local
+
+# IDE / editor
+.cursor/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# SO
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs y temporales
+*.log
+tmp/
+temp/
+
+# Modelos pesados opcionales (EasyOCR / torch si se instalan a mano)
+backend/.easyocr/
+*.pt
+*.pth
+
+# PyInstaller / builds locales
+*.spec.bak
+dist/
+*.exe
