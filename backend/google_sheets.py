@@ -5,6 +5,7 @@ Optimizado: caché de worksheets, mínimas lecturas, append por lotes, retry 429
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sqlite3
@@ -48,6 +49,8 @@ REQUIRED_TABS = (
 
 _client: Optional[gspread.Client] = None
 _spreadsheet: Optional[gspread.Spreadsheet] = None
+_credentials: Optional[Credentials] = None
+_credentials_source: Optional[str] = None  # "env" | "file"
 _worksheet_cache: dict[str, gspread.Worksheet] = {}
 _tab_state_cache: dict[str, "TabState"] = {}
 
@@ -121,11 +124,42 @@ def _with_retry(operation: str, fn: Callable[[], Any]) -> Any:
 
 
 def _load_credentials() -> Optional[Credentials]:
+    """Carga credenciales: GOOGLE_SERVICE_ACCOUNT_JSON (Render) o archivo local."""
+    global _credentials, _credentials_source
+    logger.warning(
+        "[DEBUG] GOOGLE_SERVICE_ACCOUNT_JSON existe=%s",
+        bool(os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")),
+    )
+    logger.warning(
+        "[DEBUG] GOOGLE_CREDENTIALS_PATH=%s",
+        os.getenv("GOOGLE_CREDENTIALS_PATH"),
+    )
+    logger.warning("[DEBUG] VERSION_ENV_SUPPORT_V1")
+    if _credentials is not None:
+        return _credentials
+
+    env_json = (os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON") or "").strip()
+    if env_json:
+        try:
+            info = json.loads(env_json)
+            _credentials = Credentials.from_service_account_info(info, scopes=SCOPES)
+            _credentials_source = "env"
+            logger.info("Google Sheets: credenciales cargadas desde ENV")
+            return _credentials
+        except Exception:
+            logger.exception(
+                "Google Sheets: error al leer credenciales desde GOOGLE_SERVICE_ACCOUNT_JSON"
+            )
+            return None
+
     if not CREDENTIALS_PATH.is_file():
         logger.warning("Google Sheets: credenciales no encontradas en %s", CREDENTIALS_PATH)
         return None
     try:
-        return Credentials.from_service_account_file(str(CREDENTIALS_PATH), scopes=SCOPES)
+        _credentials = Credentials.from_service_account_file(str(CREDENTIALS_PATH), scopes=SCOPES)
+        _credentials_source = "file"
+        logger.info("Google Sheets: credenciales cargadas desde archivo")
+        return _credentials
     except Exception:
         logger.exception("Google Sheets: error al leer credenciales desde %s", CREDENTIALS_PATH)
         return None
@@ -203,9 +237,11 @@ def get_trasiegos_sheet() -> Optional[gspread.Worksheet]:
 
 
 def reset_connection() -> None:
-    global _client, _spreadsheet, _worksheet_cache, _tab_state_cache
+    global _client, _spreadsheet, _credentials, _credentials_source, _worksheet_cache, _tab_state_cache
     _client = None
     _spreadsheet = None
+    _credentials = None
+    _credentials_source = None
     _worksheet_cache.clear()
     _tab_state_cache.clear()
 
@@ -617,9 +653,27 @@ def run_manual_resync(db_path: Path) -> dict[str, Any]:
 
 
 def check_startup_sheets_access() -> bool:
+    logger.warning(
+        "GOOGLE_SERVICE_ACCOUNT_JSON presente=%s",
+        bool(os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")),
+    )
+    logger.warning(
+        "GOOGLE_CREDENTIALS_PATH=%s",
+        os.getenv("GOOGLE_CREDENTIALS_PATH"),
+    )
+    logger.warning("google_sheets version = ENV_SUPPORT_V1")
     reset_connection()
-    if not CREDENTIALS_PATH.is_file():
-        logger.error("[STARTUP] Sheets ERROR | credenciales no encontradas: %s", CREDENTIALS_PATH)
+    if _load_credentials() is None:
+        env_json = (os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON") or "").strip()
+        if env_json:
+            logger.error(
+                "[STARTUP] Sheets ERROR | GOOGLE_SERVICE_ACCOUNT_JSON inválido o incompleto"
+            )
+        else:
+            logger.error(
+                "[STARTUP] Sheets ERROR | credenciales no encontradas: %s",
+                CREDENTIALS_PATH,
+            )
         return False
     if get_spreadsheet() is None:
         logger.error("[STARTUP] Sheets ERROR | no se pudo abrir spreadsheet")
