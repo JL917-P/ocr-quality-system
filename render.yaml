@@ -1,13 +1,15 @@
 # Blueprint Render: https://render.com/docs/blueprint-spec
 services:
   - type: web
-    name: control-calidad-ocr
+    name: ocr-quality-system
     runtime: docker
     plan: free
     healthCheckPath: /health
     envVars:
       - key: PORT
         value: "8000"
+      - key: PUBLIC_APP_URL
+        value: https://ocr-quality-system.onrender.com
       - key: DATA_DIR
         value: /var/data
       - key: DATABASE_PATH

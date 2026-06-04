@@ -449,6 +449,31 @@ body.page-admin {
   display: none;
 }
 
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.btn-sync-sheets {
+  font-size: 12px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  white-space: nowrap;
+}
+
+.btn-sync-sheets:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.btn-sync-sheets:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .page-header-title {
   color: #ffffff;
   font-size: 1rem;

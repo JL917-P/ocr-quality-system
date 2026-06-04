@@ -123,7 +123,15 @@
           <div class="brand-mark">QC</div>
           <span class="page-header-title">Control de Calidad</span>
         </div>
-        <span class="topbar-badge">Área Calidad</span>
+        <div class="page-header-actions">
+          <button type="button" id="importSheetsBtn" class="btn btn-secondary btn-import-sheets" title="Restaurar SQLite desde Google Sheets">
+            Importar desde Google Sheets
+          </button>
+          <button type="button" id="syncSheetsBtn" class="btn btn-secondary btn-sync-sheets" title="Respaldo SQLite → Google Sheets">
+            Sincronizar con Google Sheets
+          </button>
+          <span class="topbar-badge">Área Calidad</span>
+        </div>
       </header>
       <main class="content">
         <div class="container">
@@ -631,6 +639,77 @@
       const trasiegosCount = document.getElementById("trasiegosCount");
       let trasiegosSaveTimers = new Map();
       const navLinks = document.querySelectorAll(".sidebar-nav a[data-target]");
+      const syncSheetsBtn = document.getElementById("syncSheetsBtn");
+      const importSheetsBtn = document.getElementById("importSheetsBtn");
+
+      if (importSheetsBtn) {
+        importSheetsBtn.addEventListener("click", async () => {
+          if (!confirm("¿Importar registros desde Google Sheets a SQLite?\nSolo se insertarán los que falten (por ID).")) {
+            return;
+          }
+          importSheetsBtn.disabled = true;
+          const prevText = importSheetsBtn.textContent;
+          importSheetsBtn.textContent = "Importando…";
+          try {
+            const res = await fetch("/api/admin/import-from-sheets", { method: "POST" });
+            const data = await res.json();
+            if (data.ok) {
+              const lines = Object.entries(data.by_tab || {}).map(
+                ([tab, n]) => `${tab}: ${n} importados`
+              );
+              alert(
+                `${data.message || "Importación completada"}\n` +
+                  `Total: ${data.imported ?? data.total ?? 0}\n\n` +
+                  lines.join("\n")
+              );
+              await Promise.all([
+                loadClients(),
+                loadProducts(),
+                loadTransports(),
+                loadConstancias(),
+                loadTrasiegos(),
+              ]);
+            } else {
+              alert(
+                "No se pudo importar desde Google Sheets.\n" +
+                  (data.error || "Revisa los logs del servidor.")
+              );
+            }
+          } catch (err) {
+            alert("Error de red al importar: " + (err?.message || err));
+          } finally {
+            importSheetsBtn.disabled = false;
+            importSheetsBtn.textContent = prevText;
+          }
+        });
+      }
+
+      if (syncSheetsBtn) {
+        syncSheetsBtn.addEventListener("click", async () => {
+          if (!confirm("¿Sincronizar registros de SQLite con Google Sheets?\nSolo se copiarán los que falten (por ID).")) {
+            return;
+          }
+          syncSheetsBtn.disabled = true;
+          const prevText = syncSheetsBtn.textContent;
+          syncSheetsBtn.textContent = "Sincronizando…";
+          try {
+            const res = await fetch("/api/sync/sheets", { method: "POST" });
+            const data = await res.json();
+            if (data.ok) {
+              alert(
+                `${data.message || "Sincronización completada"}\nRegistros enviados: ${data.synced ?? 0}`
+              );
+            } else {
+              alert("No se pudo sincronizar con Google Sheets. Revisa los logs del servidor.");
+            }
+          } catch (err) {
+            alert("Error de red al sincronizar: " + (err?.message || err));
+          } finally {
+            syncSheetsBtn.disabled = false;
+            syncSheetsBtn.textContent = prevText;
+          }
+        });
+      }
 
       const prodName = document.getElementById("prodName");
       const prodOrigin = document.getElementById("prodOrigin");

@@ -1,107 +1,101 @@
 # Control de Calidad · OCR Logística
 
-Captura de etiquetas desde el celular, OCR con Tesseract, panel admin (constancias, productos, trasiegos, trazabilidad).
+Panel administrativo y API OCR (constancias, productos, trasiegos, trazabilidad).
+
+## URL de producción (panel principal)
+
+**https://ocr-quality-system.onrender.com/admin**
+
+- Usuario por defecto: `admin` / `123456` (cambiar en `frontend/auth-gate.js` antes de uso público)
+- Raíz del sitio `/` redirige a `/admin`
+- Health: https://ocr-quality-system.onrender.com/health
+
+La ruta `/capture` existe solo como **OCR móvil opcional**; no es la entrada principal.
 
 ## Estructura
 
 ```
-├── backend/          # API FastAPI + SQLite
-│   ├── app.py
-│   ├── data/         # Catálogo products.txt
+├── backend/
+│   ├── app.py              # FastAPI
+│   ├── app_config.py       # PUBLIC_APP_URL, ADMIN_URL
+│   ├── google_sheets.py    # Sync creaciones → Sheets
 │   └── requirements.txt
-├── frontend/         # admin.html, capture.html, estilos
-├── Dockerfile        # Despliegue web (Tesseract incluido)
-└── render.yaml       # Blueprint Render.com
+├── frontend/
+│   ├── admin.html          # Panel (ruta /admin)
+│   └── capture.html        # OCR móvil opcional (/capture)
+├── secrets/                # Credenciales Google (no subir a GitHub)
+├── Dockerfile
+└── render.yaml
 ```
 
-## Desarrollo local (Windows)
+## Rutas FastAPI (resumen)
 
-### Requisitos
+| Método | Ruta | Uso |
+|--------|------|-----|
+| GET | `/` | Redirección → `/admin` |
+| GET | `/admin` | Panel administrativo |
+| GET | `/capture` | Captura móvil (opcional) |
+| GET | `/health` | Estado del servicio |
+| GET | `/api/app-config` | URL base y panel |
+| GET/POST/PUT/DELETE | `/api/*` | API REST (SQLite) |
 
-- Python 3.10+
-- [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) en el PATH
+No hay `APIRouter` ni `include_router`; todo está en `app.py`.
 
-### Ejecutar
+## Desarrollo local (opcional)
+
+Solo para pruebas en tu PC. **No es la URL de producción.**
 
 ```powershell
 cd backend
-python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-- Admin: http://127.0.0.1:8000/admin (`admin` / `123456`)
-- Captura móvil: http://IP_DE_TU_PC:8000/capture
+- Panel local: http://127.0.0.1:8000/admin (misma app, otro host)
+- Las peticiones `fetch("/api/...")` usan rutas relativas y funcionan en local y en Render
 
-Si Tesseract no está en PATH:
+Variable opcional en local:
 
 ```powershell
-$env:TESSERACT_CMD = "C:\Program Files\Tesseract-OCR\tesseract.exe"
+$env:PUBLIC_APP_URL = "http://127.0.0.1:8000"
 ```
+
+Si no la defines, `app_config.py` sigue apuntando por defecto a la URL de Render.
+
+## Google Sheets (pruebas)
+
+La sincronización corre en el **mismo backend** (local o Render):
+
+1. Coloca `secrets/chatbot-registros-1bef43c0e1a6.json`
+2. Comparte el spreadsheet `ocr_control_calidad` con la cuenta de servicio
+3. Crea un registro (cliente, producto, etc.) vía panel o API
+4. Revisa logs: `Sheets sync OK` o `Sheets sync FALLIDA`
+
+| Entorno | Dónde probar | Base de datos | Sheets |
+|---------|----------------|---------------|--------|
+| **Producción** | https://ocr-quality-system.onrender.com/admin | SQLite en disco Render | Credenciales en Render (secret file / env) |
+| **Local** | http://127.0.0.1:8000/admin | `backend/results.db` | Mismo JSON en `secrets/` |
+
+Recomendación: probar Sheets en **local** primero; en **Render** sube el JSON como variable/secreto (no está en GitHub).
+
+## Desplegar en Render
+
+1. Conecta el repo en [render.com](https://render.com)
+2. Usa `render.yaml` (servicio `ocr-quality-system`)
+3. Variables: `PUBLIC_APP_URL`, `DATA_DIR`, `DATABASE_PATH` (ya en blueprint)
 
 ## Subir a GitHub
 
-1. Crea un repositorio vacío en GitHub (sin README).
-2. En esta carpeta:
-
 ```powershell
-cd "ruta\ocr - copia en cursor"
-git init
 git add .
-git commit -m "Initial commit: OCR Control de Calidad"
-git branch -M main
-git remote add origin https://github.com/TU_USUARIO/TU_REPO.git
-git push -u origin main
+git commit -m "Configuración panel producción Render"
+git push
 ```
 
-**No se sube:** `.env`, `backend/results.db`, `.venv` (ya están en `.gitignore`).
+No subir: `.env`, `secrets/`, `backend/results.db`
 
-## Desplegar en la web (Render.com)
+## Seguridad
 
-Render ejecuta el `Dockerfile` (Python + Tesseract). El disco persistente guarda la base SQLite.
-
-### Pasos
-
-1. Cuenta en [render.com](https://render.com) y conecta tu cuenta de GitHub.
-2. **New → Blueprint** y selecciona este repositorio (usa `render.yaml`),  
-   **o** **New → Web Service** → Runtime **Docker** → mismo repo.
-3. Espera el build (5–10 min la primera vez).
-4. URL pública: `https://control-calidad-ocr.onrender.com` (según el nombre que elijas).
-
-### Comprobar
-
-- https://TU-APP.onrender.com/health → `{"ok":true,"tesseract":true}`
-- https://TU-APP.onrender.com/admin
-
-### Plan gratuito Render
-
-- La app **se duerme** tras ~15 min sin visitas; el primer acceso puede tardar ~1 min.
-- Disco de 1 GB en `/var/data` para SQLite (datos entre reinicios).
-- Si necesitas siempre activo y más recursos, usa un plan de pago.
-
-### Variables de entorno (producción)
-
-| Variable | Valor típico |
-|----------|----------------|
-| `PORT` | `8000` |
-| `DATA_DIR` | `/var/data` |
-| `DATABASE_PATH` | `/var/data/results.db` |
-
-## Catálogo de productos
-
-Edita `backend/data/products.txt` (una línea por producto). En producción, tras el primer despliegue, los cambios en el repo no sobrescriben el disco; actualiza el archivo en el servidor o vuelve a desplegar según tu flujo.
-
-## Seguridad (importante)
-
-- Las credenciales del admin están en `frontend/auth-gate.js` (`admin` / `123456`). **Cámbialas antes de exponer la app en internet.**
-- No subas `.env` ni bases de datos con datos reales a GitHub.
-- Haz copias periódicas de `results.db` (descarga desde el servidor o backup del disco Render).
-
-## Respaldo de datos
-
-Descarga periódicamente la base desde el entorno de producción o automatiza backup del volumen `/var/data/results.db`.
-
-## Licencia
-
-Uso interno del proyecto.
+- Cambiar contraseña en `auth-gate.js`
+- No commitear credenciales Google ni `.db` con datos reales
