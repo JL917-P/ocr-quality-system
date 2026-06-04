@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import os
 import re
 import shutil
@@ -24,14 +25,49 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pytesseract import Output
 
+from app_config import ADMIN_PATH, ADMIN_URL, app_config_payload
+from import_from_sheets import run_import_from_sheets
+from google_sheets import (
+    TAB_CLIENTES,
+    TAB_CONSTANCIAS,
+    TAB_PRODUCTOS,
+    TAB_TRASIEGOS,
+    TAB_TRANSPORTES,
+    run_manual_resync,
+    run_startup_sheets_backup_check,
+    run_sync_after_create,
+    sync_client_created,
+    sync_constancia_created,
+    sync_product_created,
+    sync_transport_created,
+    sync_trasiego_created,
+)
+
 APP_ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.getenv("DATA_DIR", str(APP_ROOT / "data")))
 DB_PATH = Path(os.getenv("DATABASE_PATH", str(APP_ROOT / "results.db")))
 PRODUCTS_PATH = DATA_DIR / "products.txt"
 FRONTEND_DIR = APP_ROOT.parent / "frontend"
 
-app = FastAPI(title="Mobile OCR Admin")
+app = FastAPI(title="Control de Calidad OCR")
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+
+
+def _inject_panel_config(html: str) -> str:
+    """Inyecta URL del panel (producción) sin hardcodear localhost en el frontend."""
+    cfg = app_config_payload()
+    snippet = (
+        f'<link rel="canonical" href="{ADMIN_URL}" />'
+        f'<script>window.QC_APP_CONFIG={json.dumps(cfg, ensure_ascii=True)};</script>'
+    )
+    marker = "</head>"
+    if marker in html:
+        return html.replace(marker, f"{snippet}\n  {marker}", 1)
+    return html + snippet
+
+
+def _read_frontend_html(filename: str) -> str:
+    return (FRONTEND_DIR / filename).read_text(encoding="utf-8")
 
 
 def init_db() -> None:
@@ -819,7 +855,12 @@ def save_result(lines: List[str], warnings: List[str], label_text: str) -> None:
 
 @app.on_event("startup")
 def on_startup() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
     init_db()
+    run_startup_sheets_backup_check(DB_PATH)
 
 
 @app.get("/health")
@@ -827,21 +868,59 @@ def health() -> JSONResponse:
     return JSONResponse({"ok": True, "tesseract": bool(resolved_cmd)})
 
 
+@app.get("/api/app-config")
+def get_app_config() -> JSONResponse:
+    """URL base y panel admin (producción: ocr-quality-system.onrender.com/admin)."""
+    return JSONResponse(app_config_payload())
+
+
+@app.post("/api/sync/sheets")
+def sync_sheets_manual() -> JSONResponse:
+    """Respaldo manual: SQLite → Google Sheets (solo registros faltantes por id)."""
+    result = run_manual_resync(DB_PATH)
+    return JSONResponse(
+        {
+            "ok": bool(result.get("ok")),
+            "message": result.get("message", "Sincronización completada"),
+            "synced": result.get("synced", 0),
+            "by_tab": result.get("by_tab", {}),
+            "metrics": result.get("metrics", {}),
+        }
+    )
+
+
+@app.post("/api/admin/import-from-sheets")
+def import_from_sheets_admin() -> JSONResponse:
+    """Importación manual: Google Sheets → SQLite (solo registros faltantes por id)."""
+    init_db()
+    result = run_import_from_sheets(DB_PATH)
+    return JSONResponse(
+        {
+            "ok": bool(result.get("ok")),
+            "message": result.get("message", "Importación completada"),
+            "imported": result.get("imported", 0),
+            "total": result.get("total", 0),
+            "by_tab": result.get("by_tab", {}),
+            "error": result.get("error"),
+        }
+    )
+
+
 @app.get("/", response_class=RedirectResponse)
 def root() -> RedirectResponse:
-    return RedirectResponse(url="/admin")
+    return RedirectResponse(url=ADMIN_PATH, status_code=302)
 
 
 @app.get("/capture", response_class=HTMLResponse)
 def capture_page() -> HTMLResponse:
-    html_path = FRONTEND_DIR / "capture.html"
-    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+    """OCR móvil opcional; el panel principal es /admin."""
+    return HTMLResponse(content=_read_frontend_html("capture.html"))
 
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page() -> HTMLResponse:
-    html_path = FRONTEND_DIR / "admin.html"
-    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+    html = _inject_panel_config(_read_frontend_html("admin.html"))
+    return HTMLResponse(content=html)
 
 
 @app.get("/constancia-view", response_class=HTMLResponse)
@@ -1045,6 +1124,11 @@ async def create_product(payload: dict) -> JSONResponse:
         )
         conn.commit()
         product_id = cursor.lastrowid
+    run_sync_after_create(
+        TAB_PRODUCTOS,
+        product_id,
+        lambda: sync_product_created(product_id, data, created_at),
+    )
     return JSONResponse({"id": product_id})
 
 
@@ -1135,6 +1219,11 @@ async def create_client(payload: dict) -> JSONResponse:
         )
         conn.commit()
         client_id = cursor.lastrowid
+    run_sync_after_create(
+        TAB_CLIENTES,
+        client_id,
+        lambda: sync_client_created(client_id, name, ruc, created_at),
+    )
     return JSONResponse({"id": client_id})
 
 
@@ -1170,6 +1259,11 @@ async def create_transport(payload: dict) -> JSONResponse:
         )
         conn.commit()
         transport_id = cursor.lastrowid
+    run_sync_after_create(
+        TAB_TRANSPORTES,
+        transport_id,
+        lambda: sync_transport_created(transport_id, plate, created_at),
+    )
     return JSONResponse({"id": transport_id})
 
 
@@ -1215,6 +1309,14 @@ def list_trasiegos(limit: int = 500) -> JSONResponse:
 @app.post("/api/trasiegos")
 async def create_trasiego(payload: dict) -> JSONResponse:
     now = datetime.now(timezone.utc).isoformat()
+    fecha = (payload.get("fecha") or "").strip() or None
+    mp = (payload.get("mp") or "").strip() or None
+    f_ingreso = (payload.get("f_ingreso") or "").strip() or None
+    estado = (payload.get("estado") or "").strip() or None
+    lote = (payload.get("lote") or "").strip() or None
+    f_p = (payload.get("f_p") or "").strip() or None
+    f_v = (payload.get("f_v") or "").strip() or None
+    cantidad = (payload.get("cantidad") or "").strip() or None
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.execute(
             """
@@ -1222,21 +1324,17 @@ async def create_trasiego(payload: dict) -> JSONResponse:
                 fecha, mp, f_ingreso, estado, lote, f_p, f_v, cantidad, created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (
-                (payload.get("fecha") or "").strip() or None,
-                (payload.get("mp") or "").strip() or None,
-                (payload.get("f_ingreso") or "").strip() or None,
-                (payload.get("estado") or "").strip() or None,
-                (payload.get("lote") or "").strip() or None,
-                (payload.get("f_p") or "").strip() or None,
-                (payload.get("f_v") or "").strip() or None,
-                (payload.get("cantidad") or "").strip() or None,
-                now,
-                now,
-            ),
+            (fecha, mp, f_ingreso, estado, lote, f_p, f_v, cantidad, now, now),
         )
         conn.commit()
         row_id = cursor.lastrowid
+    run_sync_after_create(
+        TAB_TRASIEGOS,
+        row_id,
+        lambda: sync_trasiego_created(
+            row_id, fecha, mp, f_ingreso, estado, lote, f_p, f_v, cantidad, now, now
+        ),
+    )
     return JSONResponse({"id": row_id})
 
 
@@ -1292,6 +1390,7 @@ async def create_constancia(payload: dict) -> JSONResponse:
     client_name = (payload.get("client_name") or "").strip() or None
     transport_plate = (payload.get("transport_plate") or "").strip() or None
     created_at = datetime.now(timezone.utc).isoformat()
+    items_json = json.dumps(items, ensure_ascii=True)
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.execute(
             """
@@ -1307,12 +1406,28 @@ async def create_constancia(payload: dict) -> JSONResponse:
                 fumigacion,
                 calidad,
                 status,
-                json.dumps(items, ensure_ascii=True),
+                items_json,
                 created_at,
             ),
         )
         conn.commit()
         constancia_id = cursor.lastrowid
+    run_sync_after_create(
+        TAB_CONSTANCIAS,
+        constancia_id,
+        lambda: sync_constancia_created(
+            constancia_id,
+            number,
+            issue_date,
+            client_name,
+            transport_plate,
+            fumigacion,
+            calidad,
+            status,
+            items_json,
+            created_at,
+        ),
+    )
     return JSONResponse({"id": constancia_id})
 
 
@@ -1432,4 +1547,10 @@ async def update_constancia(constancia_id: int, payload: dict) -> JSONResponse:
         conn.commit()
     return JSONResponse({"ok": True})
 
+
+if __name__ == "__main__":
+    import uvicorn
+
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
