@@ -436,6 +436,7 @@
                     <th style="width:120px;">M.P</th>
                     <th style="width:150px;">F.Ingreso</th>
                     <th style="width:120px;">Estado</th>
+                    <th style="width:220px;">P.final</th>
                     <th style="width:120px;">Lote</th>
                     <th style="width:170px;">F.P</th>
                     <th style="width:170px;">F.V</th>
@@ -2052,6 +2053,7 @@
           <td><input type="text" data-field="mp" placeholder="M.P" /></td>
           <td><input type="date" class="trasiego-date" data-field="f_ingreso" title="F. Ingreso" /></td>
           <td><input type="text" data-field="estado" placeholder="Estado" /></td>
+          <td><input type="text" data-field="p_final" placeholder="Ej: Arroz gran chalan extrab x 50kg" /></td>
           <td><input type="text" data-field="lote" placeholder="Lote" /></td>
           <td>
             <div class="trasiego-dual-date">
@@ -2068,7 +2070,7 @@
           <td><input type="text" data-field="cantidad" placeholder="Cantidad" /></td>
           <td><button type="button" class="btn btn-danger btn-mini trasiego-delete" title="Eliminar fila">🗑</button></td>
         `;
-        const fields = ["fecha", "mp", "f_ingreso", "estado", "lote", "cantidad"];
+        const fields = ["fecha", "mp", "f_ingreso", "estado", "p_final", "lote", "cantidad"];
         fields.forEach((field) => {
           const input = tr.querySelector(`[data-field="${field}"]`);
           if (!input) return;

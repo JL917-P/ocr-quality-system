@@ -486,6 +486,7 @@ def sync_trasiego_created(
     mp: str | None,
     f_ingreso: str | None,
     estado: str | None,
+    p_final: str | None,
     lote: str | None,
     f_p: str | None,
     f_v: str | None,
@@ -496,11 +497,11 @@ def sync_trasiego_created(
     return _append_single(
         TAB_TRASIEGOS,
         (
-            "id", "fecha", "mp", "f_ingreso", "estado", "lote",
+            "id", "fecha", "mp", "f_ingreso", "estado", "p_final", "lote",
             "f_p", "f_v", "cantidad", "created_at", "updated_at",
         ),
         (
-            trasiego_id, fecha, mp, f_ingreso, estado, lote,
+            trasiego_id, fecha, mp, f_ingreso, estado, p_final, lote,
             f_p, f_v, cantidad, created_at, updated_at,
         ),
     )
@@ -545,7 +546,7 @@ HEADERS_CONSTANCIAS = (
     "fumigacion", "calidad", "status", "items_json", "created_at",
 )
 HEADERS_TRASIEGOS = (
-    "id", "fecha", "mp", "f_ingreso", "estado", "lote",
+    "id", "fecha", "mp", "f_ingreso", "estado", "p_final", "lote",
     "f_p", "f_v", "cantidad", "created_at", "updated_at",
 )
 
@@ -576,7 +577,7 @@ ENTITY_SPECS: list[tuple[str, str, Sequence[str], str]] = [
         "trasiegos",
         HEADERS_TRASIEGOS,
         """
-        SELECT id, fecha, mp, f_ingreso, estado, lote, f_p, f_v, cantidad, created_at, updated_at
+        SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
         FROM trasiegos ORDER BY id
         """,
     ),

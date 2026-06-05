@@ -158,6 +158,7 @@ def init_db() -> None:
                 mp TEXT,
                 f_ingreso TEXT,
                 estado TEXT,
+                p_final TEXT,
                 lote TEXT,
                 f_p TEXT,
                 f_v TEXT,
@@ -167,6 +168,11 @@ def init_db() -> None:
             )
             """
         )
+        trasiego_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(trasiegos)").fetchall()
+        }
+        if "p_final" not in trasiego_columns:
+            conn.execute("ALTER TABLE trasiegos ADD COLUMN p_final TEXT")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS constancias (
@@ -1303,12 +1309,13 @@ def _trasiego_row_to_dict(row: tuple) -> dict:
         "mp": row[2] or "",
         "f_ingreso": row[3] or "",
         "estado": row[4] or "",
-        "lote": row[5] or "",
-        "f_p": row[6] or "",
-        "f_v": row[7] or "",
-        "cantidad": row[8] or "",
-        "created_at": row[9],
-        "updated_at": row[10],
+        "p_final": row[5] or "",
+        "lote": row[6] or "",
+        "f_p": row[7] or "",
+        "f_v": row[8] or "",
+        "cantidad": row[9] or "",
+        "created_at": row[10],
+        "updated_at": row[11],
     }
 
 
@@ -1317,7 +1324,7 @@ def list_trasiegos(limit: int = 500) -> JSONResponse:
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             """
-            SELECT id, fecha, mp, f_ingreso, estado, lote, f_p, f_v, cantidad, created_at, updated_at
+            SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
             FROM trasiegos
             ORDER BY id ASC
             LIMIT ?
@@ -1334,6 +1341,7 @@ async def create_trasiego(payload: dict) -> JSONResponse:
     mp = (payload.get("mp") or "").strip() or None
     f_ingreso = (payload.get("f_ingreso") or "").strip() or None
     estado = (payload.get("estado") or "").strip() or None
+    p_final = (payload.get("p_final") or "").strip() or None
     lote = (payload.get("lote") or "").strip() or None
     f_p = (payload.get("f_p") or "").strip() or None
     f_v = (payload.get("f_v") or "").strip() or None
@@ -1342,10 +1350,10 @@ async def create_trasiego(payload: dict) -> JSONResponse:
         cursor = conn.execute(
             """
             INSERT INTO trasiegos (
-                fecha, mp, f_ingreso, estado, lote, f_p, f_v, cantidad, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (fecha, mp, f_ingreso, estado, lote, f_p, f_v, cantidad, now, now),
+            (fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, now, now),
         )
         conn.commit()
         row_id = cursor.lastrowid
@@ -1353,7 +1361,7 @@ async def create_trasiego(payload: dict) -> JSONResponse:
         TAB_TRASIEGOS,
         row_id,
         lambda: sync_trasiego_created(
-            row_id, fecha, mp, f_ingreso, estado, lote, f_p, f_v, cantidad, now, now
+            row_id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, now, now
         ),
     )
     return JSONResponse({"id": row_id})
@@ -1366,7 +1374,7 @@ async def update_trasiego(trasiego_id: int, payload: dict) -> JSONResponse:
         conn.execute(
             """
             UPDATE trasiegos
-            SET fecha = ?, mp = ?, f_ingreso = ?, estado = ?, lote = ?, f_p = ?, f_v = ?, cantidad = ?, updated_at = ?
+            SET fecha = ?, mp = ?, f_ingreso = ?, estado = ?, p_final = ?, lote = ?, f_p = ?, f_v = ?, cantidad = ?, updated_at = ?
             WHERE id = ?
             """,
             (
@@ -1374,6 +1382,7 @@ async def update_trasiego(trasiego_id: int, payload: dict) -> JSONResponse:
                 (payload.get("mp") or "").strip() or None,
                 (payload.get("f_ingreso") or "").strip() or None,
                 (payload.get("estado") or "").strip() or None,
+                (payload.get("p_final") or "").strip() or None,
                 (payload.get("lote") or "").strip() or None,
                 (payload.get("f_p") or "").strip() or None,
                 (payload.get("f_v") or "").strip() or None,

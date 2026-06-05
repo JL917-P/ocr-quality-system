@@ -230,8 +230,8 @@ def _import_trasiegos(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> i
         conn.execute(
             """
             INSERT INTO trasiegos (
-                id, fecha, mp, f_ingreso, estado, lote, f_p, f_v, cantidad, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 row_id,
@@ -239,6 +239,7 @@ def _import_trasiegos(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> i
                 _str_or_none(row.get("mp", "")),
                 _str_or_none(row.get("f_ingreso", "")),
                 _str_or_none(row.get("estado", "")),
+                _str_or_none(row.get("p_final", "")),
                 _str_or_none(row.get("lote", "")),
                 _str_or_none(row.get("f_p", "")),
                 _str_or_none(row.get("f_v", "")),
