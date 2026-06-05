@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=sidebar-edge" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=mobile1" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: flex; min-height: 100vh; position: relative; z-index: 1; }
@@ -117,6 +117,7 @@
           <span class="sidebar-toggle-icon" aria-hidden="true">▶</span>
         </button>
       </aside>
+      <div id="sidebarBackdrop" class="sidebar-backdrop hidden" aria-hidden="true"></div>
       <div class="main-wrap">
       <header class="page-header">
         <div class="page-header-brand">
@@ -640,6 +641,27 @@
       const addRowBtn = document.getElementById("addRowBtn");
       const adminLayout = document.getElementById("adminLayout");
       const sidebarToggle = document.getElementById("sidebarToggle");
+      const sidebarBackdrop = document.getElementById("sidebarBackdrop");
+
+      function setSidebarOpen(open) {
+        if (!adminLayout) return;
+        adminLayout.classList.toggle("sidebar-open", open);
+        if (sidebarToggle) {
+          const label = open ? "Ocultar menú" : "Mostrar menú";
+          sidebarToggle.setAttribute("aria-label", label);
+          sidebarToggle.setAttribute("title", label);
+          sidebarToggle.setAttribute("aria-expanded", open ? "true" : "false");
+        }
+        if (sidebarBackdrop) {
+          sidebarBackdrop.classList.toggle("hidden", !open);
+        }
+      }
+
+      function closeSidebarIfMobile() {
+        if (window.matchMedia("(max-width: 768px)").matches) {
+          setSidebarOpen(false);
+        }
+      }
       const ocrBandejaBtn = document.getElementById("ocrBandejaBtn");
       const ocrBandejaPanel = document.getElementById("ocrBandejaPanel");
       let cachedResults = [];
@@ -1980,6 +2002,7 @@
           loadTrasiegos();
         }
         suppressOcrReset = false;
+        closeSidebarIfMobile();
       }
 
       const navContainer = document.querySelector(".sidebar-nav");
@@ -1994,12 +2017,11 @@
 
       if (adminLayout && sidebarToggle) {
         sidebarToggle.addEventListener("click", () => {
-          const open = adminLayout.classList.toggle("sidebar-open");
-          const label = open ? "Ocultar menú" : "Mostrar menú";
-          sidebarToggle.setAttribute("aria-label", label);
-          sidebarToggle.setAttribute("title", label);
-          sidebarToggle.setAttribute("aria-expanded", open ? "true" : "false");
+          setSidebarOpen(!adminLayout.classList.contains("sidebar-open"));
         });
+      }
+      if (sidebarBackdrop) {
+        sidebarBackdrop.addEventListener("click", () => setSidebarOpen(false));
       }
 
       function isTrasiegoRowMeaningful(payload) {
