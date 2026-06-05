@@ -665,7 +665,7 @@
 
       if (importSheetsBtn) {
         importSheetsBtn.addEventListener("click", async () => {
-          if (!confirm("¿Importar registros desde Google Sheets a SQLite?\nSolo se insertarán los que falten (por ID).\nNo se borrarán productos de constancias ya guardadas.\nLos registros eliminados no volverán.\n\nSe guardarán primero los trasiegos pendientes.")) {
+          if (!confirm("¿Importar registros desde Google Sheets a SQLite?\nSolo se insertarán los que falten (por ID).\nNo se sobrescriben trasiegos ni productos de constancias ya guardados.\nLos registros eliminados no volverán.\n\nSe guardarán primero los trasiegos pendientes.")) {
             return;
           }
           importSheetsBtn.disabled = true;

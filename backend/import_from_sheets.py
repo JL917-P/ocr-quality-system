@@ -22,16 +22,17 @@ from google_sheets import (
     HEADERS_CLIENTES,
     HEADERS_CONSTANCIAS,
     HEADERS_PRODUCTOS,
-    HEADERS_TRANSPORTES,
     HEADERS_TRASIEGOS,
+    HEADERS_TRANSPORTES,
     TAB_CLIENTES,
     TAB_CONSTANCIAS,
     TAB_PRODUCTOS,
-    TAB_TRANSPORTES,
     TAB_TRASIEGOS,
+    TAB_TRANSPORTES,
     _parse_id_cell,
     get_spreadsheet,
     read_sheet_rows,
+    read_trasiegos_sheet_rows,
     reset_connection,
 )
 
@@ -296,56 +297,39 @@ def _import_trasiegos(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> i
     existing = _existing_ids(conn, "trasiegos")
     deleted = _deleted_ids(conn, "trasiegos")
     imported = 0
-    updated = 0
     for row in rows:
         row_id = _parse_id_cell(row.get("id", ""))
-        if row_id is None or row_id in deleted:
+        if row_id is None or row_id in existing or row_id in deleted:
             continue
         now = _utc_now()
         created_at = _str_or_none(row.get("created_at", "")) or now
         updated_at = _str_or_none(row.get("updated_at", "")) or created_at
-        values = (
-            _str_or_none(row.get("fecha", "")),
-            _str_or_none(row.get("mp", "")),
-            _str_or_none(row.get("f_ingreso", "")),
-            _str_or_none(row.get("estado", "")),
-            _str_or_none(row.get("p_final", "")),
-            _str_or_none(row.get("lote", "")),
-            _str_or_none(row.get("f_p", "")),
-            _str_or_none(row.get("f_v", "")),
-            _str_or_none(row.get("cantidad", "")),
-        )
-        if row_id in existing:
-            cur = conn.execute(
-                "SELECT updated_at FROM trasiegos WHERE id = ?",
-                (row_id,),
-            ).fetchone()
-            sqlite_updated = (cur[0] or "") if cur else ""
-            if updated_at > sqlite_updated:
-                conn.execute(
-                    """
-                    UPDATE trasiegos
-                    SET fecha = ?, mp = ?, f_ingreso = ?, estado = ?, p_final = ?, lote = ?,
-                        f_p = ?, f_v = ?, cantidad = ?, updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (*values, updated_at, row_id),
-                )
-                updated += 1
-            continue
         conn.execute(
             """
             INSERT INTO trasiegos (
                 id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (row_id, *values, created_at, updated_at),
+            (
+                row_id,
+                _str_or_none(row.get("fecha", "")),
+                _str_or_none(row.get("mp", "")),
+                _str_or_none(row.get("f_ingreso", "")),
+                _str_or_none(row.get("estado", "")),
+                _str_or_none(row.get("p_final", "")),
+                _str_or_none(row.get("lote", "")),
+                _str_or_none(row.get("f_p", "")),
+                _str_or_none(row.get("f_v", "")),
+                _str_or_none(row.get("cantidad", "")),
+                created_at,
+                updated_at,
+            ),
         )
         existing.add(row_id)
         imported += 1
     if imported:
         _fix_sqlite_sequence(conn, "trasiegos")
-    return imported + updated
+    return imported
 
 
 IMPORT_SPECS: list[tuple[str, Sequence[str], Callable[[sqlite3.Connection, list[dict[str, str]]], int]]] = [
@@ -382,7 +366,10 @@ def run_import_from_sheets(db_path: Path, *, reset: bool = True) -> dict[str, An
     by_tab: dict[str, int] = {}
     with sqlite3.connect(db_path) as conn:
         for tab, headers, importer in IMPORT_SPECS:
-            rows = read_sheet_rows(tab, headers)
+            if tab == TAB_TRASIEGOS:
+                rows = read_trasiegos_sheet_rows()
+            else:
+                rows = read_sheet_rows(tab, headers)
             count = importer(conn, rows)
             conn.commit()
             by_tab[tab] = count

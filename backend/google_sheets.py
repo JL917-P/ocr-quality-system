@@ -271,6 +271,91 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
 }
 
 
+def ensure_tab_headers(state: TabState) -> None:
+    """Fila 1 = headers canónicos (evita desalineación al añadir columnas como p_final)."""
+    global _metrics
+    headers = list(state.headers)
+    end_col = _col_letter(len(headers))
+    range_name = f"A1:{end_col}1"
+
+    def _update() -> None:
+        state.sheet.update(
+            [headers],
+            range_name=range_name,
+            value_input_option="USER_ENTERED",
+        )
+
+    _with_retry(f"ensure_headers({state.tab})", _update)
+    _metrics.writes += 1
+    state.has_header = True
+
+
+def read_trasiegos_sheet_rows() -> list[dict[str, str]]:
+    """Lee TRASIEGOS; soporta hoja legacy sin columna p_final."""
+    sheet = _get_worksheet_cached(TAB_TRASIEGOS)
+    if sheet is None:
+        return []
+
+    def _read() -> list[list[str]]:
+        return sheet.get_all_values()
+
+    raw = _with_retry(f"get_all_values({TAB_TRASIEGOS})", _read)
+    global _metrics
+    _metrics.reads += 1
+    if not raw:
+        return []
+
+    header_row = [(c or "").strip().lower() for c in raw[0]]
+    legacy = "p_final" not in header_row
+    canonical = HEADERS_TRASIEGOS
+    legacy_keys = (
+        "id", "fecha", "mp", "f_ingreso", "estado", "lote",
+        "f_p", "f_v", "cantidad", "created_at", "updated_at",
+    )
+
+    if not legacy:
+        col_map: dict[str, int] = {}
+        for h in canonical:
+            key = h.lower()
+            if key in header_row:
+                col_map[h] = header_row.index(key)
+        records: list[dict[str, str]] = []
+        for row in raw[1:]:
+            if not any((c or "").strip() for c in row):
+                continue
+            rec: dict[str, str] = {}
+            for h in canonical:
+                idx = col_map.get(h)
+                rec[h] = (row[idx] if idx is not None and idx < len(row) else "") or ""
+            records.append(rec)
+        return records
+
+    records = []
+    for row in raw[1:]:
+        if not any((c or "").strip() for c in row):
+            continue
+        rec = {
+            legacy_keys[i]: (row[i] if i < len(row) else "") or ""
+            for i in range(len(legacy_keys))
+        }
+        mapped = {
+            "id": rec.get("id", ""),
+            "fecha": rec.get("fecha", ""),
+            "mp": rec.get("mp", ""),
+            "f_ingreso": rec.get("f_ingreso", ""),
+            "estado": rec.get("estado", ""),
+            "p_final": "",
+            "lote": rec.get("lote", ""),
+            "f_p": rec.get("f_p", ""),
+            "f_v": rec.get("f_v", ""),
+            "cantidad": rec.get("cantidad", ""),
+            "created_at": rec.get("created_at", ""),
+            "updated_at": rec.get("updated_at", ""),
+        }
+        records.append(mapped)
+    return records
+
+
 def read_sheet_rows(tab: str, headers: Sequence[str]) -> list[dict[str, str]]:
     """Lee todas las filas de una pestaña como dicts {header: valor_str}."""
     sheet = _get_worksheet_cached(tab)
@@ -364,6 +449,8 @@ def _append_rows_batch(state: TabState, rows: list[list[Any]]) -> int:
     global _metrics
     if not rows:
         return 0
+
+    ensure_tab_headers(state)
 
     new_rows: list[list[Any]] = []
     for row in rows:
@@ -471,6 +558,7 @@ def upsert_row_by_id(tab: str, headers: Sequence[str], values: Sequence[Any]) ->
     state = get_tab_state(tab, headers)
     if state is None:
         return False
+    ensure_tab_headers(state)
     record_id = _parse_id_cell(str(values[0]) if values else "")
     if record_id is None:
         return False
