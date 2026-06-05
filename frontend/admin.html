@@ -185,6 +185,7 @@
           </table>
           <div class="actions">
             <button class="btn btn-success" id="addRowBtn">+ Agregar fila</button>
+            <button class="btn btn-secondary hidden" id="restoreConstanciaItemsBtn" type="button">Restaurar productos del historial</button>
             <button class="btn btn-primary" id="saveBtn">Guardar Constancia</button>
             <button class="btn btn-warning" id="reserveBtn">Reserva</button>
             <button class="btn btn-outline" id="draftBtn">Borrador</button>
@@ -364,6 +365,7 @@
                 <tr>
                   <th style="width:34px;"><input id="selectAllConstancias" type="checkbox" /></th>
                   <th style="width:80px;">Número</th>
+                  <th style="width:90px;">Productos</th>
                   <th style="width:140px;">Fecha emisión</th>
                   <th>Cliente</th>
                   <th style="width:160px;">Unidad transporte</th>
@@ -663,7 +665,7 @@
 
       if (importSheetsBtn) {
         importSheetsBtn.addEventListener("click", async () => {
-          if (!confirm("¿Importar registros desde Google Sheets a SQLite?\nSolo se insertarán los que falten (por ID).\nLos registros eliminados no volverán.\n\nSe guardarán primero los trasiegos pendientes.")) {
+          if (!confirm("¿Importar registros desde Google Sheets a SQLite?\nSolo se insertarán los que falten (por ID).\nNo se borrarán productos de constancias ya guardadas.\nLos registros eliminados no volverán.\n\nSe guardarán primero los trasiegos pendientes.")) {
             return;
           }
           importSheetsBtn.disabled = true;
@@ -777,6 +779,7 @@
       const constanciaNumero = document.getElementById("constanciaNumero");
       const constanciaFecha = document.getElementById("constanciaFecha");
       const saveBtn = document.getElementById("saveBtn");
+      const restoreConstanciaItemsBtn = document.getElementById("restoreConstanciaItemsBtn");
       const reserveBtn = document.getElementById("reserveBtn");
       const draftBtn = document.getElementById("draftBtn");
       const cancelBtn = document.getElementById("cancelBtn");
@@ -1851,6 +1854,27 @@
       loadResults();
 
       saveBtn.addEventListener("click", () => saveConstancia("confirmada"));
+      if (restoreConstanciaItemsBtn) {
+        restoreConstanciaItemsBtn.addEventListener("click", async () => {
+          if (!currentConstanciaId) return;
+          try {
+            const res = await fetch(`/api/constancias/${currentConstanciaId}/restore-items-from-history`, {
+              method: "POST",
+            });
+            const data = await res.json();
+            if (res.ok && data.restored > 0) {
+              fillConstanciaItems(data.items || []);
+              updateRestoreConstanciaButton(data.items || []);
+              alert(`Se restauraron ${data.restored} producto(s) desde el historial.`);
+              await loadConstancias();
+            } else {
+              alert(data.message || "No hay productos en el historial para restaurar.");
+            }
+          } catch (err) {
+            alert("Error al restaurar productos: " + (err?.message || err));
+          }
+        });
+      }
       reserveBtn.addEventListener("click", () => saveConstancia("por_confirmar"));
       if (draftBtn) draftBtn.addEventListener("click", () => saveConstancia("borrador"));
       cancelBtn.addEventListener("click", () => {
@@ -2591,6 +2615,12 @@
         return "";
       }
 
+      function updateRestoreConstanciaButton(items) {
+        if (!restoreConstanciaItemsBtn) return;
+        const hasItems = Array.isArray(items) && items.length > 0;
+        restoreConstanciaItemsBtn.classList.toggle("hidden", !currentConstanciaId || hasItems);
+      }
+
       function resetConstanciaForm() {
         constanciaNumero.value = "";
         constanciaFecha.value = formatToday();
@@ -2602,11 +2632,17 @@
         addRow();
         currentConstanciaId = null;
         currentConstanciaStatus = "confirmada";
+        updateRestoreConstanciaButton([]);
       }
 
       async function saveConstancia(status) {
         if (!constanciaFumigacion.checked && !constanciaCalidad.checked) {
           alert("Selecciona al menos una constancia (Fumigación o Calidad).");
+          return;
+        }
+        const items = collectConstanciaItems();
+        if (!items.length) {
+          alert("Agrega al menos un producto a la constancia antes de guardar.");
           return;
         }
         const payload = {
@@ -2617,7 +2653,7 @@
           fumigacion: constanciaFumigacion.checked,
           calidad: constanciaCalidad.checked,
           status,
-          items: collectConstanciaItems(),
+          items,
           usuario: "admin",
         };
         if (!payload.client_name) return;
@@ -2656,9 +2692,15 @@
           const row = document.createElement("tr");
           const statusLabel = constanciaStatusLabel(item.status);
           const statusClass = constanciaStatusClass(item.status);
+          const itemCount = Array.isArray(item.items) ? item.items.length : 0;
+          const itemCountLabel =
+            itemCount === 0
+              ? '<span style="color:#b42318;font-weight:600;">0</span>'
+              : String(itemCount);
           row.innerHTML = `
             <td><input type="checkbox" class="const-check" data-id="${item.id}" /></td>
             <td>${item.number || item.id}</td>
+            <td>${itemCountLabel}</td>
             <td>${item.issue_date || ""}</td>
             <td>${item.client_name || ""}</td>
             <td>${item.transport_plate || ""}</td>
@@ -2689,6 +2731,7 @@
             constanciaFumigacion.checked = data.fumigacion !== 0 && data.fumigacion !== false;
             constanciaCalidad.checked = data.calidad !== 0 && data.calidad !== false;
             fillConstanciaItems(data.items || []);
+            updateRestoreConstanciaButton(data.items || []);
             showSection("section-ocr");
           });
           const confirmBtn = row.querySelector(".confirm-btn");

@@ -266,6 +266,11 @@ def _parse_id_cell(value: str) -> Optional[int]:
         return None
 
 
+COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
+    "items_json": ("items_json", "items", "productos_json", "items json"),
+}
+
+
 def read_sheet_rows(tab: str, headers: Sequence[str]) -> list[dict[str, str]]:
     """Lee todas las filas de una pestaña como dicts {header: valor_str}."""
     sheet = _get_worksheet_cached(tab)
@@ -284,9 +289,12 @@ def read_sheet_rows(tab: str, headers: Sequence[str]) -> list[dict[str, str]]:
     header_row = [(c or "").strip().lower() for c in raw[0]]
     col_map: dict[str, int] = {}
     for h in headers:
-        key = h.lower()
-        if key in header_row:
-            col_map[h] = header_row.index(key)
+        alias_keys = COLUMN_ALIASES.get(h, (h,))
+        for key in alias_keys:
+            lookup = key.lower()
+            if lookup in header_row:
+                col_map[h] = header_row.index(lookup)
+                break
 
     records: list[dict[str, str]] = []
     for row in raw[1:]:

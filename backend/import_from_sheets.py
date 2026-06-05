@@ -98,6 +98,40 @@ def _items_json_is_empty(raw: str) -> bool:
     return len(parse_items_json(raw or "[]")) == 0
 
 
+def _constancia_id_by_number(conn: sqlite3.Connection, number: Optional[str]) -> Optional[int]:
+    text = (number or "").strip()
+    if not text:
+        return None
+    row = conn.execute(
+        "SELECT id FROM constancias WHERE trim(coalesce(number, '')) = ? LIMIT 1",
+        (text,),
+    ).fetchone()
+    return int(row[0]) if row else None
+
+
+def _merge_constancia_from_sheet(
+    conn: sqlite3.Connection,
+    target_id: int,
+    status: str,
+    items_json: str,
+) -> bool:
+    """Fusiona fila de Sheets en constancia existente. Nunca borra items_json."""
+    cur = conn.execute(
+        "SELECT items_json FROM constancias WHERE id = ?",
+        (target_id,),
+    ).fetchone()
+    if not cur:
+        return False
+    sqlite_items = cur[0] or "[]"
+    if _items_json_is_empty(sqlite_items) and not _items_json_is_empty(items_json):
+        conn.execute(
+            "UPDATE constancias SET items_json = ?, status = ? WHERE id = ?",
+            (items_json, status, target_id),
+        )
+        return True
+    return False
+
+
 def _fix_sqlite_sequence(conn: sqlite3.Connection, table: str) -> None:
     row = conn.execute(f"SELECT COALESCE(MAX(id), 0) FROM {table}").fetchone()
     max_id = int(row[0]) if row else 0
@@ -206,23 +240,30 @@ def _import_constancias(conn: sqlite3.Connection, rows: list[dict[str, str]]) ->
     imported = 0
     repaired = 0
     for row in rows:
-        row_id = _parse_id_cell(row.get("id", ""))
-        if row_id is None or row_id in deleted:
+        sheet_id = _parse_id_cell(row.get("id", ""))
+        if sheet_id is None or sheet_id in deleted:
             continue
         status = normalize_constancia_status(row.get("status") or "confirmada")
         items_json = (row.get("items_json") or "").strip() or "[]"
-        if row_id in existing:
-            cur = conn.execute(
-                "SELECT items_json, status FROM constancias WHERE id = ?",
-                (row_id,),
-            ).fetchone()
-            if cur and _items_json_is_empty(cur[0]) and not _items_json_is_empty(items_json):
-                conn.execute(
-                    "UPDATE constancias SET items_json = ?, status = ? WHERE id = ?",
-                    (items_json, status, row_id),
-                )
+        number = _str_or_none(row.get("number", ""))
+
+        target_id: Optional[int] = None
+        if sheet_id in existing:
+            target_id = sheet_id
+        elif number:
+            target_id = _constancia_id_by_number(conn, number)
+
+        if target_id is not None:
+            if _merge_constancia_from_sheet(conn, target_id, status, items_json):
                 repaired += 1
             continue
+
+        if number and _constancia_id_by_number(conn, number) is not None:
+            continue
+
+        if sheet_id in existing:
+            continue
+
         created_at = _str_or_none(row.get("created_at", "")) or _utc_now()
         conn.execute(
             """
@@ -232,8 +273,8 @@ def _import_constancias(conn: sqlite3.Connection, rows: list[dict[str, str]]) ->
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                row_id,
-                _str_or_none(row.get("number", "")),
+                sheet_id,
+                number,
                 _str_or_none(row.get("issue_date", "")),
                 _str_or_none(row.get("client_name", "")),
                 _str_or_none(row.get("transport_plate", "")),
@@ -244,7 +285,7 @@ def _import_constancias(conn: sqlite3.Connection, rows: list[dict[str, str]]) ->
                 created_at,
             ),
         )
-        existing.add(row_id)
+        existing.add(sheet_id)
         imported += 1
     if imported or repaired:
         _fix_sqlite_sequence(conn, "constancias")

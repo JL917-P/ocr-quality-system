@@ -33,6 +33,7 @@ from constancia_utils import (
     normalize_items_for_save,
     parse_items_json,
     record_constancia_history,
+    restore_items_from_history,
 )
 from import_from_sheets import run_import_from_sheets
 from google_sheets import (
@@ -1629,6 +1630,57 @@ def list_constancias(limit: int = 200) -> JSONResponse:
         for row in rows
     ]
     return JSONResponse({"constancias": constancias})
+
+
+@app.post("/api/constancias/{constancia_id}/restore-items-from-history")
+def restore_constancia_items_from_history(constancia_id: int) -> JSONResponse:
+    with sqlite3.connect(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT items_json, created_at FROM constancias WHERE id = ?",
+            (constancia_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Constancia no encontrada.")
+        if parse_items_json(row[0]):
+            return JSONResponse({"ok": True, "restored": 0, "message": "La constancia ya tiene productos."})
+        restored = restore_items_from_history(conn, constancia_id)
+        if not restored:
+            return JSONResponse({"ok": False, "restored": 0, "message": "No hay historial de productos para restaurar."})
+        items_snap = normalize_items_for_save(conn, restored)
+        items_json = json.dumps(items_snap, ensure_ascii=True)
+        conn.execute(
+            "UPDATE constancias SET items_json = ? WHERE id = ?",
+            (items_json, constancia_id),
+        )
+        conn.commit()
+        created_at = row[1]
+    header_row = None
+    with sqlite3.connect(DB_PATH) as conn:
+        header_row = conn.execute(
+            """
+            SELECT number, issue_date, client_name, transport_plate, fumigacion, calidad, status
+            FROM constancias WHERE id = ?
+            """,
+            (constancia_id,),
+        ).fetchone()
+    if header_row:
+        run_sync_after_create(
+            TAB_CONSTANCIAS,
+            constancia_id,
+            lambda: sync_constancia_upsert(
+                constancia_id,
+                header_row[0],
+                header_row[1],
+                header_row[2],
+                header_row[3],
+                header_row[4],
+                header_row[5],
+                normalize_constancia_status(header_row[6]),
+                items_json,
+                created_at,
+            ),
+        )
+    return JSONResponse({"ok": True, "restored": len(items_snap), "items": items_snap})
 
 
 @app.post("/api/constancias/{constancia_id}/confirm")

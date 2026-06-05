@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -268,3 +269,54 @@ def parse_items_json(raw: str) -> list[dict[str, Any]]:
     except json.JSONDecodeError:
         return []
     return data if isinstance(data, list) else []
+
+
+def restore_items_from_history(conn: sqlite3.Connection, constancia_id: int) -> list[dict[str, Any]]:
+    """Reconstruye items desde el historial (último valor conocido por campo)."""
+    label_to_snap = {label: snap for snap, label in ITEM_HISTORY_FIELDS}
+    legacy_keys = {
+        "producto": "product",
+        "lote": "lot",
+        "fecha_producción": "production_text",
+        "fecha_vencimiento": "expiration_text",
+        "cantidad": "quantity",
+        "humedad": "humidity",
+        "quebrados": "broken_grains",
+        "tizados_1": "chalky_1",
+        "tizados_2": "chalky_2",
+        "dañados": "damaged_grains",
+        "blancura": "whiteness",
+    }
+    rows = conn.execute(
+        """
+        SELECT campo, valor_nuevo FROM constancia_history
+        WHERE constancia_id = ? AND campo LIKE 'item_%'
+        ORDER BY id DESC
+        """,
+        (constancia_id,),
+    ).fetchall()
+    items_by_idx: dict[int, dict[str, Any]] = {}
+    pattern = re.compile(r"^item_(\d+)\.(.+)$")
+    for campo, valor_nuevo in rows:
+        match = pattern.match(_str(campo))
+        if not match:
+            continue
+        idx = int(match.group(1)) - 1
+        label = match.group(2)
+        snap_key = label_to_snap.get(label)
+        if not snap_key:
+            continue
+        bucket = items_by_idx.setdefault(idx, {})
+        if snap_key in bucket:
+            continue
+        val = valor_nuevo
+        if label == "cantidad":
+            try:
+                val = float(valor_nuevo) if "." in str(valor_nuevo) else int(valor_nuevo)
+            except (ValueError, TypeError):
+                val = valor_nuevo
+        bucket[snap_key] = val
+        legacy = legacy_keys.get(label)
+        if legacy:
+            bucket[legacy] = val
+    return [items_by_idx[i] for i in sorted(items_by_idx)]
