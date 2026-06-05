@@ -271,6 +271,53 @@ def parse_items_json(raw: str) -> list[dict[str, Any]]:
     return data if isinstance(data, list) else []
 
 
+def items_json_is_empty(raw: str) -> bool:
+    return len(parse_items_json(raw or "[]")) == 0
+
+
+def find_items_json_by_number(
+    conn: sqlite3.Connection,
+    number: str,
+    exclude_id: Optional[int] = None,
+) -> Optional[str]:
+    text = _str(number)
+    if not text:
+        return None
+    sql = """
+        SELECT items_json FROM constancias
+        WHERE trim(coalesce(number, '')) = ?
+          AND items_json IS NOT NULL
+          AND trim(items_json) NOT IN ('', '[]')
+    """
+    params: list[Any] = [text]
+    if exclude_id is not None:
+        sql += " AND id != ?"
+        params.append(exclude_id)
+    sql += " ORDER BY length(items_json) DESC LIMIT 1"
+    row = conn.execute(sql, params).fetchone()
+    return row[0] if row else None
+
+
+def dedupe_constancia_rows(rows: list[tuple]) -> list[tuple]:
+    """Por número de constancia conserva la fila con más productos."""
+    best_by_number: dict[str, tuple] = {}
+    without_number: list[tuple] = []
+    for row in rows:
+        number = _str(row[1])
+        if not number:
+            without_number.append(row)
+            continue
+        if number not in best_by_number:
+            best_by_number[number] = row
+            continue
+        prev = best_by_number[number]
+        if len(parse_items_json(row[8])) > len(parse_items_json(prev[8])):
+            best_by_number[number] = row
+    merged = list(best_by_number.values()) + without_number
+    merged.sort(key=lambda r: r[0], reverse=True)
+    return merged
+
+
 def restore_items_from_history(conn: sqlite3.Connection, constancia_id: int) -> list[dict[str, Any]]:
     """Reconstruye items desde el historial (último valor conocido por campo)."""
     label_to_snap = {label: snap for snap, label in ITEM_HISTORY_FIELDS}

@@ -10,7 +10,7 @@ import sqlite3
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import cv2
 import numpy as np
@@ -29,6 +29,8 @@ from app_config import ADMIN_PATH, ADMIN_URL, app_config_payload
 from constancia_utils import (
     VALID_STATUSES,
     constancia_header_snapshot,
+    dedupe_constancia_rows,
+    find_items_json_by_number,
     normalize_constancia_status,
     normalize_items_for_save,
     parse_items_json,
@@ -1581,8 +1583,17 @@ async def create_constancia(payload: dict) -> JSONResponse:
                 created_at,
             ),
         )
-        conn.commit()
         constancia_id = cursor.lastrowid
+        record_constancia_history(
+            conn,
+            constancia_id,
+            {},
+            header,
+            [],
+            items_snap,
+            (payload.get("usuario") or "admin").strip() or "admin",
+        )
+        conn.commit()
     run_sync_after_create(
         TAB_CONSTANCIAS,
         constancia_id,
@@ -1614,6 +1625,7 @@ def list_constancias(limit: int = 200) -> JSONResponse:
             """,
             (limit,),
         ).fetchall()
+        rows = dedupe_constancia_rows(list(rows))
     constancias = [
         {
             "id": row[0],
@@ -1636,7 +1648,7 @@ def list_constancias(limit: int = 200) -> JSONResponse:
 def restore_constancia_items_from_history(constancia_id: int) -> JSONResponse:
     with sqlite3.connect(DB_PATH) as conn:
         row = conn.execute(
-            "SELECT items_json, created_at FROM constancias WHERE id = ?",
+            "SELECT items_json, created_at, number FROM constancias WHERE id = ?",
             (constancia_id,),
         ).fetchone()
         if not row:
@@ -1644,6 +1656,12 @@ def restore_constancia_items_from_history(constancia_id: int) -> JSONResponse:
         if parse_items_json(row[0]):
             return JSONResponse({"ok": True, "restored": 0, "message": "La constancia ya tiene productos."})
         restored = restore_items_from_history(conn, constancia_id)
+        source = "historial"
+        if not restored:
+            alt_json = find_items_json_by_number(conn, row[2] or "", exclude_id=constancia_id)
+            if alt_json:
+                restored = parse_items_json(alt_json)
+                source = "duplicado"
         if not restored:
             return JSONResponse({"ok": False, "restored": 0, "message": "No hay historial de productos para restaurar."})
         items_snap = normalize_items_for_save(conn, restored)
@@ -1680,7 +1698,18 @@ def restore_constancia_items_from_history(constancia_id: int) -> JSONResponse:
                 created_at,
             ),
         )
-    return JSONResponse({"ok": True, "restored": len(items_snap), "items": items_snap})
+    return JSONResponse(
+        {
+            "ok": True,
+            "restored": len(items_snap),
+            "items": items_snap,
+            "message": (
+                f"Se restauraron {len(items_snap)} producto(s) desde el historial."
+                if source == "historial"
+                else f"Se copiaron {len(items_snap)} producto(s) de otra entrada con el mismo número."
+            ),
+        }
+    )
 
 
 @app.post("/api/constancias/{constancia_id}/confirm")
@@ -1736,6 +1765,10 @@ def get_constancia_history(constancia_id: int) -> JSONResponse:
 
 @app.get("/api/constancias/{constancia_id}")
 def get_constancia(constancia_id: int) -> JSONResponse:
+    repaired = False
+    items_json_for_sync: Optional[str] = None
+    created_at_for_sync: Optional[str] = None
+    header_for_sync: Optional[tuple] = None
     with sqlite3.connect(DB_PATH) as conn:
         row = conn.execute(
             """
@@ -1745,8 +1778,39 @@ def get_constancia(constancia_id: int) -> JSONResponse:
             """,
             (constancia_id,),
         ).fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Constancia no encontrada.")
+        if not row:
+            raise HTTPException(status_code=404, detail="Constancia no encontrada.")
+        items = parse_items_json(row[8])
+        if not items:
+            alt_json = find_items_json_by_number(conn, row[1] or "", exclude_id=constancia_id)
+            if alt_json:
+                items = parse_items_json(alt_json)
+                conn.execute(
+                    "UPDATE constancias SET items_json = ? WHERE id = ?",
+                    (alt_json, constancia_id),
+                )
+                conn.commit()
+                repaired = True
+                items_json_for_sync = alt_json
+                created_at_for_sync = row[9]
+                header_for_sync = row[1:8]
+    if repaired and items_json_for_sync and header_for_sync is not None and created_at_for_sync:
+        run_sync_after_create(
+            TAB_CONSTANCIAS,
+            constancia_id,
+            lambda: sync_constancia_upsert(
+                constancia_id,
+                header_for_sync[0],
+                header_for_sync[1],
+                header_for_sync[2],
+                header_for_sync[3],
+                header_for_sync[4],
+                header_for_sync[5],
+                normalize_constancia_status(header_for_sync[6]),
+                items_json_for_sync,
+                created_at_for_sync,
+            ),
+        )
     return JSONResponse(
         {
             "id": row[0],
@@ -1757,8 +1821,9 @@ def get_constancia(constancia_id: int) -> JSONResponse:
             "fumigacion": bool(row[5]),
             "calidad": bool(row[6]),
             "status": normalize_constancia_status(row[7]),
-            "items": parse_items_json(row[8]),
+            "items": items,
             "created_at": row[9],
+            "repaired_from_duplicate": repaired,
         }
     )
 

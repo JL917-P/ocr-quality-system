@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
-from constancia_utils import normalize_constancia_status, parse_items_json
+from constancia_utils import find_items_json_by_number, normalize_constancia_status, parse_items_json
 from google_sheets import (
     HEADERS_CLIENTES,
     HEADERS_CONSTANCIAS,
@@ -118,7 +118,7 @@ def _merge_constancia_from_sheet(
 ) -> bool:
     """Fusiona fila de Sheets en constancia existente. Nunca borra items_json."""
     cur = conn.execute(
-        "SELECT items_json FROM constancias WHERE id = ?",
+        "SELECT items_json, number FROM constancias WHERE id = ?",
         (target_id,),
     ).fetchone()
     if not cur:
@@ -130,6 +130,14 @@ def _merge_constancia_from_sheet(
             (items_json, status, target_id),
         )
         return True
+    if _items_json_is_empty(sqlite_items):
+        alt_json = find_items_json_by_number(conn, cur[1] or "", exclude_id=target_id)
+        if alt_json:
+            conn.execute(
+                "UPDATE constancias SET items_json = ? WHERE id = ?",
+                (alt_json, target_id),
+            )
+            return True
     return False
 
 

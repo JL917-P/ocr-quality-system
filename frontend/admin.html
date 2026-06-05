@@ -1865,7 +1865,7 @@
             if (res.ok && data.restored > 0) {
               fillConstanciaItems(data.items || []);
               updateRestoreConstanciaButton(data.items || []);
-              alert(`Se restauraron ${data.restored} producto(s) desde el historial.`);
+              alert(data.message || `Se restauraron ${data.restored} producto(s).`);
               await loadConstancias();
             } else {
               alert(data.message || "No hay productos en el historial para restaurar.");
@@ -2345,24 +2345,34 @@
       async function saveProduct(clearAfter) {
         const payload = getProductPayload();
         if (!payload.name) {
+          alert("El nombre del producto es obligatorio.");
           return;
         }
         const url = currentProductId ? `/api/products/${currentProductId}` : "/api/products";
         const method = currentProductId ? "PUT" : "POST";
-        const res = await fetch(url, {
-          method,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (res.ok) {
-          await loadProducts();
-          if (clearAfter) {
-            clearProductForm();
+        const wasEdit = !!currentProductId;
+        try {
+          const res = await fetch(url, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) {
+            await loadProducts();
+            if (clearAfter) {
+              clearProductForm();
+            } else {
+              currentProductId = null;
+            }
+            productFormCard.classList.add("hidden");
+            productListCard.classList.remove("hidden");
+            alert(wasEdit ? "Producto actualizado correctamente." : "Producto guardado correctamente.");
           } else {
-            currentProductId = null;
+            alert(data.detail || data.error || "No se pudo guardar el producto.");
           }
-          productFormCard.classList.add("hidden");
-          productListCard.classList.remove("hidden");
+        } catch (err) {
+          alert("Error de red al guardar producto: " + (err?.message || err));
         }
       }
 
@@ -2664,12 +2674,15 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        const data = await res.json().catch(() => ({}));
         if (res.ok) {
           await loadConstancias();
           currentConstanciaId = null;
           currentConstanciaStatus = "confirmada";
           resetConstanciaForm();
           showSection("section-constancias");
+        } else {
+          alert(data.detail || data.error || "No se pudo guardar la constancia.");
         }
       }
 
@@ -2732,6 +2745,9 @@
             constanciaCalidad.checked = data.calidad !== 0 && data.calidad !== false;
             fillConstanciaItems(data.items || []);
             updateRestoreConstanciaButton(data.items || []);
+            if (data.repaired_from_duplicate) {
+              alert("Se recuperaron los productos de otra copia de esta constancia en la base de datos.");
+            }
             showSection("section-ocr");
           });
           const confirmBtn = row.querySelector(".confirm-btn");
