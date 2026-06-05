@@ -30,7 +30,7 @@ from constancia_utils import (
     VALID_STATUSES,
     constancia_header_snapshot,
     dedupe_constancia_rows,
-    find_items_json_by_number,
+    find_items_json_for_constancia,
     normalize_constancia_status,
     normalize_items_for_save,
     parse_items_json,
@@ -1648,7 +1648,7 @@ def list_constancias(limit: int = 200) -> JSONResponse:
 def restore_constancia_items_from_history(constancia_id: int) -> JSONResponse:
     with sqlite3.connect(DB_PATH) as conn:
         row = conn.execute(
-            "SELECT items_json, created_at, number FROM constancias WHERE id = ?",
+            "SELECT items_json, created_at, number, client_name FROM constancias WHERE id = ?",
             (constancia_id,),
         ).fetchone()
         if not row:
@@ -1658,7 +1658,7 @@ def restore_constancia_items_from_history(constancia_id: int) -> JSONResponse:
         restored = restore_items_from_history(conn, constancia_id)
         source = "historial"
         if not restored:
-            alt_json = find_items_json_by_number(conn, row[2] or "", exclude_id=constancia_id)
+            alt_json = find_items_json_for_constancia(conn, row[2] or "", row[3] or "", exclude_id=constancia_id)
             if alt_json:
                 restored = parse_items_json(alt_json)
                 source = "duplicado"
@@ -1706,7 +1706,7 @@ def restore_constancia_items_from_history(constancia_id: int) -> JSONResponse:
             "message": (
                 f"Se restauraron {len(items_snap)} producto(s) desde el historial."
                 if source == "historial"
-                else f"Se copiaron {len(items_snap)} producto(s) de otra entrada con el mismo número."
+                else f"Se copiaron {len(items_snap)} producto(s) de otra entrada con el mismo número y cliente."
             ),
         }
     )
@@ -1782,7 +1782,7 @@ def get_constancia(constancia_id: int) -> JSONResponse:
             raise HTTPException(status_code=404, detail="Constancia no encontrada.")
         items = parse_items_json(row[8])
         if not items:
-            alt_json = find_items_json_by_number(conn, row[1] or "", exclude_id=constancia_id)
+            alt_json = find_items_json_for_constancia(conn, row[1] or "", row[3] or "", exclude_id=constancia_id)
             if alt_json:
                 items = parse_items_json(alt_json)
                 conn.execute(

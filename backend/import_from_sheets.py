@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
-from constancia_utils import find_items_json_by_number, normalize_constancia_status, parse_items_json
+from constancia_utils import find_items_json_for_constancia, normalize_constancia_status, parse_items_json
 from google_sheets import (
     HEADERS_CLIENTES,
     HEADERS_CONSTANCIAS,
@@ -99,13 +99,23 @@ def _items_json_is_empty(raw: str) -> bool:
     return len(parse_items_json(raw or "[]")) == 0
 
 
-def _constancia_id_by_number(conn: sqlite3.Connection, number: Optional[str]) -> Optional[int]:
-    text = (number or "").strip()
-    if not text:
+def _constancia_id_by_number_client(
+    conn: sqlite3.Connection,
+    number: Optional[str],
+    client_name: Optional[str],
+) -> Optional[int]:
+    num = (number or "").strip()
+    client = (client_name or "").strip().lower()
+    if not num:
         return None
     row = conn.execute(
-        "SELECT id FROM constancias WHERE trim(coalesce(number, '')) = ? LIMIT 1",
-        (text,),
+        """
+        SELECT id FROM constancias
+        WHERE trim(coalesce(number, '')) = ?
+          AND lower(trim(coalesce(client_name, ''))) = ?
+        LIMIT 1
+        """,
+        (num, client),
     ).fetchone()
     return int(row[0]) if row else None
 
@@ -118,7 +128,7 @@ def _merge_constancia_from_sheet(
 ) -> bool:
     """Fusiona fila de Sheets en constancia existente. Nunca borra items_json."""
     cur = conn.execute(
-        "SELECT items_json, number FROM constancias WHERE id = ?",
+        "SELECT items_json, number, client_name FROM constancias WHERE id = ?",
         (target_id,),
     ).fetchone()
     if not cur:
@@ -131,7 +141,7 @@ def _merge_constancia_from_sheet(
         )
         return True
     if _items_json_is_empty(sqlite_items):
-        alt_json = find_items_json_by_number(conn, cur[1] or "", exclude_id=target_id)
+        alt_json = find_items_json_for_constancia(conn, cur[1] or "", cur[2] or "", exclude_id=target_id)
         if alt_json:
             conn.execute(
                 "UPDATE constancias SET items_json = ? WHERE id = ?",
@@ -255,19 +265,20 @@ def _import_constancias(conn: sqlite3.Connection, rows: list[dict[str, str]]) ->
         status = normalize_constancia_status(row.get("status") or "confirmada")
         items_json = (row.get("items_json") or "").strip() or "[]"
         number = _str_or_none(row.get("number", ""))
+        client_name = _str_or_none(row.get("client_name", ""))
 
         target_id: Optional[int] = None
         if sheet_id in existing:
             target_id = sheet_id
         elif number:
-            target_id = _constancia_id_by_number(conn, number)
+            target_id = _constancia_id_by_number_client(conn, number, client_name)
 
         if target_id is not None:
             if _merge_constancia_from_sheet(conn, target_id, status, items_json):
                 repaired += 1
             continue
 
-        if number and _constancia_id_by_number(conn, number) is not None:
+        if number and _constancia_id_by_number_client(conn, number, client_name) is not None:
             continue
 
         if sheet_id in existing:

@@ -2746,7 +2746,7 @@
             fillConstanciaItems(data.items || []);
             updateRestoreConstanciaButton(data.items || []);
             if (data.repaired_from_duplicate) {
-              alert("Se recuperaron los productos de otra copia de esta constancia en la base de datos.");
+              alert("Se recuperaron los productos de otra copia de esta constancia (mismo número y cliente).");
             }
             showSection("section-ocr");
           });

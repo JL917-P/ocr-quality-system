@@ -275,21 +275,29 @@ def items_json_is_empty(raw: str) -> bool:
     return len(parse_items_json(raw or "[]")) == 0
 
 
-def find_items_json_by_number(
+def constancia_identity_key(number: Any, client_name: Any) -> tuple[str, str]:
+    """Clave única operativa: número + cliente (mismo número puede repetirse entre clientes)."""
+    return (_str(number).lower(), _str(client_name).lower())
+
+
+def find_items_json_for_constancia(
     conn: sqlite3.Connection,
     number: str,
+    client_name: str,
     exclude_id: Optional[int] = None,
 ) -> Optional[str]:
-    text = _str(number)
-    if not text:
+    num = _str(number)
+    client = _str(client_name).lower()
+    if not num:
         return None
     sql = """
         SELECT items_json FROM constancias
         WHERE trim(coalesce(number, '')) = ?
+          AND lower(trim(coalesce(client_name, ''))) = ?
           AND items_json IS NOT NULL
           AND trim(items_json) NOT IN ('', '[]')
     """
-    params: list[Any] = [text]
+    params: list[Any] = [num, client]
     if exclude_id is not None:
         sql += " AND id != ?"
         params.append(exclude_id)
@@ -299,21 +307,22 @@ def find_items_json_by_number(
 
 
 def dedupe_constancia_rows(rows: list[tuple]) -> list[tuple]:
-    """Por número de constancia conserva la fila con más productos."""
-    best_by_number: dict[str, tuple] = {}
+    """Por número+cliente conserva la fila con más productos (solo duplicados reales)."""
+    best_by_key: dict[tuple[str, str], tuple] = {}
     without_number: list[tuple] = []
     for row in rows:
         number = _str(row[1])
         if not number:
             without_number.append(row)
             continue
-        if number not in best_by_number:
-            best_by_number[number] = row
+        key = constancia_identity_key(number, row[3])
+        if key not in best_by_key:
+            best_by_key[key] = row
             continue
-        prev = best_by_number[number]
+        prev = best_by_key[key]
         if len(parse_items_json(row[8])) > len(parse_items_json(prev[8])):
-            best_by_number[number] = row
-    merged = list(best_by_number.values()) + without_number
+            best_by_key[key] = row
+    merged = list(best_by_key.values()) + without_number
     merged.sort(key=lambda r: r[0], reverse=True)
     return merged
 
