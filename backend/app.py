@@ -31,6 +31,7 @@ from constancia_utils import (
     consolidate_constancia_duplicates,
     constancia_header_snapshot,
     dedupe_constancia_rows,
+    sort_constancia_rows_by_issue_date,
     find_items_json_for_constancia,
     normalize_constancia_status,
     normalize_items_for_save,
@@ -1666,12 +1667,9 @@ def list_constancias(limit: int = 200) -> JSONResponse:
             """
             SELECT id, number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json, created_at
             FROM constancias
-            ORDER BY id DESC
-            LIMIT ?
             """,
-            (limit,),
         ).fetchall()
-        rows = dedupe_constancia_rows(list(rows))
+        rows = sort_constancia_rows_by_issue_date(dedupe_constancia_rows(list(rows)))[:limit]
         constancias = []
         for row in rows:
             items = parse_items_json(row[8])

@@ -2841,15 +2841,43 @@
         });
       }
 
+      function parseIssueDateSortKey(rawDate) {
+        const value = (rawDate || "").trim();
+        if (!value) return 0;
+        let match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (match) {
+          return parseInt(match[1], 10) * 10000 + parseInt(match[2], 10) * 100 + parseInt(match[3], 10);
+        }
+        match = value.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{4})$/);
+        if (match) {
+          return parseInt(match[3], 10) * 10000 + parseInt(match[2], 10) * 100 + parseInt(match[1], 10);
+        }
+        match = value.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{2})$/);
+        if (match) {
+          let year = parseInt(match[3], 10);
+          year += year < 100 ? 2000 : 0;
+          return year * 10000 + parseInt(match[2], 10) * 100 + parseInt(match[1], 10);
+        }
+        return 0;
+      }
+
+      function sortConstanciasByIssueDate(list) {
+        return [...list].sort(
+          (a, b) => parseIssueDateSortKey(b.issue_date) - parseIssueDateSortKey(a.issue_date)
+        );
+      }
+
       function applyConstanciaFilters() {
         const query = constanciaSearch.value.toLowerCase().trim();
         if (!query) {
-          filteredConstancias = [...allConstancias];
+          filteredConstancias = sortConstanciasByIssueDate(allConstancias);
         } else {
-          filteredConstancias = allConstancias.filter((c) =>
-            `${c.number || ""} ${c.client_name || ""} ${c.transport_plate || ""}`
-              .toLowerCase()
-              .includes(query)
+          filteredConstancias = sortConstanciasByIssueDate(
+            allConstancias.filter((c) =>
+              `${c.number || ""} ${c.client_name || ""} ${c.transport_plate || ""}`
+                .toLowerCase()
+                .includes(query)
+            )
           );
         }
         renderConstancias(filteredConstancias);
@@ -2952,7 +2980,7 @@
         const res = await fetch("/api/constancias");
         const data = await res.json();
         if (!res.ok) return;
-        allConstancias = data.constancias || [];
+        allConstancias = sortConstanciasByIssueDate(data.constancias || []);
         applyConstanciaFilters();
         applyTraceFilters();
       }

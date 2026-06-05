@@ -342,6 +342,30 @@ def consolidate_constancia_duplicates(
     return removed
 
 
+def issue_date_sort_key(issue_date: Any) -> tuple[int, int, int]:
+    """Clave (año, mes, día) para ordenar por fecha de emisión."""
+    text = _str(issue_date)
+    if not text:
+        return (0, 0, 0)
+    iso = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", text)
+    if iso:
+        return (int(iso.group(1)), int(iso.group(2)), int(iso.group(3)))
+    slash4 = re.match(r"^(\d{1,2})\s*/\s*(\d{1,2})\s*/\s*(\d{4})$", text)
+    if slash4:
+        return (int(slash4.group(3)), int(slash4.group(2)), int(slash4.group(1)))
+    slash2 = re.match(r"^(\d{1,2})\s*/\s*(\d{1,2})\s*/\s*(\d{2})$", text)
+    if slash2:
+        yy = int(slash2.group(3))
+        year = 2000 + yy if yy < 100 else yy
+        return (year, int(slash2.group(2)), int(slash2.group(1)))
+    return (0, 0, 0)
+
+
+def sort_constancia_rows_by_issue_date(rows: list[tuple]) -> list[tuple]:
+    """Más reciente primero según fecha de emisión (independiente de id o status)."""
+    return sorted(rows, key=lambda r: issue_date_sort_key(r[2]), reverse=True)
+
+
 def dedupe_constancia_rows(rows: list[tuple]) -> list[tuple]:
     """Por número+cliente conserva la fila con más productos (solo duplicados reales)."""
     best_by_key: dict[tuple[str, str], tuple] = {}
@@ -359,8 +383,7 @@ def dedupe_constancia_rows(rows: list[tuple]) -> list[tuple]:
         if len(parse_items_json(row[8])) > len(parse_items_json(prev[8])):
             best_by_key[key] = row
     merged = list(best_by_key.values()) + without_number
-    merged.sort(key=lambda r: r[0], reverse=True)
-    return merged
+    return sort_constancia_rows_by_issue_date(merged)
 
 
 def restore_items_from_history(conn: sqlite3.Connection, constancia_id: int) -> list[dict[str, Any]]:
