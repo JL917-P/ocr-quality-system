@@ -918,6 +918,11 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   color: #111827;
 }
 
+.status.borrador {
+  background: #e9ecef;
+  color: #495057;
+}
+
 .dropdown { position: relative; }
 
 .dropdown-panel {

@@ -187,6 +187,7 @@
             <button class="btn btn-success" id="addRowBtn">+ Agregar fila</button>
             <button class="btn btn-primary" id="saveBtn">Guardar Constancia</button>
             <button class="btn btn-warning" id="reserveBtn">Reserva</button>
+            <button class="btn btn-outline" id="draftBtn">Borrador</button>
             <button class="btn btn-outline" id="cancelBtn">Cancelar</button>
           </div>
         </div>
@@ -382,13 +383,14 @@
             <div class="toolbar">
               <div class="field" style="flex: 1;">
                 <label>Buscar</label>
-                <input id="traceSearchInput" type="text" placeholder="Escribe para filtrar..." />
+                <input id="traceSearchInput" type="text" placeholder="Escribe para filtrar..." list="clientesList" />
               </div>
               <div class="field">
                 <label>Buscar por</label>
                 <select id="traceSearchType">
                   <option value="product">Producto</option>
                   <option value="lot">Lote</option>
+                  <option value="tienda">Tienda</option>
                 </select>
               </div>
               <div class="field">
@@ -413,6 +415,31 @@
                 </tr>
               </thead>
               <tbody id="traceList"></tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <div class="toolbar">
+              <div class="field">
+                <label>Historial de constancia (ID)</label>
+                <input id="traceHistoryId" type="number" min="1" placeholder="Ej: 12" />
+              </div>
+              <div class="field toolbar-field-btn">
+                <label class="toolbar-label-spacer" aria-hidden="true">&#8203;</label>
+                <button class="btn btn-outline" id="traceHistoryBtn" type="button">Ver historial</button>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:160px;">Fecha</th>
+                  <th style="width:100px;">Usuario</th>
+                  <th style="width:180px;">Campo</th>
+                  <th>Valor anterior</th>
+                  <th>Valor nuevo</th>
+                </tr>
+              </thead>
+              <tbody id="traceHistoryList"></tbody>
             </table>
           </div>
         </section>
@@ -758,6 +785,7 @@
       const constanciaFecha = document.getElementById("constanciaFecha");
       const saveBtn = document.getElementById("saveBtn");
       const reserveBtn = document.getElementById("reserveBtn");
+      const draftBtn = document.getElementById("draftBtn");
       const cancelBtn = document.getElementById("cancelBtn");
       const constanciaSearch = document.getElementById("constanciaSearch");
       const constanciaBulkAction = document.getElementById("constanciaBulkAction");
@@ -815,7 +843,7 @@
           <td><input type="text" placeholder="-" /></td>
           <td><input type="text" placeholder="Ej: DIC25" /></td>
           <td><input type="text" placeholder="Ej: AGO26" /></td>
-          <td><input type="number" min="1" value="1" /></td>
+          <td><input type="number" min="0" step="any" placeholder="" /></td>
           <td><button class="btn btn-danger btn-sm">🗑</button></td>
         `;
         const itemCell = row.querySelector(".itemCell");
@@ -841,7 +869,7 @@
           <td><input type="text" placeholder="-" /></td>
           <td><input type="text" placeholder="Ej: DIC25" /></td>
           <td><input type="text" placeholder="Ej: AGO26" /></td>
-          <td><input type="number" min="1" value="1" /></td>
+          <td><input type="number" min="0" step="any" placeholder="" /></td>
           <td><button class="btn btn-danger btn-sm">🗑</button></td>
         `;
         const itemCell = newRow.querySelector(".itemCell");
@@ -1590,7 +1618,6 @@
 
       function applyProductDetailsForRow(tr) {
         if (!allProducts.length) return;
-        if (currentConstanciaId) return;
         const inputs = tr.querySelectorAll("input");
         const productInput = inputs[0];
         if (!productInput) return;
@@ -1603,10 +1630,33 @@
 
       function applyProductDetailsFromCatalog() {
         if (!allProducts.length) return;
-        if (currentConstanciaId) return;
         [...productsBody.querySelectorAll("tr")].forEach((tr) => {
           applyProductDetailsForRow(tr);
         });
+      }
+
+      function itemSnapshotField(item, ...keys) {
+        for (const key of keys) {
+          const val = item?.[key];
+          if (val !== undefined && val !== null && String(val).trim() !== "") return val;
+        }
+        return "";
+      }
+
+      function fillConstanciaItems(items) {
+        productsBody.innerHTML = "";
+        (items || []).forEach((itm) => {
+          const name = itemSnapshotField(itm, "product_name_snapshot", "product");
+          const row = addRow(name);
+          const inputs = row.querySelectorAll("input");
+          if (inputs[1]) inputs[1].value = itemSnapshotField(itm, "lote_snapshot", "lot");
+          if (inputs[2]) inputs[2].value = itemSnapshotField(itm, "production_date_snapshot", "production_text");
+          if (inputs[3]) inputs[3].value = itemSnapshotField(itm, "expiration_date_snapshot", "expiration_text");
+          if (inputs[4] && itm.quantity !== undefined && itm.quantity !== null && itm.quantity !== "") {
+            inputs[4].value = itm.quantity;
+          }
+        });
+        if (!items?.length) addRow();
       }
 
       function moveToCell(currentInput, rowDelta, colDelta) {
@@ -1688,6 +1738,12 @@
           event.preventDefault();
           moveToCell(input, 0, 1);
         } else if (key === "ArrowLeft") {
+          event.preventDefault();
+          moveToCell(input, 0, -1);
+        } else if (key === "Tab" && !event.shiftKey) {
+          event.preventDefault();
+          moveToCell(input, 0, 1);
+        } else if (key === "Tab" && event.shiftKey) {
           event.preventDefault();
           moveToCell(input, 0, -1);
         }
@@ -1803,6 +1859,7 @@
 
       saveBtn.addEventListener("click", () => saveConstancia("confirmada"));
       reserveBtn.addEventListener("click", () => saveConstancia("por_confirmar"));
+      if (draftBtn) draftBtn.addEventListener("click", () => saveConstancia("borrador"));
       cancelBtn.addEventListener("click", () => {
         resetConstanciaForm();
         showSection("section-constancias");
@@ -1813,7 +1870,11 @@
         traceSearchInput.addEventListener("input", applyTraceFilters);
       }
       if (traceSearchType) {
-        traceSearchType.addEventListener("change", applyTraceFilters);
+        traceSearchType.addEventListener("change", () => {
+          updateTraceSearchPlaceholder();
+          applyTraceFilters();
+        });
+        updateTraceSearchPlaceholder();
       }
       constanciaApplyBtn.addEventListener("click", async () => {
         if (constanciaBulkAction.value !== "delete") return;
@@ -2398,15 +2459,19 @@
           const lot = inputs[1]?.value?.trim() || "";
           const prodDate = inputs[2]?.value?.trim() || "";
           const expDate = inputs[3]?.value?.trim() || "";
-          const qty = inputs[4]?.value || "1";
+          const qtyRaw = inputs[4]?.value;
+          const qty = qtyRaw === "" || qtyRaw === undefined ? null : Number(qtyRaw);
           if (product) {
-            items.push({
+            const match = getProductByName(product);
+            const row = {
               product,
               lot,
               production_text: prodDate,
               expiration_text: expDate,
-              quantity: Number(qty) || 1,
-            });
+            };
+            if (match?.id) row.product_id = match.id;
+            if (qty !== null && !Number.isNaN(qty)) row.quantity = qty;
+            items.push(row);
           }
         });
         return items;
@@ -2446,19 +2511,10 @@
       }
 
       async function saveConstancia(status) {
-        const isEditing = Boolean(currentConstanciaId);
-        const keepReserved = isEditing && currentConstanciaStatus === "por_confirmar" && status === "confirmada";
-        if (keepReserved) {
-          showInfoModal("Esta constancia está en reserva. Para confirmarla use el botón Confirmar.");
-        }
         if (!constanciaFumigacion.checked && !constanciaCalidad.checked) {
           alert("Selecciona al menos una constancia (Fumigación o Calidad).");
           return;
         }
-        const effectiveStatus =
-          keepReserved
-            ? "por_confirmar"
-            : status;
         const payload = {
           number: constanciaNumero.value.trim(),
           issue_date: constanciaFecha.value.trim(),
@@ -2466,8 +2522,9 @@
           transport_plate: constanciaTransporteInput.value.trim(),
           fumigacion: constanciaFumigacion.checked,
           calidad: constanciaCalidad.checked,
-          status: effectiveStatus,
+          status,
           items: collectConstanciaItems(),
+          usuario: "admin",
         };
         if (!payload.client_name) return;
         const url = currentConstanciaId ? `/api/constancias/${currentConstanciaId}` : "/api/constancias";
@@ -2486,12 +2543,25 @@
         }
       }
 
+      function constanciaStatusLabel(status) {
+        if (status === "confirmada") return "Confirmada";
+        if (status === "por_confirmar") return "Por confirmar";
+        if (status === "borrador") return "Borrador";
+        return status || "";
+      }
+
+      function constanciaStatusClass(status) {
+        if (status === "confirmada") return "confirmada";
+        if (status === "borrador") return "borrador";
+        return "por_confirmar";
+      }
+
       function renderConstancias(list) {
         constanciasList.innerHTML = "";
         list.forEach((item) => {
           const row = document.createElement("tr");
-          const statusLabel = item.status === "confirmada" ? "Confirmada" : "Por confirmar";
-          const statusClass = item.status === "confirmada" ? "confirmada" : "por_confirmar";
+          const statusLabel = constanciaStatusLabel(item.status);
+          const statusClass = constanciaStatusClass(item.status);
           row.innerHTML = `
             <td><input type="checkbox" class="const-check" data-id="${item.id}" /></td>
             <td>${item.number || item.id}</td>
@@ -2524,15 +2594,8 @@
             constanciaTransporteInput.value = data.transport_plate || "";
             constanciaFumigacion.checked = data.fumigacion !== 0 && data.fumigacion !== false;
             constanciaCalidad.checked = data.calidad !== 0 && data.calidad !== false;
-            fillProducts(data.items?.map((i) => i.product) || []);
-            const rows = productsBody.querySelectorAll("tr");
-            data.items?.forEach((itm, idx) => {
-              const inputs = rows[idx]?.querySelectorAll("input") || [];
-              if (inputs[1]) inputs[1].value = itm.lot || "";
-              if (inputs[2]) inputs[2].value = itm.production_text || "";
-              if (inputs[3]) inputs[3].value = itm.expiration_text || "";
-              if (inputs[4]) inputs[4].value = itm.quantity || 1;
-            });
+            fillConstanciaItems(data.items || []);
+            if (traceHistoryId) traceHistoryId.value = String(data.id);
             showSection("section-ocr");
           });
           const confirmBtn = row.querySelector(".confirm-btn");
@@ -2578,11 +2641,11 @@
             rows.push({
               fecha,
               cliente,
-              product: item.product || "",
-              lot: item.lot || "",
-              production: item.production_text || "",
-              expiration: item.expiration_text || "",
-              quantity: item.quantity || "",
+              product: itemSnapshotField(item, "product_name_snapshot", "product"),
+              lot: itemSnapshotField(item, "lote_snapshot", "lot"),
+              production: itemSnapshotField(item, "production_date_snapshot", "production_text"),
+              expiration: itemSnapshotField(item, "expiration_date_snapshot", "expiration_text"),
+              quantity: item.quantity ?? "",
             });
           });
         });
@@ -2614,17 +2677,50 @@
         });
       }
 
+      function parseTraceDate(fecha) {
+        const v = (fecha || "").trim();
+        if (!v) return 0;
+        if (/^\d{4}-\d{2}-\d{2}/.test(v)) {
+          const t = new Date(v).getTime();
+          return Number.isNaN(t) ? 0 : t;
+        }
+        const slash = v.match(/^(\d{2})\s*\/\s*(\d{2})\s*\/\s*(\d{4})/);
+        if (slash) {
+          const [, dd, mm, yyyy] = slash;
+          return new Date(Number(yyyy), Number(mm) - 1, Number(dd)).getTime();
+        }
+        const t = new Date(v).getTime();
+        return Number.isNaN(t) ? 0 : t;
+      }
+
+      function traceFieldForMode(row, mode) {
+        if (mode === "lot") return row.lot;
+        if (mode === "tienda") return row.cliente;
+        return row.product;
+      }
+
+      function updateTraceSearchPlaceholder() {
+        if (!traceSearchInput || !traceSearchType) return;
+        const placeholders = {
+          product: "Nombre de producto...",
+          lot: "Número de lote...",
+          tienda: "Nombre de tienda / cliente...",
+        };
+        traceSearchInput.placeholder =
+          placeholders[traceSearchType.value] || "Escribe para filtrar...";
+      }
+
       function applyTraceFilters() {
         if (!traceList || !traceSearchInput || !traceSearchType) return;
         const query = normalizeSearchText(traceSearchInput.value || "");
         const mode = traceSearchType.value || "product";
         const allRows = collectTraceRows();
-        const filtered = !query
+        let filtered = !query
           ? []
-          : allRows.filter((row) => {
-              const target = mode === "lot" ? row.lot : row.product;
-              return normalizeSearchText(target).includes(query);
-            });
+          : allRows.filter((row) =>
+              normalizeSearchText(traceFieldForMode(row, mode)).includes(query)
+            );
+        filtered = filtered.sort((a, b) => parseTraceDate(b.fecha) - parseTraceDate(a.fecha));
         renderTraceRows(filtered);
       }
 
@@ -2635,6 +2731,59 @@
         allConstancias = data.constancias || [];
         applyConstanciaFilters();
         applyTraceFilters();
+      }
+
+      const traceHistoryId = document.getElementById("traceHistoryId");
+      const traceHistoryBtn = document.getElementById("traceHistoryBtn");
+      const traceHistoryList = document.getElementById("traceHistoryList");
+
+      function formatHistoryDate(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return iso;
+        const dd = String(d.getDate()).padStart(2, "0");
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const yyyy = d.getFullYear();
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mi = String(d.getMinutes()).padStart(2, "0");
+        return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
+      }
+
+      async function loadConstanciaHistory(constanciaId) {
+        if (!traceHistoryList) return;
+        traceHistoryList.innerHTML = "";
+        if (!constanciaId) {
+          traceHistoryList.innerHTML = `<tr><td colspan="5" class="empty">Ingresa un ID de constancia</td></tr>`;
+          return;
+        }
+        const res = await fetch(`/api/constancias/${constanciaId}/history`);
+        const data = await res.json();
+        if (!res.ok) {
+          traceHistoryList.innerHTML = `<tr><td colspan="5" class="empty">No se pudo cargar el historial</td></tr>`;
+          return;
+        }
+        const rows = data.history || [];
+        if (!rows.length) {
+          traceHistoryList.innerHTML = `<tr><td colspan="5" class="empty">Sin cambios registrados</td></tr>`;
+          return;
+        }
+        rows.forEach((row) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${formatHistoryDate(row.fecha)}</td>
+            <td>${row.usuario || ""}</td>
+            <td>${row.campo || ""}</td>
+            <td>${row.valor_anterior ?? ""}</td>
+            <td>${row.valor_nuevo ?? ""}</td>
+          `;
+          traceHistoryList.appendChild(tr);
+        });
+      }
+
+      if (traceHistoryBtn) {
+        traceHistoryBtn.addEventListener("click", () => {
+          loadConstanciaHistory(traceHistoryId?.value);
+        });
       }
 
       function renderClients(list) {
@@ -2943,19 +3092,16 @@
         const showFumigacion = constancia.fumigacion !== 0 && constancia.fumigacion !== false;
         const showCalidad = constancia.calidad !== 0 && constancia.calidad !== false;
         const items = constancia.items || [];
-        const byName = new Map(
-          (catalog || []).map((p) => [(p.name || "").trim().toLowerCase(), p])
-        );
         const rows = items
           .map((item, idx) => `
             <tr>
               <td>${idx + 1}</td>
               <td>${formatShortDate(fecha)}</td>
-              <td>${item.product || ""}</td>
-              <td>${item.lot || "-"}</td>
-              <td>${item.quantity || ""}</td>
-              <td>${item.production_text || "-"}</td>
-              <td>${item.expiration_text || "-"}</td>
+              <td>${itemSnapshotField(item, "product_name_snapshot", "product")}</td>
+              <td>${itemSnapshotField(item, "lote_snapshot", "lot") || "-"}</td>
+              <td>${item.quantity ?? ""}</td>
+              <td>${itemSnapshotField(item, "production_date_snapshot", "production_text") || "-"}</td>
+              <td>${itemSnapshotField(item, "expiration_date_snapshot", "expiration_text") || "-"}</td>
             <td>${formatShortDate(fumigacion)}</td>
             <td>${formatShortDate(liberacion)}</td>
               <td>400</td>
@@ -2969,24 +3115,32 @@
             </tr>
           `)
           .join("");
+        const itemQuality = (item, snapKey, legacyKey) => {
+          if (item[snapKey] !== undefined && item[snapKey] !== null && item[snapKey] !== "") return item[snapKey];
+          if (legacyKey && item[legacyKey] !== undefined && item[legacyKey] !== null && item[legacyKey] !== "") {
+            return item[legacyKey];
+          }
+          const key = (itemSnapshotField(item, "product_name_snapshot", "product") || "").trim().toLowerCase();
+          const prod = (catalog || []).find((p) => (p.name || "").trim().toLowerCase() === key);
+          if (prod && legacyKey && prod[legacyKey] !== undefined) return prod[legacyKey];
+          return "";
+        };
         const qualityRows = items
           .map((item, idx) => {
-            const key = (item.product || "").trim().toLowerCase();
-            const prod = byName.get(key);
             return `
               <tr>
                 <td>${idx + 1}</td>
-                <td>${item.product || ""}</td>
-                <td>${item.lot || "-"}</td>
-                <td>${item.quantity || ""}</td>
-                <td>${item.production_text || "-"}</td>
-                <td>${item.expiration_text || "-"}</td>
-                <td>${prod?.humidity ?? ""}</td>
-                <td>${prod?.broken_grains ?? ""}</td>
-                <td>${prod?.chalky_1 ?? ""}</td>
-                <td>${prod?.chalky_2 ?? ""}</td>
-                <td>${prod?.damaged_grains ?? ""}</td>
-                <td>${prod?.whiteness ?? ""}</td>
+                <td>${itemSnapshotField(item, "product_name_snapshot", "product")}</td>
+                <td>${itemSnapshotField(item, "lote_snapshot", "lot") || "-"}</td>
+                <td>${item.quantity ?? ""}</td>
+                <td>${itemSnapshotField(item, "production_date_snapshot", "production_text") || "-"}</td>
+                <td>${itemSnapshotField(item, "expiration_date_snapshot", "expiration_text") || "-"}</td>
+                <td>${itemQuality(item, "humidity_snapshot", "humidity")}</td>
+                <td>${itemQuality(item, "broken_grains_snapshot", "broken_grains")}</td>
+                <td>${itemQuality(item, "chalky_grains_1_snapshot", "chalky_1")}</td>
+                <td>${itemQuality(item, "chalky_grains_2_snapshot", "chalky_2")}</td>
+                <td>${itemQuality(item, "damaged_grains_snapshot", "damaged_grains")}</td>
+                <td>${itemQuality(item, "whiteness_snapshot", "whiteness")}</td>
               </tr>
             `;
           })
