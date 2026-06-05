@@ -1769,11 +1769,38 @@ def restore_constancia_items_from_history(constancia_id: int) -> JSONResponse:
 @app.post("/api/constancias/{constancia_id}/confirm")
 def confirm_constancia(constancia_id: int) -> JSONResponse:
     with sqlite3.connect(DB_PATH) as conn:
+        row = conn.execute(
+            """
+            SELECT number, issue_date, client_name, transport_plate, fumigacion, calidad, items_json, created_at
+            FROM constancias WHERE id = ?
+            """,
+            (constancia_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Constancia no encontrada.")
         conn.execute(
             "UPDATE constancias SET status = 'confirmada' WHERE id = ?",
             (constancia_id,),
         )
         conn.commit()
+    items_json = row[6] or "[]"
+    created_at = row[7]
+    run_sync_after_create(
+        TAB_CONSTANCIAS,
+        constancia_id,
+        lambda: sync_constancia_upsert(
+            constancia_id,
+            row[0],
+            row[1],
+            row[2],
+            row[3],
+            row[4],
+            row[5],
+            "confirmada",
+            items_json,
+            created_at,
+        ),
+    )
     return JSONResponse({"ok": True})
 
 

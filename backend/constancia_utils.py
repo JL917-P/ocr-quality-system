@@ -24,6 +24,14 @@ def normalize_constancia_status(value: Any) -> str:
     return text if text in VALID_STATUSES else "por_confirmar"
 
 
+def import_constancia_status(raw: Any) -> str:
+    """Estado al importar filas nuevas: por confirmar si Sheets no trae valor."""
+    text = _str(raw)
+    if text:
+        return normalize_constancia_status(text)
+    return "por_confirmar"
+
+
 QUALITY_SNAPSHOT_MAP = (
     ("humidity", "humidity_snapshot"),
     ("broken_grains", "broken_grains_snapshot"),

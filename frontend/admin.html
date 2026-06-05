@@ -1873,7 +1873,10 @@
       });
       loadResults();
 
-      saveBtn.addEventListener("click", () => saveConstancia("confirmada"));
+      saveBtn.addEventListener("click", () => {
+        const status = currentConstanciaId ? currentConstanciaStatus : "confirmada";
+        saveConstancia(status);
+      });
       if (restoreConstanciaItemsBtn) {
         restoreConstanciaItemsBtn.addEventListener("click", async () => {
           if (!currentConstanciaId) return;
@@ -2819,6 +2822,9 @@
                 async () => {
                 await fetch(`/api/constancias/${item.id}/confirm`, { method: "POST" });
                 await loadConstancias();
+                showSuccessModal("La constancia quedó confirmada.", {
+                  title: "Constancia confirmada",
+                });
                 },
                 null,
                 { title: "Confirmar constancia" }
