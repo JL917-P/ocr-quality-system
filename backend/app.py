@@ -26,6 +26,14 @@ from PIL import Image
 from pytesseract import Output
 
 from app_config import ADMIN_PATH, ADMIN_URL, app_config_payload
+from constancia_utils import (
+    VALID_STATUSES,
+    constancia_header_snapshot,
+    normalize_constancia_status,
+    normalize_items_for_save,
+    parse_items_json,
+    record_constancia_history,
+)
 from import_from_sheets import run_import_from_sheets
 from google_sheets import (
     TAB_CLIENTES,
@@ -180,6 +188,19 @@ def init_db() -> None:
             conn.execute("ALTER TABLE constancias ADD COLUMN fumigacion INTEGER NOT NULL DEFAULT 1")
         if "calidad" not in columns:
             conn.execute("ALTER TABLE constancias ADD COLUMN calidad INTEGER NOT NULL DEFAULT 1")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS constancia_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                constancia_id INTEGER NOT NULL,
+                fecha TEXT NOT NULL,
+                usuario TEXT NOT NULL,
+                campo TEXT NOT NULL,
+                valor_anterior TEXT,
+                valor_nuevo TEXT
+            )
+            """
+        )
         conn.commit()
 
 
@@ -1379,19 +1400,17 @@ async def create_constancia(payload: dict) -> JSONResponse:
     if not isinstance(items, list):
         raise HTTPException(status_code=400, detail="Items invalidos.")
     status = payload.get("status") or "confirmada"
-    if status not in {"confirmada", "por_confirmar"}:
+    if status not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail="Estado invalido.")
     fumigacion = 1 if payload.get("fumigacion", True) else 0
     calidad = 1 if payload.get("calidad", True) else 0
     if fumigacion == 0 and calidad == 0:
         raise HTTPException(status_code=400, detail="Selecciona al menos una constancia.")
-    number = (payload.get("number") or "").strip() or None
-    issue_date = (payload.get("issue_date") or "").strip() or None
-    client_name = (payload.get("client_name") or "").strip() or None
-    transport_plate = (payload.get("transport_plate") or "").strip() or None
+    header = constancia_header_snapshot(payload)
     created_at = datetime.now(timezone.utc).isoformat()
-    items_json = json.dumps(items, ensure_ascii=True)
     with sqlite3.connect(DB_PATH) as conn:
+        items_snap = normalize_items_for_save(conn, items)
+        items_json = json.dumps(items_snap, ensure_ascii=True)
         cursor = conn.execute(
             """
             INSERT INTO constancias (
@@ -1399,13 +1418,13 @@ async def create_constancia(payload: dict) -> JSONResponse:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                number,
-                issue_date,
-                client_name,
-                transport_plate,
-                fumigacion,
-                calidad,
-                status,
+                header["number"],
+                header["issue_date"],
+                header["client_name"],
+                header["transport_plate"],
+                header["fumigacion"],
+                header["calidad"],
+                header["status"],
                 items_json,
                 created_at,
             ),
@@ -1417,13 +1436,13 @@ async def create_constancia(payload: dict) -> JSONResponse:
         constancia_id,
         lambda: sync_constancia_created(
             constancia_id,
-            number,
-            issue_date,
-            client_name,
-            transport_plate,
-            fumigacion,
-            calidad,
-            status,
+            header["number"],
+            header["issue_date"],
+            header["client_name"],
+            header["transport_plate"],
+            header["fumigacion"],
+            header["calidad"],
+            header["status"],
             items_json,
             created_at,
         ),
@@ -1452,8 +1471,8 @@ def list_constancias(limit: int = 200) -> JSONResponse:
             "transport_plate": row[4],
             "fumigacion": bool(row[5]),
             "calidad": bool(row[6]),
-            "status": row[7],
-            "items": json.loads(row[8]),
+            "status": normalize_constancia_status(row[7]),
+            "items": parse_items_json(row[8]),
             "created_at": row[9],
         }
         for row in rows
@@ -1475,9 +1494,36 @@ def confirm_constancia(constancia_id: int) -> JSONResponse:
 @app.delete("/api/constancias/{constancia_id}")
 def delete_constancia(constancia_id: int) -> JSONResponse:
     with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("DELETE FROM constancia_history WHERE constancia_id = ?", (constancia_id,))
         conn.execute("DELETE FROM constancias WHERE id = ?", (constancia_id,))
         conn.commit()
     return JSONResponse({"ok": True})
+
+
+@app.get("/api/constancias/{constancia_id}/history")
+def get_constancia_history(constancia_id: int) -> JSONResponse:
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute(
+            """
+            SELECT id, fecha, usuario, campo, valor_anterior, valor_nuevo
+            FROM constancia_history
+            WHERE constancia_id = ?
+            ORDER BY fecha DESC, id DESC
+            """,
+            (constancia_id,),
+        ).fetchall()
+    history = [
+        {
+            "id": r[0],
+            "fecha": r[1],
+            "usuario": r[2],
+            "campo": r[3],
+            "valor_anterior": r[4],
+            "valor_nuevo": r[5],
+        }
+        for r in rows
+    ]
+    return JSONResponse({"history": history})
 
 
 @app.get("/api/constancias/{constancia_id}")
@@ -1502,8 +1548,8 @@ def get_constancia(constancia_id: int) -> JSONResponse:
             "transport_plate": row[4],
             "fumigacion": bool(row[5]),
             "calidad": bool(row[6]),
-            "status": row[7],
-            "items": json.loads(row[8]),
+            "status": normalize_constancia_status(row[7]),
+            "items": parse_items_json(row[8]),
             "created_at": row[9],
         }
     )
@@ -1515,34 +1561,62 @@ async def update_constancia(constancia_id: int, payload: dict) -> JSONResponse:
     if not isinstance(items, list):
         raise HTTPException(status_code=400, detail="Items invalidos.")
     status = payload.get("status") or "confirmada"
-    if status not in {"confirmada", "por_confirmar"}:
+    if status not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail="Estado invalido.")
     fumigacion = 1 if payload.get("fumigacion", True) else 0
     calidad = 1 if payload.get("calidad", True) else 0
     if fumigacion == 0 and calidad == 0:
         raise HTTPException(status_code=400, detail="Selecciona al menos una constancia.")
-    number = (payload.get("number") or "").strip() or None
-    issue_date = (payload.get("issue_date") or "").strip() or None
-    client_name = (payload.get("client_name") or "").strip() or None
-    transport_plate = (payload.get("transport_plate") or "").strip() or None
+    header = constancia_header_snapshot(payload)
+    usuario = (payload.get("usuario") or "admin").strip() or "admin"
     with sqlite3.connect(DB_PATH) as conn:
+        row = conn.execute(
+            """
+            SELECT number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json
+            FROM constancias WHERE id = ?
+            """,
+            (constancia_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Constancia no encontrada.")
+        old_header = {
+            "number": row[0],
+            "issue_date": row[1],
+            "client_name": row[2],
+            "transport_plate": row[3],
+            "fumigacion": row[4],
+            "calidad": row[5],
+            "status": row[6],
+        }
+        old_items = parse_items_json(row[7])
+        items_snap = normalize_items_for_save(conn, items, old_items)
         conn.execute(
             """
             UPDATE constancias
-            SET number = ?, issue_date = ?, client_name = ?, transport_plate = ?, fumigacion = ?, calidad = ?, status = ?, items_json = ?
+            SET number = ?, issue_date = ?, client_name = ?, transport_plate = ?,
+                fumigacion = ?, calidad = ?, status = ?, items_json = ?
             WHERE id = ?
             """,
             (
-                number,
-                issue_date,
-                client_name,
-                transport_plate,
-                fumigacion,
-                calidad,
-                status,
-                json.dumps(items, ensure_ascii=True),
+                header["number"],
+                header["issue_date"],
+                header["client_name"],
+                header["transport_plate"],
+                header["fumigacion"],
+                header["calidad"],
+                header["status"],
+                json.dumps(items_snap, ensure_ascii=True),
                 constancia_id,
             ),
+        )
+        record_constancia_history(
+            conn,
+            constancia_id,
+            old_header,
+            header,
+            old_items,
+            items_snap,
+            usuario,
         )
         conn.commit()
     return JSONResponse({"ok": True})

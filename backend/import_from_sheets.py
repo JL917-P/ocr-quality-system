@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
+from constancia_utils import normalize_constancia_status
 from google_sheets import (
     HEADERS_CLIENTES,
     HEADERS_CONSTANCIAS,
@@ -186,7 +187,7 @@ def _import_constancias(conn: sqlite3.Connection, rows: list[dict[str, str]]) ->
         row_id = _parse_id_cell(row.get("id", ""))
         if row_id is None or row_id in existing:
             continue
-        status = (row.get("status") or "").strip() or "draft"
+        status = normalize_constancia_status(row.get("status") or "confirmada")
         items_json = (row.get("items_json") or "").strip() or "[]"
         created_at = _str_or_none(row.get("created_at", "")) or _utc_now()
         conn.execute(

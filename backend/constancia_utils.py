@@ -1,0 +1,270 @@
+"""Snapshots históricos e historial de cambios para constancias."""
+from __future__ import annotations
+
+import json
+import sqlite3
+from datetime import datetime, timezone
+from typing import Any, Optional
+
+VALID_STATUSES = frozenset({"borrador", "por_confirmar", "confirmada"})
+
+
+def normalize_constancia_status(value: Any) -> str:
+    """Normaliza estados legacy (p. ej. '1' importado desde Sheets)."""
+    text = str(value or "").strip().lower()
+    if text in ("confirmada", "confirmado", "confirmed", "1", "true", "si", "sí"):
+        return "confirmada"
+    if text in ("por_confirmar", "por confirmar", "reserva", "pending", "0", "false", "no"):
+        return "por_confirmar"
+    if text in ("borrador", "draft"):
+        return "borrador"
+    if not text:
+        return "confirmada"
+    return text if text in VALID_STATUSES else "por_confirmar"
+
+
+QUALITY_SNAPSHOT_MAP = (
+    ("humidity", "humidity_snapshot"),
+    ("broken_grains", "broken_grains_snapshot"),
+    ("chalky_1", "chalky_grains_1_snapshot"),
+    ("chalky_2", "chalky_grains_2_snapshot"),
+    ("damaged_grains", "damaged_grains_snapshot"),
+    ("whiteness", "whiteness_snapshot"),
+)
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _str(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def item_field(item: dict[str, Any], *keys: str) -> Any:
+    """Lee un campo del ítem priorizando snapshots."""
+    for key in keys:
+        if key in item and item[key] not in (None, ""):
+            return item[key]
+    return ""
+
+
+def item_display_product(item: dict[str, Any]) -> str:
+    return _str(item_field(item, "product_name_snapshot", "product"))
+
+
+def item_display_lot(item: dict[str, Any]) -> str:
+    return _str(item_field(item, "lote_snapshot", "lot"))
+
+
+def item_display_production(item: dict[str, Any]) -> str:
+    return _str(item_field(item, "production_date_snapshot", "production_text"))
+
+
+def item_display_expiration(item: dict[str, Any]) -> str:
+    return _str(item_field(item, "expiration_date_snapshot", "expiration_text"))
+
+
+def item_quality_value(item: dict[str, Any], catalog_key: str, snapshot_key: str) -> Any:
+    if snapshot_key in item and item[snapshot_key] not in (None, ""):
+        return item[snapshot_key]
+    legacy = {
+        "humidity_snapshot": "humidity",
+        "broken_grains_snapshot": "broken_grains",
+        "chalky_grains_1_snapshot": "chalky_1",
+        "chalky_grains_2_snapshot": "chalky_2",
+        "damaged_grains_snapshot": "damaged_grains",
+        "whiteness_snapshot": "whiteness",
+    }.get(snapshot_key)
+    if legacy and legacy in item and item[legacy] not in (None, ""):
+        return item[legacy]
+    return ""
+
+
+def find_product_by_name(conn: sqlite3.Connection, name: str) -> Optional[dict[str, Any]]:
+    target = _str(name).lower()
+    if not target:
+        return None
+    row = conn.execute(
+        """
+        SELECT id, name, lot, production_text, expiration_text,
+               humidity, broken_grains, chalky_1, chalky_2, damaged_grains, whiteness
+        FROM products
+        WHERE lower(trim(name)) = ?
+        LIMIT 1
+        """,
+        (target,),
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "name": row[1],
+        "lot": row[2],
+        "production_text": row[3],
+        "expiration_text": row[4],
+        "humidity": row[5],
+        "broken_grains": row[6],
+        "chalky_1": row[7],
+        "chalky_2": row[8],
+        "damaged_grains": row[9],
+        "whiteness": row[10],
+    }
+
+
+def build_item_snapshot(
+    item: dict[str, Any],
+    catalog: Optional[dict[str, Any]],
+    previous: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Construye snapshot completo; no sobrescribe calidad si el producto no cambió."""
+    product_name = _str(item.get("product") or item.get("product_name_snapshot"))
+    lot = _str(item.get("lot") or item.get("lote_snapshot"))
+    production = _str(item.get("production_text") or item.get("production_date_snapshot"))
+    expiration = _str(item.get("expiration_text") or item.get("expiration_date_snapshot"))
+    quantity = item.get("quantity")
+
+    prev_name = _str((previous or {}).get("product_name_snapshot") or (previous or {}).get("product"))
+    product_changed = bool(previous) and product_name.lower() != prev_name.lower()
+
+    snap: dict[str, Any] = {
+        "product_id": item.get("product_id") or (catalog or {}).get("id") or (previous or {}).get("product_id"),
+        "product": product_name,
+        "product_name_snapshot": product_name,
+        "lot": lot,
+        "lote_snapshot": lot,
+        "production_text": production,
+        "production_date_snapshot": production,
+        "expiration_text": expiration,
+        "expiration_date_snapshot": expiration,
+    }
+    if quantity not in (None, ""):
+        snap["quantity"] = quantity
+
+    for cat_key, snap_key in QUALITY_SNAPSHOT_MAP:
+        if previous and not product_changed and snap_key in previous:
+            snap[snap_key] = previous[snap_key]
+        elif catalog and catalog.get(cat_key) is not None:
+            snap[snap_key] = catalog[cat_key]
+        elif snap_key in (item or {}):
+            snap[snap_key] = item[snap_key]
+
+    return snap
+
+
+def normalize_items_for_save(
+    conn: sqlite3.Connection,
+    items: list[dict[str, Any]],
+    previous_items: Optional[list[dict[str, Any]]] = None,
+) -> list[dict[str, Any]]:
+    prev_list = previous_items or []
+    normalized: list[dict[str, Any]] = []
+    for idx, raw in enumerate(items):
+        if not isinstance(raw, dict):
+            continue
+        product_name = _str(raw.get("product") or raw.get("product_name_snapshot"))
+        if not product_name:
+            continue
+        catalog = find_product_by_name(conn, product_name)
+        previous = prev_list[idx] if idx < len(prev_list) else None
+        normalized.append(build_item_snapshot(raw, catalog, previous))
+    return normalized
+
+
+def constancia_header_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "number": _str(payload.get("number")) or None,
+        "issue_date": _str(payload.get("issue_date")) or None,
+        "client_name": _str(payload.get("client_name")) or None,
+        "transport_plate": _str(payload.get("transport_plate")) or None,
+        "fumigacion": 1 if payload.get("fumigacion", True) else 0,
+        "calidad": 1 if payload.get("calidad", True) else 0,
+        "status": payload.get("status") or "confirmada",
+    }
+
+
+HEADER_HISTORY_FIELDS = (
+    ("number", "número"),
+    ("issue_date", "fecha_emisión"),
+    ("client_name", "cliente"),
+    ("transport_plate", "transporte"),
+    ("fumigacion", "fumigación"),
+    ("calidad", "calidad"),
+    ("status", "estado"),
+)
+
+ITEM_HISTORY_FIELDS = (
+    ("product_name_snapshot", "producto"),
+    ("lote_snapshot", "lote"),
+    ("production_date_snapshot", "fecha_producción"),
+    ("expiration_date_snapshot", "fecha_vencimiento"),
+    ("quantity", "cantidad"),
+    ("humidity_snapshot", "humedad"),
+    ("broken_grains_snapshot", "quebrados"),
+    ("chalky_grains_1_snapshot", "tizados_1"),
+    ("chalky_grains_2_snapshot", "tizados_2"),
+    ("damaged_grains_snapshot", "dañados"),
+    ("whiteness_snapshot", "blancura"),
+)
+
+
+def _fmt_history(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, float):
+        return str(value)
+    return str(value)
+
+
+def record_constancia_history(
+    conn: sqlite3.Connection,
+    constancia_id: int,
+    old_header: dict[str, Any],
+    new_header: dict[str, Any],
+    old_items: list[dict[str, Any]],
+    new_items: list[dict[str, Any]],
+    usuario: str,
+) -> None:
+    now = utc_now_iso()
+    user = _str(usuario) or "admin"
+
+    for field, label in HEADER_HISTORY_FIELDS:
+        old_val = _fmt_history(old_header.get(field))
+        new_val = _fmt_history(new_header.get(field))
+        if old_val != new_val:
+            conn.execute(
+                """
+                INSERT INTO constancia_history
+                    (constancia_id, fecha, usuario, campo, valor_anterior, valor_nuevo)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (constancia_id, now, user, label, old_val, new_val),
+            )
+
+    max_len = max(len(old_items), len(new_items))
+    for idx in range(max_len):
+        old_item = old_items[idx] if idx < len(old_items) else {}
+        new_item = new_items[idx] if idx < len(new_items) else {}
+        prefix = f"item_{idx + 1}"
+        for field, label in ITEM_HISTORY_FIELDS:
+            old_val = _fmt_history(old_item.get(field, ""))
+            new_val = _fmt_history(new_item.get(field, ""))
+            if old_val != new_val:
+                conn.execute(
+                    """
+                    INSERT INTO constancia_history
+                        (constancia_id, fecha, usuario, campo, valor_anterior, valor_nuevo)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (constancia_id, now, user, f"{prefix}.{label}", old_val, new_val),
+                )
+
+
+def parse_items_json(raw: str) -> list[dict[str, Any]]:
+    try:
+        data = json.loads(raw or "[]")
+    except json.JSONDecodeError:
+        return []
+    return data if isinstance(data, list) else []
