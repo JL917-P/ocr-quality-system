@@ -1032,12 +1032,25 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
 }
 
 .trasiegos-table-wrap {
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .trasiegos-table {
-  min-width: 980px;
+  width: 100%;
+  table-layout: fixed;
+  min-width: 0;
 }
+
+.trasiegos-table .col-tr-fecha { width: 9%; }
+.trasiegos-table .col-tr-mp { width: 7%; }
+.trasiegos-table .col-tr-fing { width: 9%; }
+.trasiegos-table .col-tr-estado { width: 8%; }
+.trasiegos-table .col-tr-pfinal { width: 20%; }
+.trasiegos-table .col-tr-lote { width: 8%; }
+.trasiegos-table .col-tr-fp { width: 12%; }
+.trasiegos-table .col-tr-fv { width: 12%; }
+.trasiegos-table .col-tr-cant { width: 7%; }
+.trasiegos-table .col-tr-del { width: 4%; }
 
 .trasiegos-table th {
   position: sticky;
@@ -1045,50 +1058,63 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   z-index: 2;
   background: linear-gradient(180deg, #e0f2fe, #bae6fd);
   color: #0c2340;
-  font-size: 12px;
+  font-size: 11px;
   white-space: nowrap;
+  padding: 6px 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .trasiegos-table td {
-  padding: 4px;
+  padding: 3px 2px;
   vertical-align: middle;
+  overflow: hidden;
 }
 
 .trasiegos-table input {
   width: 100%;
   min-width: 0;
-  padding: 8px 8px;
-  font-size: 13px;
+  padding: 5px 4px;
+  font-size: 11px;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   box-sizing: border-box;
 }
 
 .trasiegos-table input.trasiego-date {
-  min-width: 130px;
+  min-width: 0;
   cursor: pointer;
+  padding: 5px 2px;
 }
 
 .trasiego-dual-date {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
 .trasiego-dual-date input[data-field] {
-  flex: 1;
-  min-width: 70px;
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 11px;
+  padding: 5px 2px;
 }
 
 .trasiegos-table .trasiego-date-picker {
-  width: 38px;
-  min-width: 38px;
-  max-width: 38px;
-  padding: 6px 4px;
+  width: 28px;
+  min-width: 28px;
+  max-width: 28px;
+  padding: 4px 2px;
   flex-shrink: 0;
   cursor: pointer;
   color: #0e7490;
+}
+
+.trasiegos-table .btn-mini.trasiego-delete {
+  min-width: 0;
+  width: 100%;
+  padding: 4px 2px;
 }
 
 .trasiegos-table input:focus {

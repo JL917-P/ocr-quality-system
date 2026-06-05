@@ -432,18 +432,30 @@
           <div class="card trasiegos-sheet-card">
             <div class="trasiegos-table-wrap">
               <table class="trasiegos-table">
+                <colgroup>
+                  <col class="col-tr-fecha" />
+                  <col class="col-tr-mp" />
+                  <col class="col-tr-fing" />
+                  <col class="col-tr-estado" />
+                  <col class="col-tr-pfinal" />
+                  <col class="col-tr-lote" />
+                  <col class="col-tr-fp" />
+                  <col class="col-tr-fv" />
+                  <col class="col-tr-cant" />
+                  <col class="col-tr-del" />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th style="width:150px;">Fecha</th>
-                    <th style="width:120px;">M.P</th>
-                    <th style="width:150px;">F.Ingreso</th>
-                    <th style="width:120px;">Estado</th>
-                    <th style="width:220px;">P.final</th>
-                    <th style="width:120px;">Lote</th>
-                    <th style="width:170px;">F.P</th>
-                    <th style="width:170px;">F.V</th>
-                    <th style="width:110px;">Cantidad</th>
-                    <th style="width:56px;"></th>
+                    <th>Fecha</th>
+                    <th>M.P</th>
+                    <th>F.Ing.</th>
+                    <th>Estado</th>
+                    <th>P.final</th>
+                    <th>Lote</th>
+                    <th>F.P</th>
+                    <th>F.V</th>
+                    <th>Cant.</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody id="trasiegosBody"></tbody>
@@ -2130,17 +2142,17 @@
           <td><input type="text" data-field="mp" placeholder="M.P" /></td>
           <td><input type="date" class="trasiego-date" data-field="f_ingreso" title="F. Ingreso" /></td>
           <td><input type="text" data-field="estado" placeholder="Estado" /></td>
-          <td><input type="text" data-field="p_final" placeholder="Ej: Arroz gran chalan extrab x 50kg" /></td>
+          <td><input type="text" data-field="p_final" placeholder="Producto final" title="Ej: Arroz gran chalan extrab x 50kg" /></td>
           <td><input type="text" data-field="lote" placeholder="Lote" /></td>
           <td>
             <div class="trasiego-dual-date">
-              <input type="text" data-field="f_p" placeholder="15/05/2026 o May26" title="Fecha completa o solo mes/año" />
+              <input type="text" data-field="f_p" placeholder="May26" title="Fecha completa o solo mes/año" />
               <input type="date" data-picker="f_p" class="trasiego-date-picker" title="Calendario (día/mes/año)" />
             </div>
           </td>
           <td>
             <div class="trasiego-dual-date">
-              <input type="text" data-field="f_v" placeholder="15/05/2026 o May26" title="Fecha completa o solo mes/año" />
+              <input type="text" data-field="f_v" placeholder="Ene27" title="Fecha completa o solo mes/año" />
               <input type="date" data-picker="f_v" class="trasiego-date-picker" title="Calendario F.V" />
             </div>
           </td>
