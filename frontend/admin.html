@@ -3270,6 +3270,56 @@
         );
       }
 
+      function parseConstanciaDate(dateText) {
+        const value = (dateText || "").trim();
+        if (!value) return null;
+        let match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (match) {
+          return {
+            day: parseInt(match[3], 10),
+            month: parseInt(match[2], 10),
+            year: parseInt(match[1], 10),
+          };
+        }
+        match = value.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{4})$/);
+        if (match) {
+          return {
+            day: parseInt(match[1], 10),
+            month: parseInt(match[2], 10),
+            year: parseInt(match[3], 10),
+          };
+        }
+        match = value.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{2})$/);
+        if (match) {
+          let year = parseInt(match[3], 10);
+          year += year < 50 ? 2000 : 1900;
+          return {
+            day: parseInt(match[1], 10),
+            month: parseInt(match[2], 10),
+            year,
+          };
+        }
+        return null;
+      }
+
+      /** PDF constancia: 06/06/2026 */
+      function formatEmissionDate(dateText) {
+        const parsed = parseConstanciaDate(dateText);
+        if (!parsed) return dateText || "";
+        const dd = String(parsed.day).padStart(2, "0");
+        const mm = String(parsed.month).padStart(2, "0");
+        return `${dd}/${mm}/${parsed.year}`;
+      }
+
+      /** PDF constancia — Fecha de envío: 6/06/26 */
+      function formatShippingDate(dateText) {
+        const parsed = parseConstanciaDate(dateText);
+        if (!parsed) return dateText || "";
+        const mm = String(parsed.month).padStart(2, "0");
+        const yy = String(parsed.year).slice(-2);
+        return `${parsed.day}/${mm}/${yy}`;
+      }
+
       function formatDateMinusDays(dateText, days) {
         const parts = (dateText || "").split("/").map((p) => p.trim());
         const hasParts = parts.length === 3 && parts.every((p) => p.length >= 1);
@@ -3321,7 +3371,7 @@
           .map((item, idx) => `
             <tr>
               <td>${idx + 1}</td>
-              <td>${formatShortDate(fecha)}</td>
+              <td>${formatShippingDate(fecha)}</td>
               <td>${itemSnapshotField(item, "product_name_snapshot", "product")}</td>
               <td>${itemSnapshotField(item, "lote_snapshot", "lot") || "-"}</td>
               <td>${item.quantity ?? ""}</td>
@@ -3381,7 +3431,7 @@
                 <tbody>
                   <tr>
                     <td class="label">FECHA DE EMISIÓN</td>
-                    <td class="value">${fecha}</td>
+                    <td class="value">${formatEmissionDate(fecha)}</td>
                   </tr>
                   <tr>
                     <td class="label">CLIENTE</td>
@@ -3437,7 +3487,7 @@
                 <tbody>
                   <tr>
                     <td class="label">FECHA DE EMISION</td>
-                    <td class="value">${fecha}</td>
+                    <td class="value">${formatEmissionDate(fecha)}</td>
                     <td class="label">RAZON SOCIAL</td>
                     <td class="value">INDUAMERICA INTERNACIONAL S.A.C</td>
                   </tr>
