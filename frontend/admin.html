@@ -679,11 +679,6 @@
               const lines = Object.entries(data.by_tab || {}).map(
                 ([tab, n]) => `${tab}: ${n} importados`
               );
-              alert(
-                `${data.message || "Importación completada"}\n` +
-                  `Total: ${data.imported ?? data.total ?? 0}\n\n` +
-                  lines.join("\n")
-              );
               await Promise.all([
                 loadClients(),
                 loadProducts(),
@@ -691,14 +686,23 @@
                 loadConstancias(),
                 loadTrasiegos(),
               ]);
+              showSuccessModal(
+                `${data.message || "Importación completada"}\n` +
+                  `Total: ${data.imported ?? data.total ?? 0}\n\n` +
+                  lines.join("\n"),
+                { title: "Importación completada" }
+              );
             } else {
-              alert(
+              showErrorModal(
                 "No se pudo importar desde Google Sheets.\n" +
-                  (data.error || "Revisa los logs del servidor.")
+                  (data.error || "Revisa los logs del servidor."),
+                { title: "Error al importar" }
               );
             }
           } catch (err) {
-            alert("Error de red al importar: " + (err?.message || err));
+            showErrorModal("Error de red al importar: " + (err?.message || err), {
+              title: "Error de conexión",
+            });
           } finally {
             importSheetsBtn.disabled = false;
             importSheetsBtn.textContent = prevText;
@@ -718,14 +722,19 @@
             const res = await fetch("/api/sync/sheets", { method: "POST" });
             const data = await res.json();
             if (data.ok) {
-              alert(
-                `${data.message || "Sincronización completada"}\nRegistros enviados: ${data.synced ?? 0}`
+              showSuccessModal(
+                `${data.message || "Sincronización completada"}\nRegistros enviados: ${data.synced ?? 0}`,
+                { title: "Sincronización completada" }
               );
             } else {
-              alert("No se pudo sincronizar con Google Sheets. Revisa los logs del servidor.");
+              showErrorModal("No se pudo sincronizar con Google Sheets. Revisa los logs del servidor.", {
+                title: "Error al sincronizar",
+              });
             }
           } catch (err) {
-            alert("Error de red al sincronizar: " + (err?.message || err));
+            showErrorModal("Error de red al sincronizar: " + (err?.message || err), {
+              title: "Error de conexión",
+            });
           } finally {
             syncSheetsBtn.disabled = false;
             syncSheetsBtn.textContent = prevText;
@@ -1388,12 +1397,12 @@
       function openAnalysisSheet() {
         const selectedStore = analysisStore.value;
         if (!selectedStore) {
-          alert("Selecciona una tienda para abrir la hoja.");
+          showInfoModal("Selecciona una tienda para abrir la hoja.");
           return;
         }
         const rows = analysisData.filter((row) => row.store === selectedStore);
         if (!rows.length) {
-          alert("No hay registros para esa tienda.");
+          showInfoModal("No hay registros para esa tienda.");
           return;
         }
         const subtotalSum = rows.reduce((acc, row) => acc + toNumber(row.subtotal), 0);
@@ -1488,7 +1497,7 @@
         `;
         const win = window.open("", "_blank");
         if (!win) {
-          alert("El navegador bloqueó la ventana emergente.");
+          showInfoModal("El navegador bloqueó la ventana emergente.");
           return;
         }
         win.document.open();
@@ -1501,7 +1510,7 @@
           const files = Array.from(event.target.files || []);
           if (!files.length) return;
           if (files.length > 3) {
-            alert("Máximo 3 archivos CSV.");
+            showInfoModal("Máximo 3 archivos CSV.");
             analysisFile.value = "";
             return;
           }
@@ -1542,12 +1551,12 @@
         analysisApplyBtn.addEventListener("click", () => {
           const selectedStore = analysisStore.value;
           if (!selectedStore) {
-            alert("Selecciona una tienda para aplicar a la constancia.");
+            showInfoModal("Selecciona una tienda para aplicar a la constancia.");
             return;
           }
           const rows = analysisData.filter((row) => row.store === selectedStore);
           if (!rows.length) {
-            alert("No hay productos para esa tienda.");
+            showInfoModal("No hay productos para esa tienda.");
             return;
           }
           const clientName = formatClientFromStore(selectedStore);
@@ -1865,13 +1874,19 @@
             if (res.ok && data.restored > 0) {
               fillConstanciaItems(data.items || []);
               updateRestoreConstanciaButton(data.items || []);
-              alert(data.message || `Se restauraron ${data.restored} producto(s).`);
+              showSuccessModal(data.message || `Se restauraron ${data.restored} producto(s).`, {
+                title: "Productos restaurados",
+              });
               await loadConstancias();
             } else {
-              alert(data.message || "No hay productos en el historial para restaurar.");
+              showInfoModal(data.message || "No hay productos en el historial para restaurar.", {
+                title: "Sin historial",
+              });
             }
           } catch (err) {
-            alert("Error al restaurar productos: " + (err?.message || err));
+            showErrorModal("Error al restaurar productos: " + (err?.message || err), {
+              title: "Error al restaurar",
+            });
           }
         });
       }
@@ -2081,11 +2096,20 @@
         if (!options.silent) {
           if (fail > 0) {
             setTrasiegosSaveStatus(`Guardado parcial: ${ok} ok, ${fail} con error.`, true);
+            showErrorModal(
+              `Se guardaron ${ok} fila(s), pero ${fail} fila(s) tuvieron error.\nRevisa los datos e intenta de nuevo.`,
+              { title: "Guardado parcial" }
+            );
           } else if (ok > 0) {
             setTrasiegosSaveStatus(`Guardado: ${ok} fila${ok === 1 ? "" : "s"} (SQLite + Google Sheets).`);
             await loadTrasiegos();
+            showSuccessModal(
+              `Se guardaron ${ok} fila${ok === 1 ? "" : "s"} correctamente en SQLite y Google Sheets.`,
+              { title: "Trasiegos guardados" }
+            );
           } else {
             setTrasiegosSaveStatus("No hay filas con datos para guardar.");
+            showInfoModal("No hay filas con datos para guardar.", { title: "Sin cambios" });
           }
         } else if (fail === 0 && ok > 0) {
           await loadTrasiegos();
@@ -2348,7 +2372,7 @@
       async function saveProduct(clearAfter) {
         const payload = getProductPayload();
         if (!payload.name) {
-          alert("El nombre del producto es obligatorio.");
+          showInfoModal("El nombre del producto es obligatorio.", { title: "Campo requerido" });
           return;
         }
         const url = currentProductId ? `/api/products/${currentProductId}` : "/api/products";
@@ -2370,12 +2394,19 @@
             }
             productFormCard.classList.add("hidden");
             productListCard.classList.remove("hidden");
-            alert(wasEdit ? "Producto actualizado correctamente." : "Producto guardado correctamente.");
+            showSuccessModal(
+              wasEdit ? "Producto actualizado correctamente." : "Producto guardado correctamente.",
+              { title: wasEdit ? "Producto actualizado" : "Producto guardado" }
+            );
           } else {
-            alert(data.detail || data.error || "No se pudo guardar el producto.");
+            showErrorModal(data.detail || data.error || "No se pudo guardar el producto.", {
+              title: "Error al guardar",
+            });
           }
         } catch (err) {
-          alert("Error de red al guardar producto: " + (err?.message || err));
+          showErrorModal("Error de red al guardar producto: " + (err?.message || err), {
+            title: "Error de conexión",
+          });
         }
       }
 
@@ -2650,12 +2681,16 @@
 
       async function saveConstancia(status) {
         if (!constanciaFumigacion.checked && !constanciaCalidad.checked) {
-          alert("Selecciona al menos una constancia (Fumigación o Calidad).");
+          showInfoModal("Selecciona al menos una constancia (Fumigación o Calidad).", {
+            title: "Campo requerido",
+          });
           return;
         }
         const items = collectConstanciaItems();
         if (!items.length) {
-          alert("Agrega al menos un producto a la constancia antes de guardar.");
+          showInfoModal("Agrega al menos un producto a la constancia antes de guardar.", {
+            title: "Productos requeridos",
+          });
           return;
         }
         const payload = {
@@ -2690,7 +2725,9 @@
             },
           });
         } else {
-          alert(data.detail || data.error || "No se pudo guardar la constancia.");
+          showErrorModal(data.detail || data.error || "No se pudo guardar la constancia.", {
+            title: "Error al guardar",
+          });
         }
       }
 
@@ -2754,7 +2791,10 @@
             fillConstanciaItems(data.items || []);
             updateRestoreConstanciaButton(data.items || []);
             if (data.repaired_from_duplicate) {
-              alert("Se recuperaron los productos de otra copia de esta constancia (mismo número y cliente).");
+              showSuccessModal(
+                "Se recuperaron los productos de otra copia de esta constancia (mismo número y cliente).",
+                { title: "Productos recuperados" }
+              );
             }
             showSection("section-ocr");
           });
@@ -2963,6 +3003,15 @@
         if (res.ok) {
           await loadClients();
           closeClientModal();
+          showSuccessModal(
+            currentClientId ? "Cliente actualizado correctamente." : "Cliente guardado correctamente.",
+            { title: currentClientId ? "Cliente actualizado" : "Cliente guardado" }
+          );
+        } else {
+          const data = await res.json().catch(() => ({}));
+          showErrorModal(data.detail || data.error || "No se pudo guardar el cliente.", {
+            title: "Error al guardar",
+          });
         }
       });
 
@@ -3055,6 +3104,15 @@
         if (res.ok) {
           await loadTransports();
           closeTransportModal();
+          showSuccessModal(
+            currentTransportId ? "Matrícula actualizada correctamente." : "Matrícula guardada correctamente.",
+            { title: currentTransportId ? "Matrícula actualizada" : "Matrícula guardada" }
+          );
+        } else {
+          const data = await res.json().catch(() => ({}));
+          showErrorModal(data.detail || data.error || "No se pudo guardar la matrícula.", {
+            title: "Error al guardar",
+          });
         }
       });
 
@@ -3112,20 +3170,35 @@
         });
       }
 
-      function showSuccessModal(message, options = {}) {
-        const title = options.title || "Operación exitosa";
+      function formatModalMessage(text) {
+        return String(text ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\n/g, "<br>");
+      }
+
+      function showNoticeModal(message, options = {}) {
+        const variant = options.variant || "info";
+        const titles = {
+          success: "Operación exitosa",
+          error: "No se pudo completar",
+          info: "Aviso",
+        };
+        const icons = { success: "✓", error: "!", info: "i" };
+        const title = options.title || titles[variant] || titles.info;
         const buttonText = options.buttonText || "Aceptar";
         const onClose = options.onClose;
         const backdrop = document.createElement("div");
         backdrop.className = "modal-backdrop show";
         const modal = document.createElement("div");
-        modal.className = "modal modal-success";
+        modal.className = `modal modal-notice modal-notice-${variant}`;
         modal.innerHTML = `
-          <div class="success-badge" aria-hidden="true">✓</div>
-          <div class="title">${title}</div>
-          <div class="sub">${message}</div>
+          <div class="notice-badge" aria-hidden="true">${icons[variant] || icons.info}</div>
+          <div class="title">${formatModalMessage(title)}</div>
+          <div class="sub">${formatModalMessage(message)}</div>
           <div class="actions">
-            <button class="btn btn-primary" id="successOkBtn" type="button">${buttonText}</button>
+            <button class="btn btn-primary" id="noticeOkBtn" type="button">${formatModalMessage(buttonText)}</button>
           </div>
         `;
         backdrop.appendChild(modal);
@@ -3136,34 +3209,22 @@
           }
           onClose?.();
         };
-        modal.querySelector("#successOkBtn").addEventListener("click", close);
+        modal.querySelector("#noticeOkBtn").addEventListener("click", close);
         backdrop.addEventListener("click", (e) => {
           if (e.target === backdrop) close();
         });
       }
 
-      function showInfoModal(message) {
-        const backdrop = document.createElement("div");
-        backdrop.className = "modal-backdrop show";
-        const modal = document.createElement("div");
-        modal.className = "modal";
-        modal.innerHTML = `
-          <div class="title">Aviso</div>
-          <div class="sub">${message}</div>
-          <div class="actions" style="margin-top:12px;">
-            <button class="btn btn-primary" id="infoOkBtn">OK</button>
-          </div>
-        `;
-        backdrop.appendChild(modal);
-        document.body.appendChild(backdrop);
-        modal.querySelector("#infoOkBtn").addEventListener("click", () => {
-          document.body.removeChild(backdrop);
-        });
-        backdrop.addEventListener("click", (e) => {
-          if (e.target === backdrop) {
-            document.body.removeChild(backdrop);
-          }
-        });
+      function showSuccessModal(message, options = {}) {
+        showNoticeModal(message, { ...options, variant: "success" });
+      }
+
+      function showErrorModal(message, options = {}) {
+        showNoticeModal(message, { ...options, variant: "error" });
+      }
+
+      function showInfoModal(message, options = {}) {
+        showNoticeModal(message, { ...options, variant: "info" });
       }
 
       function showConfirmModal(message, onConfirm, onCancel) {

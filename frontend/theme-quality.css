@@ -990,19 +990,18 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   padding-top: 12px;
 }
 
-.modal-success {
+.modal-success,
+.modal-notice {
   text-align: center;
   width: min(400px, 92vw);
   padding: 28px 24px 22px;
 }
 
-.modal-success .success-badge {
+.modal-success .success-badge,
+.modal-notice .notice-badge {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--qc-green-bg);
-  border: 2px solid #6ee7b7;
-  color: var(--qc-green);
   font-size: 28px;
   font-weight: 700;
   line-height: 1;
@@ -1012,24 +1011,47 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   margin: 0 auto 16px;
 }
 
-.modal-success .title {
+.modal-success .success-badge,
+.modal-notice-success .notice-badge {
+  background: var(--qc-green-bg);
+  border: 2px solid #6ee7b7;
+  color: var(--qc-green);
+}
+
+.modal-notice-error .notice-badge {
+  background: #fef2f2;
+  border: 2px solid #fecaca;
+  color: #b42318;
+}
+
+.modal-notice-info .notice-badge {
+  background: #eff6ff;
+  border: 2px solid #bfdbfe;
+  color: #1d4ed8;
+}
+
+.modal-success .title,
+.modal-notice .title {
   font-size: 1.15rem;
   margin-bottom: 8px;
 }
 
-.modal-success .sub {
+.modal-success .sub,
+.modal-notice .sub {
   font-size: 14px;
   line-height: 1.5;
   margin-bottom: 20px;
 }
 
-.modal-success .actions {
+.modal-success .actions,
+.modal-notice .actions {
   border-top: none;
   padding-top: 0;
   justify-content: center;
 }
 
-.modal-success .actions .btn {
+.modal-success .actions .btn,
+.modal-notice .actions .btn {
   min-width: 120px;
 }
 
