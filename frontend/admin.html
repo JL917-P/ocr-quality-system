@@ -664,10 +664,10 @@
       const importSheetsBtn = document.getElementById("importSheetsBtn");
 
       if (importSheetsBtn) {
-        importSheetsBtn.addEventListener("click", async () => {
-          if (!confirm("¿Importar registros desde Google Sheets a SQLite?\nSolo se insertarán los que falten (por ID).\nNo se sobrescriben trasiegos ni productos de constancias ya guardados.\nLos registros eliminados no volverán.\n\nSe guardarán primero los trasiegos pendientes.")) {
-            return;
-          }
+        importSheetsBtn.addEventListener("click", () => {
+          showConfirmModal(
+            "¿Importar registros desde Google Sheets a SQLite?\n\nSolo se insertarán los que falten (por ID).\nNo se sobrescriben trasiegos ni productos de constancias ya guardados.\nLos registros eliminados no volverán.\n\nSe guardarán primero los trasiegos pendientes.",
+            async () => {
           importSheetsBtn.disabled = true;
           const prevText = importSheetsBtn.textContent;
           importSheetsBtn.textContent = "Importando…";
@@ -687,9 +687,7 @@
                 loadTrasiegos(),
               ]);
               showSuccessModal(
-                `${data.message || "Importación completada"}\n` +
-                  `Total: ${data.imported ?? data.total ?? 0}\n\n` +
-                  lines.join("\n"),
+                `Total: ${data.imported ?? data.total ?? 0}\n\n${lines.join("\n")}`,
                 { title: "Importación completada" }
               );
             } else {
@@ -707,14 +705,18 @@
             importSheetsBtn.disabled = false;
             importSheetsBtn.textContent = prevText;
           }
+            },
+            null,
+            { title: "Importar desde Google Sheets" }
+          );
         });
       }
 
       if (syncSheetsBtn) {
-        syncSheetsBtn.addEventListener("click", async () => {
-          if (!confirm("¿Sincronizar registros de SQLite con Google Sheets?\nSe actualizarán todos los datos (productos, clientes, matrículas, constancias y trasiegos).")) {
-            return;
-          }
+        syncSheetsBtn.addEventListener("click", () => {
+          showConfirmModal(
+            "¿Sincronizar registros de SQLite con Google Sheets?\nSe actualizarán todos los datos (productos, clientes, matrículas, constancias y trasiegos).",
+            async () => {
           syncSheetsBtn.disabled = true;
           const prevText = syncSheetsBtn.textContent;
           syncSheetsBtn.textContent = "Sincronizando…";
@@ -723,7 +725,7 @@
             const data = await res.json();
             if (data.ok) {
               showSuccessModal(
-                `${data.message || "Sincronización completada"}\nRegistros enviados: ${data.synced ?? 0}`,
+                `Registros enviados: ${data.synced ?? 0}`,
                 { title: "Sincronización completada" }
               );
             } else {
@@ -739,6 +741,10 @@
             syncSheetsBtn.disabled = false;
             syncSheetsBtn.textContent = prevText;
           }
+            },
+            null,
+            { title: "Sincronizar con Google Sheets" }
+          );
         });
       }
 
@@ -1613,12 +1619,17 @@
         const normalized = normalizeProductKey(trimmed);
         if (inputEl?.dataset.promptedValue === normalized) return;
         inputEl.dataset.promptedValue = normalized;
-        showConfirmModal(`Este producto es nuevo: "${trimmed}". ¿Deseas guardarlo en el catálogo?`, () => {
-          clearProductForm();
-          prodName.value = trimmed;
-          openProductModal();
-          prodName.focus();
-        });
+        showConfirmModal(
+          `Este producto es nuevo: "${trimmed}". ¿Deseas guardarlo en el catálogo?`,
+          () => {
+            clearProductForm();
+            prodName.value = trimmed;
+            openProductModal();
+            prodName.focus();
+          },
+          null,
+          { title: "Producto nuevo" }
+        );
       }
 
       function applyProductDetailsForRow(tr) {
@@ -1923,7 +1934,9 @@
             selectedConstancias.clear();
             selectAllConstancias.checked = false;
             renderConstancias(filteredConstancias);
-          }
+          },
+          null,
+          { title: "Eliminar constancias" }
         );
       });
       selectAllConstancias.addEventListener("change", () => {
@@ -2801,10 +2814,15 @@
           const confirmBtn = row.querySelector(".confirm-btn");
           if (confirmBtn) {
             confirmBtn.addEventListener("click", async () => {
-              showConfirmModal("¿Desea confirmar la constancia?", async () => {
+              showConfirmModal(
+                "¿Desea confirmar la constancia?",
+                async () => {
                 await fetch(`/api/constancias/${item.id}/confirm`, { method: "POST" });
                 await loadConstancias();
-              });
+                },
+                null,
+                { title: "Confirmar constancia" }
+              );
             });
           }
           const viewBtn = row.querySelector(".view-btn");
@@ -3227,17 +3245,19 @@
         showNoticeModal(message, { ...options, variant: "info" });
       }
 
-      function showConfirmModal(message, onConfirm, onCancel) {
+      function showConfirmModal(message, onConfirm, onCancel, options = {}) {
+        const title = options.title || "Confirmación";
         const backdrop = document.createElement("div");
         backdrop.className = "modal-backdrop show";
         const modal = document.createElement("div");
-        modal.className = "modal";
+        modal.className = "modal modal-notice modal-notice-confirm";
         modal.innerHTML = `
-          <div class="title">Confirmación</div>
-          <div class="sub">${message}</div>
-          <div class="actions" style="margin-top:12px;">
-            <button class="btn btn-success" id="confirmOkBtn">Sí</button>
-            <button class="btn btn-outline" id="confirmCancelBtn">No</button>
+          <div class="notice-badge" aria-hidden="true">?</div>
+          <div class="title">${formatModalMessage(title)}</div>
+          <div class="sub">${formatModalMessage(message)}</div>
+          <div class="actions actions-row">
+            <button class="btn btn-success" id="confirmOkBtn" type="button">Sí</button>
+            <button class="btn btn-outline" id="confirmCancelBtn" type="button">No</button>
           </div>
         `;
         backdrop.appendChild(modal);
@@ -3266,7 +3286,9 @@
       function confirmDelete(itemLabel, onConfirm) {
         showConfirmModal(
           `¿Está seguro de eliminar ${itemLabel}?\nSe borrará de SQLite y Google Sheets.`,
-          onConfirm
+          onConfirm,
+          null,
+          { title: "Confirmación" }
         );
       }
 

@@ -1030,6 +1030,12 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   color: #1d4ed8;
 }
 
+.modal-notice-confirm .notice-badge {
+  background: #eff6ff;
+  border: 2px solid #bfdbfe;
+  color: #1d4ed8;
+}
+
 .modal-success .title,
 .modal-notice .title {
   font-size: 1.15rem;
@@ -1041,6 +1047,7 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   font-size: 14px;
   line-height: 1.5;
   margin-bottom: 20px;
+  text-align: center;
 }
 
 .modal-success .actions,
@@ -1048,6 +1055,13 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   border-top: none;
   padding-top: 0;
   justify-content: center;
+}
+
+.modal-notice .actions-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .modal-success .actions .btn,
