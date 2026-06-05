@@ -990,6 +990,49 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   padding-top: 12px;
 }
 
+.modal-success {
+  text-align: center;
+  width: min(400px, 92vw);
+  padding: 28px 24px 22px;
+}
+
+.modal-success .success-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--qc-green-bg);
+  border: 2px solid #6ee7b7;
+  color: var(--qc-green);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+
+.modal-success .title {
+  font-size: 1.15rem;
+  margin-bottom: 8px;
+}
+
+.modal-success .sub {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.modal-success .actions {
+  border-top: none;
+  padding-top: 0;
+  justify-content: center;
+}
+
+.modal-success .actions .btn {
+  min-width: 120px;
+}
+
 .page-admin .card {
   margin-bottom: 16px;
 }

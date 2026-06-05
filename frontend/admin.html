@@ -2679,12 +2679,16 @@
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
-          alert("Constancia guardada correctamente.");
           await loadConstancias();
-          currentConstanciaId = null;
-          currentConstanciaStatus = "confirmada";
-          resetConstanciaForm();
-          showSection("section-constancias");
+          showSuccessModal("Constancia guardada correctamente.", {
+            title: "Constancia guardada",
+            onClose: () => {
+              currentConstanciaId = null;
+              currentConstanciaStatus = "confirmada";
+              resetConstanciaForm();
+              showSection("section-constancias");
+            },
+          });
         } else {
           alert(data.detail || data.error || "No se pudo guardar la constancia.");
         }
@@ -3105,6 +3109,36 @@
           if (e.target === backdrop) {
             document.body.removeChild(backdrop);
           }
+        });
+      }
+
+      function showSuccessModal(message, options = {}) {
+        const title = options.title || "Operación exitosa";
+        const buttonText = options.buttonText || "Aceptar";
+        const onClose = options.onClose;
+        const backdrop = document.createElement("div");
+        backdrop.className = "modal-backdrop show";
+        const modal = document.createElement("div");
+        modal.className = "modal modal-success";
+        modal.innerHTML = `
+          <div class="success-badge" aria-hidden="true">✓</div>
+          <div class="title">${title}</div>
+          <div class="sub">${message}</div>
+          <div class="actions">
+            <button class="btn btn-primary" id="successOkBtn" type="button">${buttonText}</button>
+          </div>
+        `;
+        backdrop.appendChild(modal);
+        document.body.appendChild(backdrop);
+        const close = () => {
+          if (document.body.contains(backdrop)) {
+            document.body.removeChild(backdrop);
+          }
+          onClose?.();
+        };
+        modal.querySelector("#successOkBtn").addEventListener("click", close);
+        backdrop.addEventListener("click", (e) => {
+          if (e.target === backdrop) close();
         });
       }
 
