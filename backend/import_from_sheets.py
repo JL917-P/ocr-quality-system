@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
-from constancia_utils import normalize_constancia_status
+from constancia_utils import normalize_constancia_status, parse_items_json
 from google_sheets import (
     HEADERS_CLIENTES,
     HEADERS_CONSTANCIAS,
@@ -81,6 +81,23 @@ def _existing_ids(conn: sqlite3.Connection, table: str) -> set[int]:
         return set()
 
 
+def _deleted_ids(conn: sqlite3.Connection, entity_table: str) -> set[int]:
+    try:
+        return {
+            int(r[0])
+            for r in conn.execute(
+                "SELECT record_id FROM sync_deletions WHERE entity_table = ?",
+                (entity_table,),
+            ).fetchall()
+        }
+    except sqlite3.OperationalError:
+        return set()
+
+
+def _items_json_is_empty(raw: str) -> bool:
+    return len(parse_items_json(raw or "[]")) == 0
+
+
 def _fix_sqlite_sequence(conn: sqlite3.Connection, table: str) -> None:
     row = conn.execute(f"SELECT COALESCE(MAX(id), 0) FROM {table}").fetchone()
     max_id = int(row[0]) if row else 0
@@ -94,10 +111,11 @@ def _fix_sqlite_sequence(conn: sqlite3.Connection, table: str) -> None:
 
 def _import_clients(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> int:
     existing = _existing_ids(conn, "clients")
+    deleted = _deleted_ids(conn, "clients")
     imported = 0
     for row in rows:
         row_id = _parse_id_cell(row.get("id", ""))
-        if row_id is None or row_id in existing:
+        if row_id is None or row_id in existing or row_id in deleted:
             continue
         name = (row.get("name") or "").strip()
         if not name:
@@ -116,10 +134,11 @@ def _import_clients(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> int
 
 def _import_products(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> int:
     existing = _existing_ids(conn, "products")
+    deleted = _deleted_ids(conn, "products")
     imported = 0
     for row in rows:
         row_id = _parse_id_cell(row.get("id", ""))
-        if row_id is None or row_id in existing:
+        if row_id is None or row_id in existing or row_id in deleted:
             continue
         name = (row.get("name") or "").strip()
         if not name:
@@ -160,10 +179,11 @@ def _import_products(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> in
 
 def _import_transports(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> int:
     existing = _existing_ids(conn, "transports")
+    deleted = _deleted_ids(conn, "transports")
     imported = 0
     for row in rows:
         row_id = _parse_id_cell(row.get("id", ""))
-        if row_id is None or row_id in existing:
+        if row_id is None or row_id in existing or row_id in deleted:
             continue
         plate = (row.get("plate") or "").strip()
         if not plate:
@@ -182,13 +202,27 @@ def _import_transports(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> 
 
 def _import_constancias(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> int:
     existing = _existing_ids(conn, "constancias")
+    deleted = _deleted_ids(conn, "constancias")
     imported = 0
+    repaired = 0
     for row in rows:
         row_id = _parse_id_cell(row.get("id", ""))
-        if row_id is None or row_id in existing:
+        if row_id is None or row_id in deleted:
             continue
         status = normalize_constancia_status(row.get("status") or "confirmada")
         items_json = (row.get("items_json") or "").strip() or "[]"
+        if row_id in existing:
+            cur = conn.execute(
+                "SELECT items_json, status FROM constancias WHERE id = ?",
+                (row_id,),
+            ).fetchone()
+            if cur and _items_json_is_empty(cur[0]) and not _items_json_is_empty(items_json):
+                conn.execute(
+                    "UPDATE constancias SET items_json = ?, status = ? WHERE id = ?",
+                    (items_json, status, row_id),
+                )
+                repaired += 1
+            continue
         created_at = _str_or_none(row.get("created_at", "")) or _utc_now()
         conn.execute(
             """
@@ -212,47 +246,65 @@ def _import_constancias(conn: sqlite3.Connection, rows: list[dict[str, str]]) ->
         )
         existing.add(row_id)
         imported += 1
-    if imported:
+    if imported or repaired:
         _fix_sqlite_sequence(conn, "constancias")
-    return imported
+    return imported + repaired
 
 
 def _import_trasiegos(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> int:
     existing = _existing_ids(conn, "trasiegos")
+    deleted = _deleted_ids(conn, "trasiegos")
     imported = 0
+    updated = 0
     for row in rows:
         row_id = _parse_id_cell(row.get("id", ""))
-        if row_id is None or row_id in existing:
+        if row_id is None or row_id in deleted:
             continue
         now = _utc_now()
         created_at = _str_or_none(row.get("created_at", "")) or now
         updated_at = _str_or_none(row.get("updated_at", "")) or created_at
+        values = (
+            _str_or_none(row.get("fecha", "")),
+            _str_or_none(row.get("mp", "")),
+            _str_or_none(row.get("f_ingreso", "")),
+            _str_or_none(row.get("estado", "")),
+            _str_or_none(row.get("p_final", "")),
+            _str_or_none(row.get("lote", "")),
+            _str_or_none(row.get("f_p", "")),
+            _str_or_none(row.get("f_v", "")),
+            _str_or_none(row.get("cantidad", "")),
+        )
+        if row_id in existing:
+            cur = conn.execute(
+                "SELECT updated_at FROM trasiegos WHERE id = ?",
+                (row_id,),
+            ).fetchone()
+            sqlite_updated = (cur[0] or "") if cur else ""
+            if updated_at > sqlite_updated:
+                conn.execute(
+                    """
+                    UPDATE trasiegos
+                    SET fecha = ?, mp = ?, f_ingreso = ?, estado = ?, p_final = ?, lote = ?,
+                        f_p = ?, f_v = ?, cantidad = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (*values, updated_at, row_id),
+                )
+                updated += 1
+            continue
         conn.execute(
             """
             INSERT INTO trasiegos (
                 id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (
-                row_id,
-                _str_or_none(row.get("fecha", "")),
-                _str_or_none(row.get("mp", "")),
-                _str_or_none(row.get("f_ingreso", "")),
-                _str_or_none(row.get("estado", "")),
-                _str_or_none(row.get("p_final", "")),
-                _str_or_none(row.get("lote", "")),
-                _str_or_none(row.get("f_p", "")),
-                _str_or_none(row.get("f_v", "")),
-                _str_or_none(row.get("cantidad", "")),
-                created_at,
-                updated_at,
-            ),
+            (row_id, *values, created_at, updated_at),
         )
         existing.add(row_id)
         imported += 1
     if imported:
         _fix_sqlite_sequence(conn, "trasiegos")
-    return imported
+    return imported + updated
 
 
 IMPORT_SPECS: list[tuple[str, Sequence[str], Callable[[sqlite3.Connection, list[dict[str, str]]], int]]] = [

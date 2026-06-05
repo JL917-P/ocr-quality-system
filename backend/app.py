@@ -36,19 +36,28 @@ from constancia_utils import (
 )
 from import_from_sheets import run_import_from_sheets
 from google_sheets import (
+    HEADERS_CLIENTES,
+    HEADERS_CONSTANCIAS,
+    HEADERS_PRODUCTOS,
+    HEADERS_TRASIEGOS,
+    HEADERS_TRANSPORTES,
     TAB_CLIENTES,
     TAB_CONSTANCIAS,
     TAB_PRODUCTOS,
     TAB_TRASIEGOS,
     TAB_TRANSPORTES,
+    delete_row_by_id,
     run_manual_resync,
     run_startup_sheets_backup_check,
     run_sync_after_create,
+    run_sync_after_delete,
     sync_client_created,
     sync_constancia_created,
+    sync_constancia_upsert,
     sync_product_created,
     sync_transport_created,
     sync_trasiego_created,
+    sync_trasiego_upsert,
 )
 
 APP_ROOT = Path(__file__).resolve().parent
@@ -207,7 +216,46 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS sync_deletions (
+                entity_table TEXT NOT NULL,
+                record_id INTEGER NOT NULL,
+                deleted_at TEXT NOT NULL,
+                PRIMARY KEY (entity_table, record_id)
+            )
+            """
+        )
         conn.commit()
+
+
+def _delete_with_sheets_sync(
+    entity_table: str,
+    tab: str,
+    headers: tuple[str, ...],
+    record_id: int,
+    extra_sql: list[tuple[str, tuple]] | None = None,
+) -> None:
+    """Elimina en SQLite, registra tombstone e intenta borrar la fila en Sheets."""
+    now = datetime.now(timezone.utc).isoformat()
+    with sqlite3.connect(DB_PATH) as conn:
+        if extra_sql:
+            for sql, params in extra_sql:
+                conn.execute(sql, params)
+        conn.execute(f"DELETE FROM {entity_table} WHERE id = ?", (record_id,))
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO sync_deletions (entity_table, record_id, deleted_at)
+            VALUES (?, ?, ?)
+            """,
+            (entity_table, record_id, now),
+        )
+        conn.commit()
+    run_sync_after_delete(
+        tab,
+        record_id,
+        lambda: delete_row_by_id(tab, headers, record_id),
+    )
 
 
 def load_product_catalog() -> List[str]:
@@ -1212,9 +1260,7 @@ async def update_product(product_id: int, payload: dict) -> JSONResponse:
 
 @app.delete("/api/products/{product_id}")
 def delete_product(product_id: int) -> JSONResponse:
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
-        conn.commit()
+    _delete_with_sheets_sync("products", TAB_PRODUCTOS, HEADERS_PRODUCTOS, product_id)
     return JSONResponse({"ok": True})
 
 
@@ -1256,9 +1302,7 @@ async def create_client(payload: dict) -> JSONResponse:
 
 @app.delete("/api/clients/{client_id}")
 def delete_client(client_id: int) -> JSONResponse:
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("DELETE FROM clients WHERE id = ?", (client_id,))
-        conn.commit()
+    _delete_with_sheets_sync("clients", TAB_CLIENTES, HEADERS_CLIENTES, client_id)
     return JSONResponse({"ok": True})
 
 
@@ -1296,9 +1340,7 @@ async def create_transport(payload: dict) -> JSONResponse:
 
 @app.delete("/api/transports/{transport_id}")
 def delete_transport(transport_id: int) -> JSONResponse:
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("DELETE FROM transports WHERE id = ?", (transport_id,))
-        conn.commit()
+    _delete_with_sheets_sync("transports", TAB_TRANSPORTES, HEADERS_TRANSPORTES, transport_id)
     return JSONResponse({"ok": True})
 
 
@@ -1370,7 +1412,22 @@ async def create_trasiego(payload: dict) -> JSONResponse:
 @app.put("/api/trasiegos/{trasiego_id}")
 async def update_trasiego(trasiego_id: int, payload: dict) -> JSONResponse:
     now = datetime.now(timezone.utc).isoformat()
+    fecha = (payload.get("fecha") or "").strip() or None
+    mp = (payload.get("mp") or "").strip() or None
+    f_ingreso = (payload.get("f_ingreso") or "").strip() or None
+    estado = (payload.get("estado") or "").strip() or None
+    p_final = (payload.get("p_final") or "").strip() or None
+    lote = (payload.get("lote") or "").strip() or None
+    f_p = (payload.get("f_p") or "").strip() or None
+    f_v = (payload.get("f_v") or "").strip() or None
+    cantidad = (payload.get("cantidad") or "").strip() or None
     with sqlite3.connect(DB_PATH) as conn:
+        created_row = conn.execute(
+            "SELECT created_at FROM trasiegos WHERE id = ?",
+            (trasiego_id,),
+        ).fetchone()
+        if not created_row:
+            raise HTTPException(status_code=404, detail="Trasiego no encontrado.")
         conn.execute(
             """
             UPDATE trasiegos
@@ -1378,28 +1435,45 @@ async def update_trasiego(trasiego_id: int, payload: dict) -> JSONResponse:
             WHERE id = ?
             """,
             (
-                (payload.get("fecha") or "").strip() or None,
-                (payload.get("mp") or "").strip() or None,
-                (payload.get("f_ingreso") or "").strip() or None,
-                (payload.get("estado") or "").strip() or None,
-                (payload.get("p_final") or "").strip() or None,
-                (payload.get("lote") or "").strip() or None,
-                (payload.get("f_p") or "").strip() or None,
-                (payload.get("f_v") or "").strip() or None,
-                (payload.get("cantidad") or "").strip() or None,
+                fecha,
+                mp,
+                f_ingreso,
+                estado,
+                p_final,
+                lote,
+                f_p,
+                f_v,
+                cantidad,
                 now,
                 trasiego_id,
             ),
         )
         conn.commit()
-    return JSONResponse({"ok": True})
+        created_at = created_row[0]
+    run_sync_after_create(
+        TAB_TRASIEGOS,
+        trasiego_id,
+        lambda: sync_trasiego_upsert(
+            trasiego_id,
+            fecha,
+            mp,
+            f_ingreso,
+            estado,
+            p_final,
+            lote,
+            f_p,
+            f_v,
+            cantidad,
+            created_at,
+            now,
+        ),
+    )
+    return JSONResponse({"ok": True, "id": trasiego_id, "updated_at": now})
 
 
 @app.delete("/api/trasiegos/{trasiego_id}")
 def delete_trasiego(trasiego_id: int) -> JSONResponse:
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("DELETE FROM trasiegos WHERE id = ?", (trasiego_id,))
-        conn.commit()
+    _delete_with_sheets_sync("trasiegos", TAB_TRASIEGOS, HEADERS_TRASIEGOS, trasiego_id)
     return JSONResponse({"ok": True})
 
 
@@ -1502,10 +1576,15 @@ def confirm_constancia(constancia_id: int) -> JSONResponse:
 
 @app.delete("/api/constancias/{constancia_id}")
 def delete_constancia(constancia_id: int) -> JSONResponse:
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("DELETE FROM constancia_history WHERE constancia_id = ?", (constancia_id,))
-        conn.execute("DELETE FROM constancias WHERE id = ?", (constancia_id,))
-        conn.commit()
+    _delete_with_sheets_sync(
+        "constancias",
+        TAB_CONSTANCIAS,
+        HEADERS_CONSTANCIAS,
+        constancia_id,
+        extra_sql=[
+            ("DELETE FROM constancia_history WHERE constancia_id = ?", (constancia_id,)),
+        ],
+    )
     return JSONResponse({"ok": True})
 
 
@@ -1627,7 +1706,29 @@ async def update_constancia(constancia_id: int, payload: dict) -> JSONResponse:
             items_snap,
             usuario,
         )
+        created_at_row = conn.execute(
+            "SELECT created_at FROM constancias WHERE id = ?",
+            (constancia_id,),
+        ).fetchone()
         conn.commit()
+    items_json = json.dumps(items_snap, ensure_ascii=True)
+    created_at = created_at_row[0] if created_at_row else datetime.now(timezone.utc).isoformat()
+    run_sync_after_create(
+        TAB_CONSTANCIAS,
+        constancia_id,
+        lambda: sync_constancia_upsert(
+            constancia_id,
+            header["number"],
+            header["issue_date"],
+            header["client_name"],
+            header["transport_plate"],
+            header["fumigacion"],
+            header["calidad"],
+            header["status"],
+            items_json,
+            created_at,
+        ),
+    )
     return JSONResponse({"ok": True})
 
 

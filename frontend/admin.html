@@ -424,7 +424,9 @@
             <div class="title">Trasiegos</div>
             <div class="actions" style="margin-top: 12px;">
               <button class="btn btn-success" id="addTrasiegoRowBtn" type="button">+ Agregar fila</button>
+              <button class="btn btn-primary" id="saveTrasiegosBtn" type="button">Grabar</button>
               <span class="tag-muted" id="trasiegosCount">0 filas</span>
+              <span class="tag-muted" id="trasiegosSaveStatus"></span>
             </div>
           </div>
           <div class="card trasiegos-sheet-card">
@@ -639,7 +641,9 @@
       };
       const trasiegosBody = document.getElementById("trasiegosBody");
       const addTrasiegoRowBtn = document.getElementById("addTrasiegoRowBtn");
+      const saveTrasiegosBtn = document.getElementById("saveTrasiegosBtn");
       const trasiegosCount = document.getElementById("trasiegosCount");
+      const trasiegosSaveStatus = document.getElementById("trasiegosSaveStatus");
       let trasiegosSaveTimers = new Map();
       const navLinks = document.querySelectorAll(".sidebar-nav a[data-target]");
       const syncSheetsBtn = document.getElementById("syncSheetsBtn");
@@ -647,13 +651,14 @@
 
       if (importSheetsBtn) {
         importSheetsBtn.addEventListener("click", async () => {
-          if (!confirm("¿Importar registros desde Google Sheets a SQLite?\nSolo se insertarán los que falten (por ID).")) {
+          if (!confirm("¿Importar registros desde Google Sheets a SQLite?\nSolo se insertarán los que falten (por ID).\nLos registros eliminados no volverán.\n\nSe guardarán primero los trasiegos pendientes.")) {
             return;
           }
           importSheetsBtn.disabled = true;
           const prevText = importSheetsBtn.textContent;
           importSheetsBtn.textContent = "Importando…";
           try {
+            await saveAllTrasiegos({ silent: true });
             const res = await fetch("/api/admin/import-from-sheets", { method: "POST" });
             const data = await res.json();
             if (data.ok) {
@@ -689,7 +694,7 @@
 
       if (syncSheetsBtn) {
         syncSheetsBtn.addEventListener("click", async () => {
-          if (!confirm("¿Sincronizar registros de SQLite con Google Sheets?\nSolo se copiarán los que falten (por ID).")) {
+          if (!confirm("¿Sincronizar registros de SQLite con Google Sheets?\nSe agregarán los faltantes y se actualizarán constancias y trasiegos.")) {
             return;
           }
           syncSheetsBtn.disabled = true;
@@ -1927,6 +1932,25 @@
         });
       }
 
+      function isTrasiegoRowMeaningful(payload) {
+        return !!(
+          payload.mp ||
+          payload.lote ||
+          payload.cantidad ||
+          payload.estado ||
+          payload.p_final ||
+          payload.f_ingreso ||
+          payload.f_p ||
+          payload.f_v
+        );
+      }
+
+      function setTrasiegosSaveStatus(message, isError = false) {
+        if (!trasiegosSaveStatus) return;
+        trasiegosSaveStatus.textContent = message || "";
+        trasiegosSaveStatus.style.color = isError ? "#b42318" : "";
+      }
+
       function readTrasiegoRow(tr) {
         const payload = {};
         tr.querySelectorAll("input[data-field]").forEach((input) => {
@@ -1942,6 +1966,7 @@
       }
 
       function scheduleTrasiegoSave(tr) {
+        tr.dataset.dirty = "1";
         if (trasiegosSaveTimers.has(tr)) {
           clearTimeout(trasiegosSaveTimers.get(tr));
         }
@@ -1949,23 +1974,28 @@
           tr,
           setTimeout(() => {
             trasiegosSaveTimers.delete(tr);
-            saveTrasiegoRow(tr);
+            saveTrasiegoRow(tr, { silent: true });
           }, 450)
         );
       }
 
-      async function saveTrasiegoRow(tr) {
+      async function saveTrasiegoRow(tr, options = {}) {
+        const silent = !!options.silent;
         const payload = readTrasiegoRow(tr);
         const rowId = tr.dataset.id;
+        if (!rowId && !isTrasiegoRowMeaningful(payload)) {
+          return true;
+        }
         try {
+          let res;
           if (rowId) {
-            await fetch(`/api/trasiegos/${rowId}`, {
+            res = await fetch(`/api/trasiegos/${rowId}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),
             });
           } else {
-            const res = await fetch("/api/trasiegos", {
+            res = await fetch("/api/trasiegos", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),
@@ -1975,9 +2005,50 @@
               tr.dataset.id = String(data.id);
             }
           }
+          if (!res.ok) {
+            if (!silent) {
+              setTrasiegosSaveStatus("Error al guardar una fila.", true);
+            }
+            return false;
+          }
+          tr.dataset.dirty = "0";
+          return true;
         } catch (err) {
+          if (!silent) {
+            setTrasiegosSaveStatus("Error de red al guardar.", true);
+          }
+          return false;
+        } finally {
+          updateTrasiegosCount();
         }
-        updateTrasiegosCount();
+      }
+
+      async function saveAllTrasiegos(options = {}) {
+        if (!trasiegosBody) return { ok: 0, fail: 0 };
+        trasiegosSaveTimers.forEach((timer) => clearTimeout(timer));
+        trasiegosSaveTimers.clear();
+        const rows = [...trasiegosBody.querySelectorAll("tr")];
+        let ok = 0;
+        let fail = 0;
+        for (const tr of rows) {
+          const payload = readTrasiegoRow(tr);
+          if (!tr.dataset.id && !isTrasiegoRowMeaningful(payload)) {
+            continue;
+          }
+          const saved = await saveTrasiegoRow(tr, { silent: true });
+          if (saved) ok += 1;
+          else fail += 1;
+        }
+        if (!options.silent) {
+          if (fail > 0) {
+            setTrasiegosSaveStatus(`Guardado parcial: ${ok} ok, ${fail} con error.`, true);
+          } else if (ok > 0) {
+            setTrasiegosSaveStatus(`Guardado: ${ok} fila${ok === 1 ? "" : "s"} (SQLite + Google Sheets).`);
+          } else {
+            setTrasiegosSaveStatus("No hay filas con datos para guardar.");
+          }
+        }
+        return { ok, fail };
       }
 
       async function deleteTrasiegoRow(tr) {
@@ -2041,8 +2112,14 @@
           textInput.value = formatIsoToDisplayDate(picker.value);
           scheduleTrasiegoSave(tr);
         });
-        textInput.addEventListener("input", () => syncTrasiegoDatePicker(textInput, picker));
-        textInput.addEventListener("blur", () => syncTrasiegoDatePicker(textInput, picker));
+        textInput.addEventListener("input", () => {
+          syncTrasiegoDatePicker(textInput, picker);
+          scheduleTrasiegoSave(tr);
+        });
+        textInput.addEventListener("blur", () => {
+          syncTrasiegoDatePicker(textInput, picker);
+          scheduleTrasiegoSave(tr);
+        });
       }
 
       function buildTrasiegoRow(data = {}) {
@@ -2123,6 +2200,20 @@
           updateTrasiegosCount();
           const fechaInput = tr.querySelector('[data-field="fecha"]');
           fechaInput?.focus();
+        });
+      }
+
+      if (saveTrasiegosBtn) {
+        saveTrasiegosBtn.addEventListener("click", async () => {
+          saveTrasiegosBtn.disabled = true;
+          const prevText = saveTrasiegosBtn.textContent;
+          saveTrasiegosBtn.textContent = "Guardando…";
+          try {
+            await saveAllTrasiegos();
+          } finally {
+            saveTrasiegosBtn.disabled = false;
+            saveTrasiegosBtn.textContent = prevText;
+          }
         });
       }
 

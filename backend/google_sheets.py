@@ -408,6 +408,85 @@ def _append_single(
     )
 
 
+def _col_letter(n: int) -> str:
+    """Índice de columna 1-based → letra(s) de Excel (A, B, …, AA)."""
+    result = ""
+    while n > 0:
+        n, rem = divmod(n - 1, 26)
+        result = chr(65 + rem) + result
+    return result
+
+
+def _invalidate_tab_state(tab: str) -> None:
+    _tab_state_cache.pop(tab, None)
+
+
+def _find_row_number_by_id(sheet: gspread.Worksheet, record_id: int) -> Optional[int]:
+    """Número de fila 1-based donde aparece record_id en columna A."""
+    global _metrics
+
+    def _read() -> list[str]:
+        return sheet.col_values(1)
+
+    col = _with_retry(f"col_values_id({sheet.title})", _read)
+    _metrics.reads += 1
+    for i, cell in enumerate(col):
+        if i == 0 and (cell or "").strip().lower() == "id":
+            continue
+        if _parse_id_cell(cell) == record_id:
+            return i + 1
+    return None
+
+
+def delete_row_by_id(tab: str, headers: Sequence[str], record_id: int) -> bool:
+    """Elimina la fila con ese id en Google Sheets (no-op si no existe)."""
+    state = get_tab_state(tab, headers)
+    if state is None:
+        return False
+    row_num = _find_row_number_by_id(state.sheet, record_id)
+    if row_num is None:
+        return True
+
+    def _delete() -> None:
+        state.sheet.delete_rows(row_num)
+
+    _with_retry(f"delete_row({tab},{record_id})", _delete)
+    global _metrics
+    _metrics.writes += 1
+    state.existing_ids.discard(record_id)
+    _invalidate_tab_state(tab)
+    return True
+
+
+def upsert_row_by_id(tab: str, headers: Sequence[str], values: Sequence[Any]) -> bool:
+    """Actualiza la fila existente por id o la agrega si no está en Sheets."""
+    state = get_tab_state(tab, headers)
+    if state is None:
+        return False
+    record_id = _parse_id_cell(str(values[0]) if values else "")
+    if record_id is None:
+        return False
+    row_values = [_fmt_cell(v) for v in values]
+    row_num = _find_row_number_by_id(state.sheet, record_id)
+    if row_num is not None:
+        end_col = _col_letter(len(headers))
+        range_name = f"A{row_num}:{end_col}{row_num}"
+
+        def _update() -> None:
+            state.sheet.update(
+                [row_values],
+                range_name=range_name,
+                value_input_option="USER_ENTERED",
+            )
+
+        _with_retry(f"update_row({tab},{record_id})", _update)
+        global _metrics
+        _metrics.writes += 1
+        state.existing_ids.add(record_id)
+        return True
+    return _append_rows_batch(state, [row_values]) > 0
+
+
 # —— Logs [SYNC] ——
 
 def log_sync_sqlite_ok(entity: str, record_id: Any) -> None:
@@ -433,6 +512,18 @@ def run_sync_after_create(entity: str, record_id: Any, sync_fn: Callable[[], boo
     except Exception as exc:
         log_sync_sheets_error(entity, record_id, str(exc))
         logger.exception("[SYNC] SHEETS ERROR detalle | %s | id=%s", entity, record_id)
+
+
+def run_sync_after_delete(entity: str, record_id: Any, sync_fn: Callable[[], bool]) -> None:
+    logger.info("[SYNC] DELETE SQLITE OK | %s | id=%s", entity, record_id)
+    try:
+        if sync_fn():
+            logger.info("[SYNC] DELETE SHEETS OK | %s | id=%s", entity, record_id)
+        else:
+            log_sync_sheets_error(entity, record_id, "delete failed")
+    except Exception as exc:
+        log_sync_sheets_error(entity, record_id, str(exc))
+        logger.exception("[SYNC] DELETE SHEETS ERROR | %s | id=%s", entity, record_id)
 
 
 def sync_client_created(client_id: int, name: str, ruc: str | None, created_at: str) -> bool:
@@ -494,12 +585,39 @@ def sync_trasiego_created(
     created_at: str,
     updated_at: str,
 ) -> bool:
-    return _append_single(
+    return sync_trasiego_upsert(
+        trasiego_id,
+        fecha,
+        mp,
+        f_ingreso,
+        estado,
+        p_final,
+        lote,
+        f_p,
+        f_v,
+        cantidad,
+        created_at,
+        updated_at,
+    )
+
+
+def sync_trasiego_upsert(
+    trasiego_id: int,
+    fecha: str | None,
+    mp: str | None,
+    f_ingreso: str | None,
+    estado: str | None,
+    p_final: str | None,
+    lote: str | None,
+    f_p: str | None,
+    f_v: str | None,
+    cantidad: str | None,
+    created_at: str,
+    updated_at: str,
+) -> bool:
+    return upsert_row_by_id(
         TAB_TRASIEGOS,
-        (
-            "id", "fecha", "mp", "f_ingreso", "estado", "p_final", "lote",
-            "f_p", "f_v", "cantidad", "created_at", "updated_at",
-        ),
+        HEADERS_TRASIEGOS,
         (
             trasiego_id, fecha, mp, f_ingreso, estado, p_final, lote,
             f_p, f_v, cantidad, created_at, updated_at,
@@ -519,16 +637,39 @@ def sync_constancia_created(
     items_json: str,
     created_at: str,
 ) -> bool:
-    return _append_single(
+    return upsert_row_by_id(
         TAB_CONSTANCIAS,
-        (
-            "id", "number", "issue_date", "client_name", "transport_plate",
-            "fumigacion", "calidad", "status", "items_json", "created_at",
-        ),
+        HEADERS_CONSTANCIAS,
         (
             constancia_id, number, issue_date, client_name, transport_plate,
             fumigacion, calidad, status, items_json, created_at,
         ),
+    )
+
+
+def sync_constancia_upsert(
+    constancia_id: int,
+    number: str | None,
+    issue_date: str | None,
+    client_name: str | None,
+    transport_plate: str | None,
+    fumigacion: int,
+    calidad: int,
+    status: str,
+    items_json: str,
+    created_at: str,
+) -> bool:
+    return sync_constancia_created(
+        constancia_id,
+        number,
+        issue_date,
+        client_name,
+        transport_plate,
+        fumigacion,
+        calidad,
+        status,
+        items_json,
+        created_at,
     )
 
 
@@ -602,6 +743,24 @@ def _export_missing_for_tab_batch(
     return _append_rows_batch(state, sheet_rows)
 
 
+def _upsert_all_for_tab_batch(
+    conn: sqlite3.Connection,
+    tab: str,
+    headers: Sequence[str],
+    sql: str,
+) -> int:
+    """Actualiza filas existentes y agrega las faltantes (upsert por id)."""
+    if get_tab_state(tab, headers) is None:
+        return 0
+    rows = conn.execute(sql).fetchall()
+    count = 0
+    for row in rows:
+        values = _row_from_sql(headers, row)
+        if upsert_row_by_id(tab, headers, values):
+            count += 1
+    return count
+
+
 def export_all_missing_from_sqlite(
     db_path: Path,
     *,
@@ -628,7 +787,10 @@ def export_all_missing_from_sqlite(
             if pause_between_tabs and idx > 0:
                 logger.info("[MIGRATE] Pausa %ss antes de %s", MIGRATE_TAB_PAUSE_SEC, tab)
                 time.sleep(MIGRATE_TAB_PAUSE_SEC)
-            n = _export_missing_for_tab_batch(conn, tab, headers, sql)
+            if tab in (TAB_CONSTANCIAS, TAB_TRASIEGOS):
+                n = _upsert_all_for_tab_batch(conn, tab, headers, sql)
+            else:
+                n = _export_missing_for_tab_batch(conn, tab, headers, sql)
             by_tab[tab] = n
             total += n
             print(f"{tab}: {n} exportados")
