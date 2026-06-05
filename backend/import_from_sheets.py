@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
 from constancia_utils import find_items_json_for_constancia, normalize_constancia_status, parse_items_json
+from trasiego_utils import repair_trasiego_in_sqlite
 from google_sheets import (
     HEADERS_CLIENTES,
     HEADERS_CONSTANCIAS,
@@ -316,9 +317,14 @@ def _import_trasiegos(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> i
     existing = _existing_ids(conn, "trasiegos")
     deleted = _deleted_ids(conn, "trasiegos")
     imported = 0
+    repaired = 0
     for row in rows:
         row_id = _parse_id_cell(row.get("id", ""))
-        if row_id is None or row_id in existing or row_id in deleted:
+        if row_id is None or row_id in deleted:
+            continue
+        if row_id in existing:
+            if repair_trasiego_in_sqlite(conn, row_id):
+                repaired += 1
             continue
         now = _utc_now()
         created_at = _str_or_none(row.get("created_at", "")) or now
@@ -346,9 +352,9 @@ def _import_trasiegos(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> i
         )
         existing.add(row_id)
         imported += 1
-    if imported:
+    if imported or repaired:
         _fix_sqlite_sequence(conn, "trasiegos")
-    return imported
+    return imported + repaired
 
 
 IMPORT_SPECS: list[tuple[str, Sequence[str], Callable[[sqlite3.Connection, list[dict[str, str]]], int]]] = [

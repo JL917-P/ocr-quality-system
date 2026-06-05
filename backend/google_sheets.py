@@ -17,6 +17,8 @@ from typing import Any, Callable, Optional, Sequence
 import gspread
 from google.oauth2.service_account import Credentials
 
+from trasiego_utils import repair_shifted_trasiego
+
 logger = logging.getLogger(__name__)
 
 BACKEND_ROOT = Path(__file__).resolve().parent
@@ -327,7 +329,7 @@ def read_trasiegos_sheet_rows() -> list[dict[str, str]]:
             for h in canonical:
                 idx = col_map.get(h)
                 rec[h] = (row[idx] if idx is not None and idx < len(row) else "") or ""
-            records.append(rec)
+            records.append(repair_shifted_trasiego(rec))
         return records
 
     records = []
@@ -352,7 +354,7 @@ def read_trasiegos_sheet_rows() -> list[dict[str, str]]:
             "created_at": rec.get("created_at", ""),
             "updated_at": rec.get("updated_at", ""),
         }
-        records.append(mapped)
+        records.append(repair_shifted_trasiego(mapped))
     return records
 
 

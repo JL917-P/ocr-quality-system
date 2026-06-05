@@ -2083,9 +2083,12 @@
             setTrasiegosSaveStatus(`Guardado parcial: ${ok} ok, ${fail} con error.`, true);
           } else if (ok > 0) {
             setTrasiegosSaveStatus(`Guardado: ${ok} fila${ok === 1 ? "" : "s"} (SQLite + Google Sheets).`);
+            await loadTrasiegos();
           } else {
             setTrasiegosSaveStatus("No hay filas con datos para guardar.");
           }
+        } else if (fail === 0 && ok > 0) {
+          await loadTrasiegos();
         }
         return { ok, fail };
       }
@@ -2676,6 +2679,7 @@
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
+          alert("Constancia guardada correctamente.");
           await loadConstancias();
           currentConstanciaId = null;
           currentConstanciaStatus = "confirmada";

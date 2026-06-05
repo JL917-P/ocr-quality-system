@@ -28,6 +28,7 @@ from pytesseract import Output
 from app_config import ADMIN_PATH, ADMIN_URL, app_config_payload
 from constancia_utils import (
     VALID_STATUSES,
+    consolidate_constancia_duplicates,
     constancia_header_snapshot,
     dedupe_constancia_rows,
     find_items_json_for_constancia,
@@ -37,6 +38,7 @@ from constancia_utils import (
     record_constancia_history,
     restore_items_from_history,
 )
+from trasiego_utils import repair_all_trasiegos_in_sqlite, repair_shifted_trasiego, repair_trasiego_in_sqlite
 from import_from_sheets import run_import_from_sheets
 from google_sheets import (
     HEADERS_CLIENTES,
@@ -233,6 +235,36 @@ def init_db() -> None:
             """
         )
         conn.commit()
+        repair_all_trasiegos_in_sqlite(conn)
+        conn.commit()
+
+
+def _record_sync_deletions(conn: sqlite3.Connection, entity_table: str, record_ids: list[int]) -> None:
+    if not record_ids:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    for record_id in record_ids:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO sync_deletions (entity_table, record_id, deleted_at)
+            VALUES (?, ?, ?)
+            """,
+            (entity_table, record_id, now),
+        )
+
+
+def _purge_duplicate_constancias(constancia_id: int, number: str | None, client_name: str | None) -> None:
+    removed: list[int] = []
+    with sqlite3.connect(DB_PATH) as conn:
+        removed = consolidate_constancia_duplicates(conn, constancia_id, number or "", client_name or "")
+        _record_sync_deletions(conn, "constancias", removed)
+        conn.commit()
+    for rid in removed:
+        run_sync_after_delete(
+            TAB_CONSTANCIAS,
+            rid,
+            lambda rid=rid: delete_row_by_id(TAB_CONSTANCIAS, HEADERS_CONSTANCIAS, rid),
+        )
 
 
 def _delete_with_sheets_sync(
@@ -1444,7 +1476,20 @@ def list_trasiegos(limit: int = 500) -> JSONResponse:
             """,
             (limit,),
         ).fetchall()
-    return JSONResponse({"trasiegos": [_trasiego_row_to_dict(row) for row in rows]})
+        out: list[dict] = []
+        for row in rows:
+            row_id = row[0]
+            if repair_trasiego_in_sqlite(conn, row_id):
+                row = conn.execute(
+                    """
+                    SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
+                    FROM trasiegos WHERE id = ?
+                    """,
+                    (row_id,),
+                ).fetchone()
+            out.append(_trasiego_row_to_dict(row))
+        conn.commit()
+    return JSONResponse({"trasiegos": out})
 
 
 @app.post("/api/trasiegos")
@@ -1594,6 +1639,7 @@ async def create_constancia(payload: dict) -> JSONResponse:
             (payload.get("usuario") or "admin").strip() or "admin",
         )
         conn.commit()
+    _purge_duplicate_constancias(constancia_id, header["number"], header["client_name"])
     run_sync_after_create(
         TAB_CONSTANCIAS,
         constancia_id,
@@ -1626,21 +1672,29 @@ def list_constancias(limit: int = 200) -> JSONResponse:
             (limit,),
         ).fetchall()
         rows = dedupe_constancia_rows(list(rows))
-    constancias = [
-        {
-            "id": row[0],
-            "number": row[1],
-            "issue_date": row[2],
-            "client_name": row[3],
-            "transport_plate": row[4],
-            "fumigacion": bool(row[5]),
-            "calidad": bool(row[6]),
-            "status": normalize_constancia_status(row[7]),
-            "items": parse_items_json(row[8]),
-            "created_at": row[9],
-        }
-        for row in rows
-    ]
+        constancias = []
+        for row in rows:
+            items = parse_items_json(row[8])
+            if not items:
+                alt_json = find_items_json_for_constancia(
+                    conn, row[1] or "", row[3] or "", exclude_id=row[0]
+                )
+                if alt_json:
+                    items = parse_items_json(alt_json)
+            constancias.append(
+                {
+                    "id": row[0],
+                    "number": row[1],
+                    "issue_date": row[2],
+                    "client_name": row[3],
+                    "transport_plate": row[4],
+                    "fumigacion": bool(row[5]),
+                    "calidad": bool(row[6]),
+                    "status": normalize_constancia_status(row[7]),
+                    "items": items,
+                    "created_at": row[9],
+                }
+            )
     return JSONResponse({"constancias": constancias})
 
 
@@ -1896,6 +1950,7 @@ async def update_constancia(constancia_id: int, payload: dict) -> JSONResponse:
             (constancia_id,),
         ).fetchone()
         conn.commit()
+    _purge_duplicate_constancias(constancia_id, header["number"], header["client_name"])
     items_json = json.dumps(items_snap, ensure_ascii=True)
     created_at = created_at_row[0] if created_at_row else datetime.now(timezone.utc).isoformat()
     run_sync_after_create(

@@ -306,6 +306,34 @@ def find_items_json_for_constancia(
     return row[0] if row else None
 
 
+def consolidate_constancia_duplicates(
+    conn: sqlite3.Connection,
+    keep_id: int,
+    number: str,
+    client_name: str,
+) -> list[int]:
+    """Elimina otras constancias con el mismo número y cliente."""
+    num = _str(number)
+    client = _str(client_name).lower()
+    if not num:
+        return []
+    rows = conn.execute(
+        """
+        SELECT id FROM constancias
+        WHERE trim(coalesce(number, '')) = ?
+          AND lower(trim(coalesce(client_name, ''))) = ?
+          AND id != ?
+        """,
+        (num, client, keep_id),
+    ).fetchall()
+    removed: list[int] = []
+    for (row_id,) in rows:
+        conn.execute("DELETE FROM constancia_history WHERE constancia_id = ?", (row_id,))
+        conn.execute("DELETE FROM constancias WHERE id = ?", (row_id,))
+        removed.append(int(row_id))
+    return removed
+
+
 def dedupe_constancia_rows(rows: list[tuple]) -> list[tuple]:
     """Por número+cliente conserva la fila con más productos (solo duplicados reales)."""
     best_by_key: dict[tuple[str, str], tuple] = {}
