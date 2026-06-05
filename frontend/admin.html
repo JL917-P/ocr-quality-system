@@ -417,31 +417,6 @@
               <tbody id="traceList"></tbody>
             </table>
           </div>
-
-          <div class="card">
-            <div class="toolbar">
-              <div class="field">
-                <label>Historial de constancia (ID)</label>
-                <input id="traceHistoryId" type="number" min="1" placeholder="Ej: 12" />
-              </div>
-              <div class="field toolbar-field-btn">
-                <label class="toolbar-label-spacer" aria-hidden="true">&#8203;</label>
-                <button class="btn btn-outline" id="traceHistoryBtn" type="button">Ver historial</button>
-              </div>
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th style="width:160px;">Fecha</th>
-                  <th style="width:100px;">Usuario</th>
-                  <th style="width:180px;">Campo</th>
-                  <th>Valor anterior</th>
-                  <th>Valor nuevo</th>
-                </tr>
-              </thead>
-              <tbody id="traceHistoryList"></tbody>
-            </table>
-          </div>
         </section>
 
         <section id="section-trasiegos" class="hidden">
@@ -2595,7 +2570,6 @@
             constanciaFumigacion.checked = data.fumigacion !== 0 && data.fumigacion !== false;
             constanciaCalidad.checked = data.calidad !== 0 && data.calidad !== false;
             fillConstanciaItems(data.items || []);
-            if (traceHistoryId) traceHistoryId.value = String(data.id);
             showSection("section-ocr");
           });
           const confirmBtn = row.querySelector(".confirm-btn");
@@ -2731,59 +2705,6 @@
         allConstancias = data.constancias || [];
         applyConstanciaFilters();
         applyTraceFilters();
-      }
-
-      const traceHistoryId = document.getElementById("traceHistoryId");
-      const traceHistoryBtn = document.getElementById("traceHistoryBtn");
-      const traceHistoryList = document.getElementById("traceHistoryList");
-
-      function formatHistoryDate(iso) {
-        if (!iso) return "";
-        const d = new Date(iso);
-        if (Number.isNaN(d.getTime())) return iso;
-        const dd = String(d.getDate()).padStart(2, "0");
-        const mm = String(d.getMonth() + 1).padStart(2, "0");
-        const yyyy = d.getFullYear();
-        const hh = String(d.getHours()).padStart(2, "0");
-        const mi = String(d.getMinutes()).padStart(2, "0");
-        return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
-      }
-
-      async function loadConstanciaHistory(constanciaId) {
-        if (!traceHistoryList) return;
-        traceHistoryList.innerHTML = "";
-        if (!constanciaId) {
-          traceHistoryList.innerHTML = `<tr><td colspan="5" class="empty">Ingresa un ID de constancia</td></tr>`;
-          return;
-        }
-        const res = await fetch(`/api/constancias/${constanciaId}/history`);
-        const data = await res.json();
-        if (!res.ok) {
-          traceHistoryList.innerHTML = `<tr><td colspan="5" class="empty">No se pudo cargar el historial</td></tr>`;
-          return;
-        }
-        const rows = data.history || [];
-        if (!rows.length) {
-          traceHistoryList.innerHTML = `<tr><td colspan="5" class="empty">Sin cambios registrados</td></tr>`;
-          return;
-        }
-        rows.forEach((row) => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${formatHistoryDate(row.fecha)}</td>
-            <td>${row.usuario || ""}</td>
-            <td>${row.campo || ""}</td>
-            <td>${row.valor_anterior ?? ""}</td>
-            <td>${row.valor_nuevo ?? ""}</td>
-          `;
-          traceHistoryList.appendChild(tr);
-        });
-      }
-
-      if (traceHistoryBtn) {
-        traceHistoryBtn.addEventListener("click", () => {
-          loadConstanciaHistory(traceHistoryId?.value);
-        });
       }
 
       function renderClients(list) {
