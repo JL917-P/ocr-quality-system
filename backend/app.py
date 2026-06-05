@@ -52,10 +52,13 @@ from google_sheets import (
     run_sync_after_create,
     run_sync_after_delete,
     sync_client_created,
+    sync_client_upsert,
     sync_constancia_created,
     sync_constancia_upsert,
     sync_product_created,
+    sync_product_upsert,
     sync_transport_created,
+    sync_transport_upsert,
     sync_trasiego_created,
     sync_trasiego_upsert,
 )
@@ -1229,6 +1232,12 @@ async def update_product(product_id: int, payload: dict) -> JSONResponse:
         "whiteness": payload.get("whiteness"),
     }
     with sqlite3.connect(DB_PATH) as conn:
+        created_row = conn.execute(
+            "SELECT created_at FROM products WHERE id = ?",
+            (product_id,),
+        ).fetchone()
+        if not created_row:
+            raise HTTPException(status_code=404, detail="Producto no encontrado.")
         conn.execute(
             """
             UPDATE products
@@ -1255,6 +1264,12 @@ async def update_product(product_id: int, payload: dict) -> JSONResponse:
             ),
         )
         conn.commit()
+        created_at = created_row[0]
+    run_sync_after_create(
+        TAB_PRODUCTOS,
+        product_id,
+        lambda: sync_product_upsert(product_id, data, created_at),
+    )
     return JSONResponse({"ok": True})
 
 
@@ -1300,6 +1315,33 @@ async def create_client(payload: dict) -> JSONResponse:
     return JSONResponse({"id": client_id})
 
 
+@app.put("/api/clients/{client_id}")
+async def update_client(client_id: int, payload: dict) -> JSONResponse:
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Nombre es obligatorio.")
+    ruc = (payload.get("ruc") or "").strip() or None
+    with sqlite3.connect(DB_PATH) as conn:
+        created_row = conn.execute(
+            "SELECT created_at FROM clients WHERE id = ?",
+            (client_id,),
+        ).fetchone()
+        if not created_row:
+            raise HTTPException(status_code=404, detail="Cliente no encontrado.")
+        conn.execute(
+            "UPDATE clients SET name = ?, ruc = ? WHERE id = ?",
+            (name, ruc, client_id),
+        )
+        conn.commit()
+        created_at = created_row[0]
+    run_sync_after_create(
+        TAB_CLIENTES,
+        client_id,
+        lambda: sync_client_upsert(client_id, name, ruc, created_at),
+    )
+    return JSONResponse({"ok": True})
+
+
 @app.delete("/api/clients/{client_id}")
 def delete_client(client_id: int) -> JSONResponse:
     _delete_with_sheets_sync("clients", TAB_CLIENTES, HEADERS_CLIENTES, client_id)
@@ -1336,6 +1378,32 @@ async def create_transport(payload: dict) -> JSONResponse:
         lambda: sync_transport_created(transport_id, plate, created_at),
     )
     return JSONResponse({"id": transport_id})
+
+
+@app.put("/api/transports/{transport_id}")
+async def update_transport(transport_id: int, payload: dict) -> JSONResponse:
+    plate = (payload.get("plate") or "").strip()
+    if not plate:
+        raise HTTPException(status_code=400, detail="Matrícula es obligatoria.")
+    with sqlite3.connect(DB_PATH) as conn:
+        created_row = conn.execute(
+            "SELECT created_at FROM transports WHERE id = ?",
+            (transport_id,),
+        ).fetchone()
+        if not created_row:
+            raise HTTPException(status_code=404, detail="Matrícula no encontrada.")
+        conn.execute(
+            "UPDATE transports SET plate = ? WHERE id = ?",
+            (plate, transport_id),
+        )
+        conn.commit()
+        created_at = created_row[0]
+    run_sync_after_create(
+        TAB_TRANSPORTES,
+        transport_id,
+        lambda: sync_transport_upsert(transport_id, plate, created_at),
+    )
+    return JSONResponse({"ok": True})
 
 
 @app.delete("/api/transports/{transport_id}")

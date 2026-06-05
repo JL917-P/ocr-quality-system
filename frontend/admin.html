@@ -706,7 +706,7 @@
 
       if (syncSheetsBtn) {
         syncSheetsBtn.addEventListener("click", async () => {
-          if (!confirm("¿Sincronizar registros de SQLite con Google Sheets?\nSe agregarán los faltantes y se actualizarán constancias y trasiegos.")) {
+          if (!confirm("¿Sincronizar registros de SQLite con Google Sheets?\nSe actualizarán todos los datos (productos, clientes, matrículas, constancias y trasiegos).")) {
             return;
           }
           syncSheetsBtn.disabled = true;
@@ -1872,17 +1872,20 @@
       constanciaApplyBtn.addEventListener("click", async () => {
         if (constanciaBulkAction.value !== "delete") return;
         if (!selectedConstancias.size) return;
-        showConfirmModal("¿Desea eliminar las constancias seleccionadas?", async () => {
-          const idsToDelete = new Set(selectedConstancias);
-          for (const id of idsToDelete) {
-            await fetch(`/api/constancias/${id}`, { method: "DELETE" });
+        showConfirmModal(
+          `¿Está seguro de eliminar ${selectedConstancias.size} constancia(s) seleccionada(s)?\nSe borrarán de SQLite y Google Sheets.`,
+          async () => {
+            const idsToDelete = new Set(selectedConstancias);
+            for (const id of idsToDelete) {
+              await fetch(`/api/constancias/${id}`, { method: "DELETE" });
+            }
+            allConstancias = allConstancias.filter((c) => !idsToDelete.has(c.id));
+            filteredConstancias = filteredConstancias.filter((c) => !idsToDelete.has(c.id));
+            selectedConstancias.clear();
+            selectAllConstancias.checked = false;
+            renderConstancias(filteredConstancias);
           }
-          allConstancias = allConstancias.filter((c) => !idsToDelete.has(c.id));
-          filteredConstancias = filteredConstancias.filter((c) => !idsToDelete.has(c.id));
-          selectedConstancias.clear();
-          selectAllConstancias.checked = false;
-          renderConstancias(filteredConstancias);
-        });
+        );
       });
       selectAllConstancias.addEventListener("change", () => {
         if (selectAllConstancias.checked) {
@@ -2064,22 +2067,26 @@
       }
 
       async function deleteTrasiegoRow(tr) {
+        const payload = readTrasiegoRow(tr);
         const rowId = tr.dataset.id;
-        if (rowId) {
-          try {
-            await fetch(`/api/trasiegos/${rowId}`, { method: "DELETE" });
-          } catch (err) {
+        const label = payload.mp || payload.lote || payload.p_final || (rowId ? `trasiego #${rowId}` : "este trasiego");
+        confirmDelete(`el trasiego (${label})`, async () => {
+          if (rowId) {
+            try {
+              await fetch(`/api/trasiegos/${rowId}`, { method: "DELETE" });
+            } catch (err) {
+            }
           }
-        }
-        if (trasiegosSaveTimers.has(tr)) {
-          clearTimeout(trasiegosSaveTimers.get(tr));
-          trasiegosSaveTimers.delete(tr);
-        }
-        tr.remove();
-        if (!trasiegosBody.querySelector("tr")) {
-          trasiegosBody.appendChild(buildTrasiegoRow({ fecha: formatToday() }));
-        }
-        updateTrasiegosCount();
+          if (trasiegosSaveTimers.has(tr)) {
+            clearTimeout(trasiegosSaveTimers.get(tr));
+            trasiegosSaveTimers.delete(tr);
+          }
+          tr.remove();
+          if (!trasiegosBody.querySelector("tr")) {
+            trasiegosBody.appendChild(buildTrasiegoRow({ fecha: formatToday() }));
+          }
+          updateTrasiegosCount();
+        });
       }
 
       function formatIsoToDisplayDate(isoDate) {
@@ -2373,11 +2380,13 @@
           });
           row.querySelector("button").addEventListener("click", async (event) => {
             event.stopPropagation();
-            await fetch(`/api/products/${prod.id}`, { method: "DELETE" });
-            await loadProducts();
-            if (currentProductId === prod.id) {
-              clearProductForm();
-            }
+            confirmDelete(`el producto "${prod.name}"`, async () => {
+              await fetch(`/api/products/${prod.id}`, { method: "DELETE" });
+              await loadProducts();
+              if (currentProductId === prod.id) {
+                clearProductForm();
+              }
+            });
           });
           const check = row.querySelector(".row-check");
           check.checked = selectedProductIds.has(prod.id);
@@ -2447,10 +2456,13 @@
       saveProductBtn.addEventListener("click", () => saveProduct(true));
       deleteProductBtn.addEventListener("click", async () => {
         if (!currentProductId) return;
-        await fetch(`/api/products/${currentProductId}`, { method: "DELETE" });
-        await loadProducts();
-        clearProductForm();
+        const name = prodName.value.trim() || `producto #${currentProductId}`;
+        confirmDelete(`el producto "${name}"`, async () => {
+          await fetch(`/api/products/${currentProductId}`, { method: "DELETE" });
+          await loadProducts();
+          clearProductForm();
           productFormCard.classList.add("hidden");
+        });
       });
 
       addProductBtn.addEventListener("click", () => {
@@ -2467,12 +2479,14 @@
       applyBulkBtn.addEventListener("click", async () => {
         if (productBulkAction.value !== "delete") return;
         if (!selectedProductIds.size) return;
-        for (const id of selectedProductIds) {
-          await fetch(`/api/products/${id}`, { method: "DELETE" });
-        }
-        selectedProductIds.clear();
-        selectAllProducts.checked = false;
-        await loadProducts();
+        confirmDelete(`${selectedProductIds.size} producto(s) seleccionado(s)`, async () => {
+          for (const id of selectedProductIds) {
+            await fetch(`/api/products/${id}`, { method: "DELETE" });
+          }
+          selectedProductIds.clear();
+          selectAllProducts.checked = false;
+          await loadProducts();
+        });
       });
 
       selectAllProducts.addEventListener("change", () => {
@@ -2831,11 +2845,13 @@
           });
           row.querySelector("button").addEventListener("click", async (event) => {
             event.stopPropagation();
-            await fetch(`/api/clients/${client.id}`, { method: "DELETE" });
-            await loadClients();
-            if (currentClientId === client.id) {
-              currentClientId = null;
-            }
+            confirmDelete(`el cliente "${client.name}"`, async () => {
+              await fetch(`/api/clients/${client.id}`, { method: "DELETE" });
+              await loadClients();
+              if (currentClientId === client.id) {
+                currentClientId = null;
+              }
+            });
           });
           clientsList.appendChild(row);
         });
@@ -2870,8 +2886,10 @@
       saveClientBtn.addEventListener("click", async () => {
         const payload = { name: clientName.value.trim(), ruc: clientRuc.value.trim() };
         if (!payload.name) return;
-        const res = await fetch("/api/clients", {
-          method: "POST",
+        const url = currentClientId ? `/api/clients/${currentClientId}` : "/api/clients";
+        const method = currentClientId ? "PUT" : "POST";
+        const res = await fetch(url, {
+          method,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
@@ -2883,9 +2901,12 @@
 
       deleteClientBtn.addEventListener("click", async () => {
         if (!currentClientId) return;
-        await fetch(`/api/clients/${currentClientId}`, { method: "DELETE" });
-        await loadClients();
-        closeClientModal();
+        const name = clientName.value.trim() || `cliente #${currentClientId}`;
+        confirmDelete(`el cliente "${name}"`, async () => {
+          await fetch(`/api/clients/${currentClientId}`, { method: "DELETE" });
+          await loadClients();
+          closeClientModal();
+        });
       });
 
       closeClientModalBtn.addEventListener("click", () => {
@@ -2917,11 +2938,13 @@
           });
           row.querySelector("button").addEventListener("click", async (event) => {
             event.stopPropagation();
-            await fetch(`/api/transports/${item.id}`, { method: "DELETE" });
-            await loadTransports();
-            if (currentTransportId === item.id) {
-              currentTransportId = null;
-            }
+            confirmDelete(`la matrícula "${item.plate}"`, async () => {
+              await fetch(`/api/transports/${item.id}`, { method: "DELETE" });
+              await loadTransports();
+              if (currentTransportId === item.id) {
+                currentTransportId = null;
+              }
+            });
           });
           transportsList.appendChild(row);
         });
@@ -2955,8 +2978,10 @@
       saveTransportBtn.addEventListener("click", async () => {
         const payload = { plate: transportPlate.value.trim() };
         if (!payload.plate) return;
-        const res = await fetch("/api/transports", {
-          method: "POST",
+        const url = currentTransportId ? `/api/transports/${currentTransportId}` : "/api/transports";
+        const method = currentTransportId ? "PUT" : "POST";
+        const res = await fetch(url, {
+          method,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
@@ -2968,9 +2993,12 @@
 
       deleteTransportBtn.addEventListener("click", async () => {
         if (!currentTransportId) return;
-        await fetch(`/api/transports/${currentTransportId}`, { method: "DELETE" });
-        await loadTransports();
-        closeTransportModal();
+        const plate = transportPlate.value.trim() || `matrícula #${currentTransportId}`;
+        confirmDelete(`la matrícula "${plate}"`, async () => {
+          await fetch(`/api/transports/${currentTransportId}`, { method: "DELETE" });
+          await loadTransports();
+          closeTransportModal();
+        });
       });
 
       closeTransportModalBtn.addEventListener("click", () => {
@@ -3041,7 +3069,7 @@
         });
       }
 
-      function showConfirmModal(message, onConfirm) {
+      function showConfirmModal(message, onConfirm, onCancel) {
         const backdrop = document.createElement("div");
         backdrop.className = "modal-backdrop show";
         const modal = document.createElement("div");
@@ -3050,8 +3078,8 @@
           <div class="title">Confirmación</div>
           <div class="sub">${message}</div>
           <div class="actions" style="margin-top:12px;">
-            <button class="btn btn-success" id="confirmOkBtn">OK</button>
-            <button class="btn btn-outline" id="confirmCancelBtn">Cancelar</button>
+            <button class="btn btn-success" id="confirmOkBtn">Sí</button>
+            <button class="btn btn-outline" id="confirmCancelBtn">No</button>
           </div>
         `;
         backdrop.appendChild(modal);
@@ -3065,10 +3093,23 @@
           close();
           onConfirm?.();
         });
-        modal.querySelector("#confirmCancelBtn").addEventListener("click", close);
-        backdrop.addEventListener("click", (e) => {
-          if (e.target === backdrop) close();
+        modal.querySelector("#confirmCancelBtn").addEventListener("click", () => {
+          close();
+          onCancel?.();
         });
+        backdrop.addEventListener("click", (e) => {
+          if (e.target === backdrop) {
+            close();
+            onCancel?.();
+          }
+        });
+      }
+
+      function confirmDelete(itemLabel, onConfirm) {
+        showConfirmModal(
+          `¿Está seguro de eliminar ${itemLabel}?\nSe borrará de SQLite y Google Sheets.`,
+          onConfirm
+        );
       }
 
       function formatDateMinusDays(dateText, days) {

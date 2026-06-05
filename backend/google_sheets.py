@@ -527,21 +527,25 @@ def run_sync_after_delete(entity: str, record_id: Any, sync_fn: Callable[[], boo
 
 
 def sync_client_created(client_id: int, name: str, ruc: str | None, created_at: str) -> bool:
-    return _append_single(
+    return sync_client_upsert(client_id, name, ruc, created_at)
+
+
+def sync_client_upsert(client_id: int, name: str, ruc: str | None, created_at: str) -> bool:
+    return upsert_row_by_id(
         TAB_CLIENTES,
-        ("id", "name", "ruc", "created_at"),
+        HEADERS_CLIENTES,
         (client_id, name, ruc, created_at),
     )
 
 
 def sync_product_created(product_id: int, data: dict[str, Any], created_at: str) -> bool:
-    return _append_single(
+    return sync_product_upsert(product_id, data, created_at)
+
+
+def sync_product_upsert(product_id: int, data: dict[str, Any], created_at: str) -> bool:
+    return upsert_row_by_id(
         TAB_PRODUCTOS,
-        (
-            "id", "name", "code", "origin", "um", "active", "lot",
-            "production_text", "expiration_text", "humidity", "broken_grains",
-            "chalky_1", "chalky_2", "damaged_grains", "whiteness", "created_at",
-        ),
+        HEADERS_PRODUCTOS,
         (
             product_id,
             data.get("name"),
@@ -564,9 +568,13 @@ def sync_product_created(product_id: int, data: dict[str, Any], created_at: str)
 
 
 def sync_transport_created(transport_id: int, plate: str, created_at: str) -> bool:
-    return _append_single(
+    return sync_transport_upsert(transport_id, plate, created_at)
+
+
+def sync_transport_upsert(transport_id: int, plate: str, created_at: str) -> bool:
+    return upsert_row_by_id(
         TAB_TRANSPORTES,
-        ("id", "plate", "created_at"),
+        HEADERS_TRANSPORTES,
         (transport_id, plate, created_at),
     )
 
@@ -787,10 +795,7 @@ def export_all_missing_from_sqlite(
             if pause_between_tabs and idx > 0:
                 logger.info("[MIGRATE] Pausa %ss antes de %s", MIGRATE_TAB_PAUSE_SEC, tab)
                 time.sleep(MIGRATE_TAB_PAUSE_SEC)
-            if tab in (TAB_CONSTANCIAS, TAB_TRASIEGOS):
-                n = _upsert_all_for_tab_batch(conn, tab, headers, sql)
-            else:
-                n = _export_missing_for_tab_batch(conn, tab, headers, sql)
+            n = _upsert_all_for_tab_batch(conn, tab, headers, sql)
             by_tab[tab] = n
             total += n
             print(f"{tab}: {n} exportados")
