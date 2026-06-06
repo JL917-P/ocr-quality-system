@@ -3425,10 +3425,10 @@
       }
 
       const AJILES_PERU_SKU_MAP = [
-        { pattern: "ARROZ EXTRA GRAN CHALAN X 5KG", sku: "13010200100586" },
-        { pattern: "DON CHEF ARROZ SUPERIOR BL 4KG", sku: "130102003001" },
-        { pattern: "DON CHEF ARROZ EXTRA BL 650GR", sku: "130102003002" },
-        { pattern: "MI ARROZ SUPERIOR NIR X 25 KG", sku: "130102003003" },
+        { patterns: ["ARROZ EXTRA GRAN CHALAN X 5KG", "GRAN CHALAN X 5KG"], sku: "13010200100586" },
+        { patterns: ["DON CHEF ARROZ SUPERIOR BL 4KG", "ARROZ SUPERIOR BL 4KG"], sku: "130102003001" },
+        { patterns: ["DON CHEF ARROZ EXTRA BL 650GR", "ARROZ EXTRA BL 650GR", "ARROZ EXTRA BL 650 GR"], sku: "130102003002" },
+        { patterns: ["MI ARROZ SUPERIOR NIR X 25 KG", "ARROZ SUPERIOR NIR X 25 KG"], sku: "130102003003" },
       ];
 
       function isAjilesPeruClient(clientName) {
@@ -3440,9 +3440,11 @@
         const key = normalizeSearchText(productName);
         if (!key) return "";
         for (const entry of AJILES_PERU_SKU_MAP) {
-          const pattern = normalizeSearchText(entry.pattern);
-          if (key === pattern || key.includes(pattern) || pattern.includes(key)) {
-            return entry.sku;
+          for (const pattern of entry.patterns) {
+            const normalizedPattern = normalizeSearchText(pattern);
+            if (key === normalizedPattern || key.includes(normalizedPattern) || normalizedPattern.includes(key)) {
+              return entry.sku;
+            }
           }
         }
         return "";
@@ -3470,25 +3472,21 @@
         return raw;
       }
 
-      function buildAjilesQualityPage(constancia, clientMatch, items, fecha) {
-        const docDate = formatAjilesDocDate(fecha);
-        const cliente = (constancia.client_name || "AJILES PERU").toUpperCase();
-        const clientRuc = (clientMatch?.ruc || "20612232203").toString().trim();
-        const minRows = 8;
+      function buildAjilesProductRows(items, minRows = 8) {
         const productRows = items.map((item, idx) => {
           const productName = itemSnapshotField(item, "product_name_snapshot", "product");
           const lote = itemSnapshotField(item, "lote_snapshot", "lot");
           const expiration = itemSnapshotField(item, "expiration_date_snapshot", "expiration_text");
           return `
             <tr>
-              <td>${idx + 1}</td>
-              <td>${resolveAjilesSku(productName)}</td>
-              <td class="ajiles-desc">${productName}</td>
-              <td>${item.quantity ?? ""}</td>
-              <td>${formatAjilesFv(expiration)}</td>
-              <td>${formatAjilesLote(lote)}</td>
-              <td></td>
-              <td></td>
+              <td class="aj-c">${idx + 1}</td>
+              <td class="aj-c">${resolveAjilesSku(productName)}</td>
+              <td class="aj-l">${productName}</td>
+              <td class="aj-c">${item.quantity ?? ""}</td>
+              <td class="aj-c">${formatAjilesFv(expiration)}</td>
+              <td class="aj-c">${formatAjilesLote(lote)}</td>
+              <td class="aj-orange aj-c"></td>
+              <td class="aj-orange aj-c"></td>
             </tr>
           `;
         });
@@ -3496,120 +3494,151 @@
           const n = productRows.length + 1;
           productRows.push(`
             <tr>
-              <td>${n}</td>
-              <td></td>
-              <td class="ajiles-desc"></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
+              <td class="aj-c">${n}</td>
+              <td class="aj-c"></td>
+              <td class="aj-l"></td>
+              <td class="aj-c"></td>
+              <td class="aj-c"></td>
+              <td class="aj-c"></td>
+              <td class="aj-orange aj-c"></td>
+              <td class="aj-orange aj-c"></td>
             </tr>
           `);
         }
-        return `
-          <div class="page ajiles-quality-page last-page">
-            <div class="ajiles-top">
-              <div class="ajiles-logo-box">
-                <div class="ajiles-logo-mark">3A</div>
-                <div class="ajiles-logo-tag">Ahorro, Alta calidad, Agilidad</div>
-              </div>
-              <div class="ajiles-title-box">
-                CONTROL DE CALIDAD EN LA RECEPCIÓN DE CENTRO DE DISTRIBUCIÓN MECHITA
-              </div>
-              <table class="ajiles-doc-meta">
-                <tbody>
-                  <tr><td class="label">Código</td><td>013</td></tr>
-                  <tr><td class="label">Revisión</td><td>01</td></tr>
-                  <tr><td class="label">Fecha</td><td>${docDate}</td></tr>
-                  <tr><td class="label">Página</td><td>1 de 1</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="ajiles-section-bar">PARA SER INGRESADO POR EL PROVEEDOR</div>
-            <table class="ajiles-meta">
-              <tbody>
-                <tr>
-                  <td class="label">PROVEEDOR</td>
-                  <td class="value">${cliente}</td>
-                  <td class="label">R.U.C.</td>
-                  <td class="value">${clientRuc}</td>
-                </tr>
-                <tr>
-                  <td class="label">FECHA DE DESPACHO</td>
-                  <td class="value">${docDate}</td>
-                  <td class="label">JERARQUÍA</td>
-                  <td class="value">BÁSICOS</td>
-                </tr>
-              </tbody>
+        return productRows.join("");
+      }
+
+      function buildAjilesQualityPage(constancia, clientMatch, items, fecha) {
+        const docDate = formatAjilesDocDate(fecha);
+        const cliente = (constancia.client_name || "AJILES PERU").toUpperCase();
+        const clientRuc = (clientMatch?.ruc || "20612232203").toString().trim();
+        const productRowsHtml = buildAjilesProductRows(items, 8);
+        const page1 = `
+          <div class="page ajiles-quality-page ajiles-page-1">
+            <table class="ajiles-sheet ajiles-head" cellspacing="0" cellpadding="0">
+              <tr class="aj-h">
+                <td class="aj-logo-cell">
+                  <img class="aj-logo" src="/static/logo-3a.png" alt="3A" />
+                </td>
+                <td class="aj-title-cell">
+                  CONTROL DE CALIDAD EN LA RECEPCIÓN DE CENTRO DE DISTRIBUCIÓN MECHITA
+                </td>
+                <td class="aj-meta-cell">
+                  <table class="aj-meta-inner" cellspacing="0" cellpadding="0">
+                    <tr><td class="aj-meta-l">Código</td><td>013</td></tr>
+                    <tr><td class="aj-meta-l">Revisión</td><td>01</td></tr>
+                    <tr><td class="aj-meta-l">Fecha</td><td>${docDate}</td></tr>
+                    <tr><td class="aj-meta-l">Página</td><td>1 de 2</td></tr>
+                  </table>
+                </td>
+              </tr>
             </table>
-            <table class="ajiles-products">
-              <thead>
-                <tr class="ajiles-group-row">
-                  <th colspan="6">PARA SER INGRESADO POR EL PROVEEDOR</th>
-                  <th colspan="2">INGRESADO POR 3A</th>
-                </tr>
-                <tr class="ajiles-group-row">
-                  <th colspan="6"></th>
-                  <th colspan="2">EVALUACIÓN DE PRODUCTOS</th>
-                </tr>
-                <tr>
-                  <th>#</th>
-                  <th>SKU 3A</th>
-                  <th>DESCRIPCIÓN DEL PRODUCTO</th>
-                  <th>CANTIDAD</th>
-                  <th>FV</th>
-                  <th>LOTE</th>
-                  <th>T° (°C)</th>
-                  <th>RESULTADO (C) Y (NC)</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${productRows.join("")}
-              </tbody>
+            <table class="ajiles-sheet" cellspacing="0" cellpadding="0">
+              <tr><td colspan="4" class="aj-bar">PARA SER INGRESADO POR EL PROVEEDOR</td></tr>
+              <tr>
+                <td class="aj-lbl">PROVEEDOR</td>
+                <td class="aj-val">${cliente}</td>
+                <td class="aj-lbl">R.U.C.</td>
+                <td class="aj-val">${clientRuc}</td>
+              </tr>
+              <tr>
+                <td class="aj-lbl">FECHA DE DESPACHO</td>
+                <td class="aj-val">${docDate}</td>
+                <td class="aj-lbl">JERARQUÍA</td>
+                <td class="aj-val">BÁSICOS</td>
+              </tr>
             </table>
-            <div class="ajiles-section-bar">PARA SER INGRESADO POR 3A</div>
-            <table class="ajiles-checks">
-              <tbody>
-                <tr>
-                  <td class="label">CONDICIONES DEL TRANSPORTE</td>
-                  <td class="value">Se encuentra limpio y en buen estado &nbsp;&nbsp; / &nbsp;&nbsp; Se encuentra sucio</td>
-                </tr>
-                <tr>
-                  <td class="label">BPH - PERSONAL</td>
-                  <td class="value">Uniforme completo y limpio &nbsp;&nbsp; / &nbsp;&nbsp; Tiene carnet de sanidad</td>
-                </tr>
-              </tbody>
+            <table class="ajiles-sheet ajiles-products" cellspacing="0" cellpadding="0">
+              <colgroup>
+                <col style="width:4%" />
+                <col style="width:13%" />
+                <col style="width:31%" />
+                <col style="width:9%" />
+                <col style="width:11%" />
+                <col style="width:11%" />
+                <col style="width:9%" />
+                <col style="width:12%" />
+              </colgroup>
+              <tr>
+                <th colspan="6" class="aj-bar">PARA SER INGRESADO POR EL PROVEEDOR</th>
+                <th colspan="2" class="aj-bar">INGRESADO POR 3A</th>
+              </tr>
+              <tr>
+                <th colspan="6" class="aj-empty"></th>
+                <th colspan="2" class="aj-bar">EVALUACIÓN DE PRODUCTOS</th>
+              </tr>
+              <tr class="aj-head-row">
+                <th>#</th>
+                <th>SKU 3A</th>
+                <th>DESCRIPCIÓN DEL PRODUCTO</th>
+                <th>CANTIDAD</th>
+                <th>FV</th>
+                <th>LOTE</th>
+                <th class="aj-orange">T° (°C)</th>
+                <th class="aj-orange">RESULTADO (C) Y (NC)</th>
+              </tr>
+              ${productRowsHtml}
             </table>
-            <div class="ajiles-obs-title">OBSERVACIONES</div>
-            <div class="ajiles-obs-box"></div>
-            <div class="ajiles-obs-note">Se colocará '--' cuando no aplique el ítem mencionado.</div>
-            <div class="ajiles-signatures">
-              <div class="ajiles-sign-col">
-                <div class="ajiles-sign-area">
-                  <img class="firma" src="/static/firma.png" alt="Firma representante" />
-                </div>
-                <div class="ajiles-sign-label">NOMBRE DE REPRESENTANTE DE LA EMPRESA</div>
-              </div>
-              <div class="ajiles-sign-col">
-                <div class="ajiles-sign-line"></div>
-                <div class="ajiles-sign-label">NOMBRE DEL EVALUADOR</div>
-              </div>
-            </div>
-            <div class="ajiles-temp-box">
-              <div class="ajiles-temp-title">Control de Temperatura: (NO OMITIR ESTA PARTE)</div>
-              <div>* La temperatura del producto se valida con lo indicado en su rotulado. Para los productos que no presentan rango, considerar las siguientes temperaturas genéricas:</div>
-              <div>* La temperatura de productos hidrobiológicos congelados: ≤ -18°C.</div>
-              <div>* La temperatura de productos refrigerados: 0°C - 6°C.</div>
-              <div>* La temperatura de productos congelados (no hidrobiológicos): ≤ -12°C.</div>
-              <div>* La temperatura de productos helados: ≤ -16°C.</div>
-            </div>
-            <div class="ajiles-footer">
+            <table class="ajiles-sheet" cellspacing="0" cellpadding="0">
+              <tr><td colspan="3" class="aj-bar">PARA SER INGRESADO POR 3A</td></tr>
+              <tr>
+                <td class="aj-lbl aj-check-lbl">CONDICIONES DEL TRANSPORTE</td>
+                <td class="aj-check-opt">Se encuentra limpio y en buen estado</td>
+                <td class="aj-check-opt">Se encuentra sucio</td>
+              </tr>
+              <tr>
+                <td class="aj-lbl aj-check-lbl">BPH - PERSONAL</td>
+                <td class="aj-check-opt">Uniforme completo y limpio</td>
+                <td class="aj-check-opt">Tiene carnet de sanidad</td>
+              </tr>
+            </table>
+          </div>
+        `;
+        const page2 = `
+          <div class="page ajiles-quality-page ajiles-page-2 last-page">
+            <table class="ajiles-sheet ajiles-page2" cellspacing="0" cellpadding="0">
+              <tr>
+                <td class="aj-obs-cell">
+                  <div class="aj-obs-title">OBSERVACIONES</div>
+                </td>
+              </tr>
+            </table>
+            <div class="aj-obs-note">Se colocará '--' cuando no aplique el ítem mencionado.</div>
+            <table class="ajiles-sheet ajiles-sign-table" cellspacing="0" cellpadding="0">
+              <tr>
+                <td class="aj-sign-cell">
+                  <div class="aj-sign-img-wrap">
+                    <img class="aj-firma" src="/static/firma.png" alt="Firma" />
+                  </div>
+                  <div class="aj-sign-line"></div>
+                  <div class="aj-sign-lbl">NOMBRE DE REPRESENTANTE DE LA EMPRESA</div>
+                </td>
+                <td class="aj-sign-cell">
+                  <div class="aj-sign-spacer"></div>
+                  <div class="aj-sign-line"></div>
+                  <div class="aj-sign-lbl">NOMBRE DEL EVALUADOR</div>
+                </td>
+              </tr>
+            </table>
+            <table class="ajiles-sheet" cellspacing="0" cellpadding="0">
+              <tr>
+                <td class="aj-temp-cell">
+                  <div class="aj-temp-title">Control de Temperatura: (NO OMITIR ESTA PARTE)</div>
+                  <div class="aj-temp-line">* La temperatura del producto se valida con lo indicado en su rotulado. Para los productos que no presentan rango, considerar las siguientes temperaturas genéricas:</div>
+                  <div class="aj-temp-line">* La temperatura de productos hidrobiológicos congelados: ≤ -18°C.</div>
+                  <div class="aj-temp-line">* La temperatura de productos refrigerados: 0°C - 6°C.</div>
+                  <div class="aj-temp-line">* La temperatura de productos congelados (no hidrobiológicos): ≤ -12°C.</div>
+                  <div class="aj-temp-line">* La temperatura de productos helados: ≤ -16°C.</div>
+                </td>
+              </tr>
+            </table>
+            <div class="aj-footer">
               <div>Av. Camino Real N° 931 Dpto. 201 San Isidro - Lima.</div>
-              <div class="email">induamerica@induamerica.com.pe</div>
+              <div class="aj-email">induamerica@induamerica.com.pe</div>
             </div>
           </div>
         `;
+        return page1 + page2;
       }
 
       function buildConstanciaHtml(constancia, catalog, clients = null) {
@@ -3938,49 +3967,48 @@ async function savePdf(){
                 .firma { max-height: 104px; max-width: 100%; object-fit: contain; }
                 .footer-text { width: 45%; font-size: 10px; text-align: right; line-height: 1.3; }
                 .footer-text .email { color: #2563eb; text-decoration: underline; }
-                .ajiles-quality-page { padding: 8mm 10mm 10mm; font-size: 8px; line-height: 1.25; height: auto; min-height: 297mm; }
-                .ajiles-top { display: grid; grid-template-columns: 22% 1fr 18%; gap: 4px; align-items: stretch; margin-bottom: 4px; }
-                .ajiles-logo-box { border: 1px solid #111827; background: #f7941d; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px; text-align: center; }
-                .ajiles-logo-mark { font-size: 22px; font-weight: 800; line-height: 1; }
-                .ajiles-logo-tag { font-size: 6px; font-weight: 600; margin-top: 2px; }
-                .ajiles-title-box { border: 1px solid #111827; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 700; font-size: 9px; padding: 4px; }
-                .ajiles-doc-meta { width: 100%; border-collapse: collapse; font-size: 7px; }
-                .ajiles-doc-meta td { border: 1px solid #111827; padding: 2px 3px; }
-                .ajiles-doc-meta .label { font-weight: 700; width: 42%; }
-                .ajiles-section-bar { background: #f7941d; border: 1px solid #111827; text-align: center; font-weight: 700; font-size: 8px; padding: 3px; margin-top: 3px; }
-                .ajiles-meta { width: 100%; border-collapse: collapse; font-size: 8px; margin-top: 0; }
-                .ajiles-meta td { border: 1px solid #111827; padding: 3px 4px; }
-                .ajiles-meta .label { font-weight: 700; width: 18%; background: #fff; }
-                .ajiles-meta .value { width: 32%; }
-                .ajiles-products { width: 100%; border-collapse: collapse; font-size: 7px; margin-top: 0; table-layout: fixed; }
-                .ajiles-products th, .ajiles-products td { border: 1px solid #111827; padding: 2px 3px; text-align: center; vertical-align: middle; word-break: break-word; }
-                .ajiles-products .ajiles-group-row th { background: #f7941d; font-size: 7px; }
-                .ajiles-products th { font-weight: 700; }
-                .ajiles-products .ajiles-desc { text-align: left; }
-                .ajiles-products th:nth-child(1), .ajiles-products td:nth-child(1) { width: 4%; }
-                .ajiles-products th:nth-child(2), .ajiles-products td:nth-child(2) { width: 12%; }
-                .ajiles-products th:nth-child(3), .ajiles-products td:nth-child(3) { width: 34%; }
-                .ajiles-products th:nth-child(4), .ajiles-products td:nth-child(4) { width: 8%; }
-                .ajiles-products th:nth-child(5), .ajiles-products td:nth-child(5) { width: 10%; }
-                .ajiles-products th:nth-child(6), .ajiles-products td:nth-child(6) { width: 10%; }
-                .ajiles-products th:nth-child(7), .ajiles-products td:nth-child(7) { width: 8%; }
-                .ajiles-products th:nth-child(8), .ajiles-products td:nth-child(8) { width: 14%; }
-                .ajiles-checks { width: 100%; border-collapse: collapse; font-size: 7px; margin-top: 0; }
-                .ajiles-checks td { border: 1px solid #111827; padding: 3px 4px; vertical-align: middle; }
-                .ajiles-checks .label { font-weight: 700; width: 22%; }
-                .ajiles-obs-title { font-weight: 700; font-size: 8px; margin-top: 4px; }
-                .ajiles-obs-box { border: 1px solid #111827; min-height: 36px; margin-top: 2px; }
-                .ajiles-obs-note { font-size: 6px; margin-top: 2px; font-style: italic; }
-                .ajiles-signatures { display: flex; gap: 8px; margin-top: 6px; }
-                .ajiles-sign-col { flex: 1; }
-                .ajiles-sign-area { min-height: 52px; display: flex; align-items: flex-end; }
-                .ajiles-sign-area .firma { max-height: 52px; max-width: 100%; object-fit: contain; }
-                .ajiles-sign-line { border-bottom: 1px solid #111827; min-height: 52px; margin-bottom: 2px; }
-                .ajiles-sign-label { font-size: 7px; font-weight: 700; text-align: center; }
-                .ajiles-temp-box { border: 1px solid #111827; margin-top: 6px; padding: 4px; font-size: 6.5px; }
-                .ajiles-temp-title { font-weight: 700; margin-bottom: 2px; }
-                .ajiles-footer { margin-top: 4px; text-align: right; font-size: 7px; line-height: 1.3; }
-                .ajiles-footer .email { color: #2563eb; text-decoration: underline; }
+                .ajiles-quality-page { padding: 12mm 14mm 10mm; font-family: Arial, Helvetica, sans-serif; color: #000; box-sizing: border-box; height: 297mm; }
+                .ajiles-page-1 { page-break-after: always; }
+                .ajiles-sheet { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 7.5pt; line-height: 1.2; margin: 0; }
+                .ajiles-sheet + .ajiles-sheet { margin-top: -1px; }
+                .ajiles-sheet td, .ajiles-sheet th { border: 1px solid #000; padding: 3px 4px; vertical-align: middle; }
+                .aj-orange { background: #F4A024; }
+                .aj-bar { background: #F4A024; text-align: center; font-weight: 700; font-size: 7.5pt; padding: 4px 3px; }
+                .aj-empty { background: #fff; border: 1px solid #000; padding: 2px; }
+                .aj-h td { padding: 0; vertical-align: stretch; height: 58px; }
+                .aj-logo-cell { width: 16%; text-align: center; background: #fff; }
+                .aj-logo { display: block; width: 100%; height: 58px; object-fit: contain; object-position: center center; }
+                .aj-title-cell { width: 58%; text-align: center; font-weight: 700; font-size: 9pt; padding: 6px 8px !important; line-height: 1.15; }
+                .aj-meta-cell { width: 26%; padding: 0 !important; vertical-align: top; }
+                .aj-meta-inner { width: 100%; height: 100%; border-collapse: collapse; table-layout: fixed; font-size: 7pt; }
+                .aj-meta-inner td { border: 1px solid #000; padding: 2px 4px; }
+                .aj-meta-inner tr:first-child td { border-top: none; }
+                .aj-meta-inner td:last-child { border-right: none; }
+                .aj-meta-inner .aj-meta-l { font-weight: 700; width: 46%; }
+                .aj-lbl { width: 25%; font-weight: 700; text-align: left; background: #fff; }
+                .aj-val { width: 25%; text-align: center; background: #fff; }
+                .ajiles-products th, .ajiles-products td { font-size: 7pt; }
+                .aj-head-row th { font-weight: 700; text-align: center; background: #fff; }
+                .aj-head-row th.aj-orange { background: #F4A024; }
+                .aj-c { text-align: center; }
+                .aj-l { text-align: left; }
+                .aj-check-lbl { width: 34%; font-weight: 700; }
+                .aj-check-opt { width: 33%; text-align: center; }
+                .ajiles-page-2 { display: flex; flex-direction: column; padding-top: 14mm; }
+                .ajiles-page2 .aj-obs-cell { height: 120px; vertical-align: top; padding: 5px 6px !important; }
+                .aj-obs-title { font-weight: 700; font-size: 8pt; }
+                .aj-obs-note { font-size: 6.5pt; margin: 3px 0 14px; }
+                .aj-sign-table td { border: none !important; padding: 0 8px !important; width: 50%; vertical-align: bottom; }
+                .aj-sign-img-wrap { min-height: 78px; display: flex; align-items: flex-end; justify-content: flex-start; padding-left: 12px; }
+                .aj-firma { max-height: 78px; max-width: 220px; object-fit: contain; }
+                .aj-sign-spacer { min-height: 78px; }
+                .aj-sign-line { border-bottom: 1px solid #000; margin: 0 8px 4px; }
+                .aj-sign-lbl { font-weight: 700; font-size: 7pt; text-align: center; padding: 4px 0 0; }
+                .aj-temp-cell { padding: 5px 7px !important; font-size: 6.5pt; line-height: 1.35; vertical-align: top; }
+                .aj-temp-title { font-weight: 700; margin-bottom: 3px; font-size: 7pt; }
+                .aj-temp-line { margin-bottom: 1px; }
+                .aj-footer { margin-top: auto; padding-top: 10px; text-align: right; font-size: 7pt; line-height: 1.35; }
+                .aj-email { color: #2563eb; text-decoration: underline; }
                 @media print {
                   body { background: #fff; }
                   .actions { display: none; }
