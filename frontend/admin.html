@@ -3461,8 +3461,7 @@
       function formatAjilesFv(expirationText) {
         const raw = (expirationText || "").toString().trim();
         if (!raw || raw === "-") return "";
-        if (/^FV/i.test(raw)) return raw.toUpperCase();
-        return `FV${raw.replace(/\s+/g, "").toUpperCase()}`;
+        return raw;
       }
 
       function formatAjilesLote(loteText) {
