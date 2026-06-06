@@ -3485,7 +3485,7 @@
             <tr>
               <td class="aj-c">${idx + 1}</td>
               <td class="aj-c">${resolveAjilesSku(productName)}</td>
-              <td class="aj-l">${productName}</td>
+              <td class="aj-c aj-desc">${productName}</td>
               <td class="aj-c">${item.quantity ?? ""}</td>
               <td class="aj-c">${formatAjilesFv(expiration)}</td>
               <td class="aj-c">${formatAjilesLote(lote)}</td>
@@ -4004,7 +4004,7 @@ async function savePdf(){
                 .ajiles-products tbody td { height: 15px; }
                 .aj-head-row th { font-weight: 700; text-align: center; background: #fff; font-size: 6.5pt; }
                 .aj-c { text-align: center; }
-                .aj-l { text-align: left; padding-left: 4px !important; }
+                .aj-desc { padding-left: 2px !important; padding-right: 2px !important; }
                 .aj-empty-row { font-style: italic; }
                 .aj-lbl { width: 25%; font-weight: 700; text-align: center; background: #fff; font-size: 6.5pt; }
                 .aj-val { width: 25%; text-align: center; background: #fff; font-size: 7pt; }
