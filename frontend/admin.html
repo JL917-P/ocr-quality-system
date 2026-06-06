@@ -3505,6 +3505,7 @@
         return `
           <div class="page ajiles-quality-page last-page">
             <div class="ajiles-body">
+              <div class="ajiles-main">
               <table class="ajiles-sheet ajiles-head" cellspacing="0" cellpadding="0">
                 <tr class="aj-h">
                   <td class="aj-logo-cell">
@@ -3554,11 +3555,10 @@
                   <col style="width:14.5%" />
                 </colgroup>
                 <tr>
-                  <th colspan="6" class="aj-bar">PARA SER INGRESADO POR EL PROVEEDOR</th>
+                  <th colspan="6" rowspan="2" class="aj-bar aj-bar-merged">PARA SER INGRESADO POR EL PROVEEDOR</th>
                   <th colspan="2" class="aj-bar">INGRESADO POR 3A</th>
                 </tr>
                 <tr>
-                  <th colspan="6" class="aj-empty"></th>
                   <th colspan="2" class="aj-bar">EVALUACIÓN DE PRODUCTOS</th>
                 </tr>
                 <tr class="aj-head-row">
@@ -3573,20 +3573,20 @@
                 </tr>
                 ${productRowsHtml}
               </table>
-              <table class="ajiles-sheet" cellspacing="0" cellpadding="0">
+              <table class="ajiles-sheet ajiles-checks" cellspacing="0" cellpadding="0">
                 <tr><td colspan="3" class="aj-bar">PARA SER INGRESADO POR 3A</td></tr>
                 <tr>
-                  <td class="aj-lbl aj-check-lbl">CONDICIONES DEL TRANSPORTE</td>
+                  <td class="aj-check-lbl">CONDICIONES DEL TRANSPORTE</td>
                   <td class="aj-check-opt">Se encuentra limpio y en buen estado</td>
                   <td class="aj-check-opt">Se encuentra sucio</td>
                 </tr>
                 <tr>
-                  <td class="aj-lbl aj-check-lbl">BPH - PERSONAL</td>
+                  <td class="aj-check-lbl">BPH - PERSONAL</td>
                   <td class="aj-check-opt">Uniforme completo y limpio</td>
                   <td class="aj-check-opt">Tiene carnet de sanidad</td>
                 </tr>
               </table>
-              <table class="ajiles-sheet" cellspacing="0" cellpadding="0">
+              <table class="ajiles-sheet ajiles-obs" cellspacing="0" cellpadding="0">
                 <tr>
                   <td class="aj-obs-cell">
                     <span class="aj-obs-title">OBSERVACIONES</span>
@@ -3594,6 +3594,8 @@
                 </tr>
               </table>
               <div class="aj-obs-note">Se colocará '--' cuando no aplique el ítem mencionado.</div>
+            </div>
+            <div class="ajiles-bottom">
               <div class="aj-sign-row">
                 <div class="aj-sign-col">
                   <div class="aj-sign-img-wrap">
@@ -3624,6 +3626,7 @@
                 <div>Av. Camino Real N° 931 Dpto. 201 San Isidro - Lima.</div>
                 <div class="aj-email">induamerica@induamerica.com.pe</div>
               </div>
+            </div>
             </div>
           </div>
         `;
@@ -3956,12 +3959,15 @@ async function savePdf(){
                 .footer-text { width: 45%; font-size: 10px; text-align: right; line-height: 1.3; }
                 .footer-text .email { color: #2563eb; text-decoration: underline; }
                 .ajiles-quality-page { padding: 9mm 11mm 7mm; font-family: Arial, Helvetica, sans-serif; color: #000; box-sizing: border-box; height: 297mm; overflow: hidden; }
-                .ajiles-body { display: flex; flex-direction: column; height: 100%; }
+                .ajiles-body { display: flex; flex-direction: column; height: 100%; min-height: 100%; }
+                .ajiles-main { flex: 0 0 auto; }
+                .ajiles-bottom { margin-top: auto; flex-shrink: 0; width: 100%; }
                 .ajiles-sheet { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 7pt; line-height: 1.15; margin: 0; flex-shrink: 0; }
                 .ajiles-sheet + .ajiles-sheet { margin-top: -1px; }
+                .ajiles-bottom .ajiles-sheet { margin-top: 6px; }
                 .ajiles-sheet td, .ajiles-sheet th { border: 1px solid #000; padding: 2px 4px; vertical-align: middle; }
-                .aj-bar { background: #f67116; text-align: center; font-weight: 700; font-size: 7pt; padding: 3px 2px; }
-                .aj-empty { background: #fff; padding: 0; height: 12px; }
+                .aj-bar { background: #f67116; text-align: center; font-weight: 700; font-size: 7pt; padding: 3px 2px; color: #000; }
+                .aj-bar-merged { vertical-align: middle; }
                 .aj-h td { padding: 0; vertical-align: middle; height: 40px; }
                 .aj-logo-cell { width: 18%; text-align: center; background: #fff; padding: 0 !important; }
                 .aj-logo { display: block; width: 100%; height: 40px; object-fit: contain; object-position: center center; }
@@ -3983,23 +3989,24 @@ async function savePdf(){
                 .aj-empty-row { font-style: italic; }
                 .aj-lbl { width: 25%; font-weight: 700; text-align: center; background: #fff; font-size: 6.5pt; }
                 .aj-val { width: 25%; text-align: center; background: #fff; font-size: 7pt; }
-                .aj-check-lbl { width: 34%; font-weight: 700; text-align: center; font-size: 6.5pt; }
-                .aj-check-opt { width: 33%; text-align: center; font-size: 6.5pt; }
-                .aj-obs-cell { height: 62px; vertical-align: top; padding: 3px 5px !important; }
+                .aj-check-lbl { width: 34%; font-weight: 700; text-align: left; font-size: 6.5pt; padding-left: 6px !important; }
+                .aj-check-opt { width: 33%; text-align: left; font-size: 6.5pt; padding-left: 6px !important; }
+                .ajiles-checks td { background: #fff; }
+                .aj-obs-cell { height: 58px; vertical-align: top; padding: 3px 5px !important; background: #fff; }
                 .aj-obs-title { font-weight: 700; font-size: 7pt; }
-                .aj-obs-note { font-size: 6pt; margin: 2px 0 4px; flex-shrink: 0; }
-                .aj-sign-row { display: flex; gap: 0; margin: 2px 0 4px; flex-shrink: 0; }
-                .aj-sign-col { flex: 1; padding: 0 6px; }
-                .aj-sign-img-wrap { min-height: 58px; display: flex; align-items: flex-end; justify-content: flex-start; padding-left: 8px; }
-                .aj-firma { max-height: 58px; max-width: 200px; object-fit: contain; }
-                .aj-sign-spacer { min-height: 58px; }
-                .aj-sign-line { border-bottom: 1px solid #000; margin: 0 4px 2px; }
+                .aj-obs-note { font-size: 6pt; margin: 2px 0 0; flex-shrink: 0; }
+                .aj-sign-row { display: flex; gap: 0; margin: 4px 0 6px; flex-shrink: 0; }
+                .aj-sign-col { flex: 1; padding: 0 10px; position: relative; }
+                .aj-sign-img-wrap { min-height: 72px; display: flex; align-items: flex-end; justify-content: center; padding: 0 12px 2px 28px; }
+                .aj-firma { max-height: 82px; max-width: 280px; width: auto; object-fit: contain; }
+                .aj-sign-spacer { min-height: 72px; }
+                .aj-sign-line { border-bottom: 1px solid #000; margin: 0 6px 3px; }
                 .aj-sign-lbl { font-weight: 700; font-size: 6.5pt; text-align: center; padding-top: 2px; }
                 .aj-temp-table { flex-shrink: 0; margin-top: 0; }
-                .aj-temp-cell { padding: 3px 5px !important; font-size: 6pt; line-height: 1.25; vertical-align: top; }
+                .aj-temp-cell { padding: 3px 5px !important; font-size: 6pt; line-height: 1.25; vertical-align: top; background: #fff; }
                 .aj-temp-title { font-weight: 700; margin-bottom: 1px; font-size: 6.5pt; }
                 .aj-temp-line { margin-bottom: 0; }
-                .aj-footer { margin-top: auto; padding-top: 4px; text-align: right; font-size: 6.5pt; line-height: 1.3; flex-shrink: 0; }
+                .aj-footer { padding-top: 4px; text-align: right; font-size: 6.5pt; line-height: 1.3; flex-shrink: 0; }
                 .aj-email { color: #2563eb; text-decoration: underline; }
                 @media print {
                   body { background: #fff; }
