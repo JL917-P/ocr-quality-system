@@ -3472,12 +3472,16 @@
         return raw;
       }
 
-      function buildAjilesProductRows(items, minRows = 8) {
-        const productRows = items.map((item, idx) => {
-          const productName = itemSnapshotField(item, "product_name_snapshot", "product");
-          const lote = itemSnapshotField(item, "lote_snapshot", "lot");
-          const expiration = itemSnapshotField(item, "expiration_date_snapshot", "expiration_text");
-          return `
+      function buildAjilesProductRows(items) {
+        if (!items.length) {
+          return `<tr><td colspan="8" class="aj-c aj-empty-row">Sin productos</td></tr>`;
+        }
+        return items
+          .map((item, idx) => {
+            const productName = itemSnapshotField(item, "product_name_snapshot", "product");
+            const lote = itemSnapshotField(item, "lote_snapshot", "lot");
+            const expiration = itemSnapshotField(item, "expiration_date_snapshot", "expiration_text");
+            return `
             <tr>
               <td class="aj-c">${idx + 1}</td>
               <td class="aj-c">${resolveAjilesSku(productName)}</td>
@@ -3485,68 +3489,57 @@
               <td class="aj-c">${item.quantity ?? ""}</td>
               <td class="aj-c">${formatAjilesFv(expiration)}</td>
               <td class="aj-c">${formatAjilesLote(lote)}</td>
-              <td class="aj-orange aj-c"></td>
-              <td class="aj-orange aj-c"></td>
+              <td class="aj-c"></td>
+              <td class="aj-c"></td>
             </tr>
           `;
-        });
-        while (productRows.length < minRows) {
-          const n = productRows.length + 1;
-          productRows.push(`
-            <tr>
-              <td class="aj-c">${n}</td>
-              <td class="aj-c"></td>
-              <td class="aj-l"></td>
-              <td class="aj-c"></td>
-              <td class="aj-c"></td>
-              <td class="aj-c"></td>
-              <td class="aj-orange aj-c"></td>
-              <td class="aj-orange aj-c"></td>
-            </tr>
-          `);
-        }
-        return productRows.join("");
+          })
+          .join("");
       }
 
       function buildAjilesQualityPage(constancia, clientMatch, items, fecha) {
         const docDate = formatAjilesDocDate(fecha);
         const cliente = (constancia.client_name || "AJILES PERU").toUpperCase();
         const clientRuc = (clientMatch?.ruc || "20612232203").toString().trim();
-        const productRowsHtml = buildAjilesProductRows(items, Math.max(8, items.length));
+        const productRowsHtml = buildAjilesProductRows(items);
         return `
           <div class="page ajiles-quality-page last-page">
             <div class="ajiles-body">
               <table class="ajiles-sheet ajiles-head" cellspacing="0" cellpadding="0">
                 <tr class="aj-h">
                   <td class="aj-logo-cell">
-                    <img class="aj-logo" src="/static/logo-3a.png" alt="3A" />
+                    <img class="aj-logo" src="/static/logo-3a-header.png" alt="3A" />
                   </td>
                   <td class="aj-title-cell">
                     CONTROL DE CALIDAD EN LA RECEPCIÓN DE CENTRO DE DISTRIBUCIÓN MECHITA
                   </td>
                   <td class="aj-meta-cell">
                     <table class="aj-meta-inner" cellspacing="0" cellpadding="0">
-                      <tr><td class="aj-meta-l">Código</td><td>013</td></tr>
-                      <tr><td class="aj-meta-l">Revisión</td><td>01</td></tr>
-                      <tr><td class="aj-meta-l">Fecha</td><td>${docDate}</td></tr>
-                      <tr><td class="aj-meta-l">Página</td><td>1 de 1</td></tr>
+                      <tr><td class="aj-meta-l">Código:</td><td>013</td></tr>
+                      <tr><td class="aj-meta-l">Revisión:</td><td>01</td></tr>
+                      <tr><td class="aj-meta-l">Fecha:</td><td>${docDate}</td></tr>
+                      <tr><td class="aj-meta-l">Página:</td><td>1 de 1</td></tr>
                     </table>
                   </td>
                 </tr>
               </table>
-              <table class="ajiles-sheet" cellspacing="0" cellpadding="0">
-                <tr><td colspan="4" class="aj-bar">PARA SER INGRESADO POR EL PROVEEDOR</td></tr>
+              <table class="ajiles-sheet ajiles-provider" cellspacing="0" cellpadding="0">
+                <tr><td colspan="2" class="aj-bar">PARA SER INGRESADO POR EL PROVEEDOR</td></tr>
                 <tr>
-                  <td class="aj-lbl">PROVEEDOR</td>
-                  <td class="aj-val">${cliente}</td>
-                  <td class="aj-lbl">R.U.C.</td>
-                  <td class="aj-val">${clientRuc}</td>
+                  <td class="aj-prov-lbl">PROVEEDOR</td>
+                  <td class="aj-prov-val">${cliente}</td>
                 </tr>
                 <tr>
-                  <td class="aj-lbl">FECHA DE DESPACHO</td>
-                  <td class="aj-val">${docDate}</td>
-                  <td class="aj-lbl">JERARQUÍA</td>
-                  <td class="aj-val">BÁSICOS</td>
+                  <td class="aj-prov-lbl">R.U.C.</td>
+                  <td class="aj-prov-val">${clientRuc}</td>
+                </tr>
+                <tr>
+                  <td class="aj-prov-lbl">FECHA DE DESPACHO</td>
+                  <td class="aj-prov-val">${docDate}</td>
+                </tr>
+                <tr>
+                  <td class="aj-prov-lbl">JERARQUÍA</td>
+                  <td class="aj-prov-val">BÁSICOS</td>
                 </tr>
               </table>
               <table class="ajiles-sheet ajiles-products" cellspacing="0" cellpadding="0">
@@ -3575,8 +3568,8 @@
                   <th>CANTIDAD</th>
                   <th>FV</th>
                   <th>LOTE</th>
-                  <th class="aj-orange">T° (°C)</th>
-                  <th class="aj-orange">RESULTADO (C) Y (NC)</th>
+                  <th>T° (°C)</th>
+                  <th>RESULTADO (C) Y (NC)</th>
                 </tr>
                 ${productRowsHtml}
               </table>
@@ -3966,28 +3959,30 @@ async function savePdf(){
                 .ajiles-body { display: flex; flex-direction: column; height: 100%; }
                 .ajiles-sheet { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 7pt; line-height: 1.15; margin: 0; flex-shrink: 0; }
                 .ajiles-sheet + .ajiles-sheet { margin-top: -1px; }
-                .ajiles-sheet td, .ajiles-sheet th { border: 1px solid #000; padding: 2px 3px; vertical-align: middle; }
-                .aj-orange { background: #f67116; }
+                .ajiles-sheet td, .ajiles-sheet th { border: 1px solid #000; padding: 2px 4px; vertical-align: middle; }
                 .aj-bar { background: #f67116; text-align: center; font-weight: 700; font-size: 7pt; padding: 3px 2px; }
-                .aj-empty { background: #fff; padding: 1px; height: 14px; }
-                .aj-h td { padding: 0; vertical-align: middle; height: 52px; }
-                .aj-logo-cell { width: 17%; text-align: center; background: #fff; }
-                .aj-logo { display: block; width: 100%; height: 52px; object-fit: contain; object-position: center center; }
-                .aj-title-cell { width: 57%; text-align: center; font-weight: 700; font-size: 8.5pt; padding: 4px 6px !important; line-height: 1.12; }
+                .aj-empty { background: #fff; padding: 0; height: 12px; }
+                .aj-h td { padding: 0; vertical-align: middle; height: 40px; }
+                .aj-logo-cell { width: 18%; text-align: center; background: #fff; padding: 0 !important; }
+                .aj-logo { display: block; width: 100%; height: 40px; object-fit: contain; object-position: center center; }
+                .aj-title-cell { width: 56%; text-align: center; font-weight: 700; font-size: 7.5pt; padding: 3px 5px !important; line-height: 1.1; }
                 .aj-meta-cell { width: 26%; padding: 0 !important; vertical-align: top; }
                 .aj-meta-inner { width: 100%; height: 100%; border-collapse: collapse; table-layout: fixed; font-size: 6.5pt; }
-                .aj-meta-inner td { border: 1px solid #000; padding: 1px 3px; text-align: center; }
+                .aj-meta-inner td { border: 1px solid #000; padding: 1px 4px; text-align: left; }
                 .aj-meta-inner tr:first-child td { border-top: none; }
-                .aj-meta-inner td:last-child { border-right: none; }
-                .aj-meta-inner .aj-meta-l { font-weight: 700; width: 48%; }
-                .aj-lbl { width: 25%; font-weight: 700; text-align: center; background: #fff; font-size: 6.5pt; }
-                .aj-val { width: 25%; text-align: center; background: #fff; font-size: 7pt; }
-                .ajiles-products th, .ajiles-products td { font-size: 6.5pt; }
-                .ajiles-products tbody td { height: 16px; }
+                .aj-meta-inner td:last-child { border-right: none; text-align: center; }
+                .aj-meta-inner .aj-meta-l { font-weight: 700; width: 44%; }
+                .ajiles-provider .aj-prov-lbl { width: 28%; font-weight: 700; text-align: left; padding-left: 6px !important; font-size: 6.5pt; background: #fff; }
+                .ajiles-provider .aj-prov-val { width: 72%; text-align: left; padding-left: 6px !important; font-size: 7pt; background: #fff; }
+                .ajiles-products th, .ajiles-products td { font-size: 6.5pt; background: #fff; }
+                .ajiles-products .aj-bar { background: #f67116; }
+                .ajiles-products tbody td { height: 15px; }
                 .aj-head-row th { font-weight: 700; text-align: center; background: #fff; font-size: 6.5pt; }
-                .aj-head-row th.aj-orange { background: #f67116; }
                 .aj-c { text-align: center; }
                 .aj-l { text-align: left; padding-left: 4px !important; }
+                .aj-empty-row { font-style: italic; }
+                .aj-lbl { width: 25%; font-weight: 700; text-align: center; background: #fff; font-size: 6.5pt; }
+                .aj-val { width: 25%; text-align: center; background: #fff; font-size: 7pt; }
                 .aj-check-lbl { width: 34%; font-weight: 700; text-align: center; font-size: 6.5pt; }
                 .aj-check-opt { width: 33%; text-align: center; font-size: 6.5pt; }
                 .aj-obs-cell { height: 62px; vertical-align: top; padding: 3px 5px !important; }
