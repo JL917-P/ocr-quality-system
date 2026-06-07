@@ -2856,7 +2856,25 @@
           const viewBtn = row.querySelector(".view-btn");
           if (viewBtn) {
             viewBtn.addEventListener("click", async () => {
-              window.open(`/constancia-view?id=${item.id}`, "_blank");
+              try {
+                const res = await fetch(`/api/constancias/${item.id}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error("fetch");
+                const prodRes = await fetch("/api/products");
+                const prodData = await prodRes.json();
+                const catalog = prodData.products || [];
+                const html = buildConstanciaHtml(data, catalog, allClients);
+                const win = window.open("", "_blank");
+                if (!win) throw new Error("popup");
+                win.document.open();
+                win.document.write(html);
+                win.document.close();
+              } catch (_) {
+                showErrorModal(
+                  "No se pudo abrir la plantilla. Recarga el panel (Ctrl+F5) e intenta de nuevo.",
+                  { title: "Plantilla" }
+                );
+              }
             });
           }
           constanciasList.appendChild(row);
@@ -3642,6 +3660,138 @@
         `;
       }
 
+      const CENCOSUD_CD_LIMA_CLIENT_IDS = new Set([25]);
+
+      function isCencosudCdLimaClient(clientName, clientMatch = null) {
+        if (clientMatch?.id && CENCOSUD_CD_LIMA_CLIENT_IDS.has(Number(clientMatch.id))) {
+          return true;
+        }
+        const candidates = [clientName, clientMatch?.name].filter(Boolean);
+        return candidates.some((name) => {
+          const key = normalizeSearchText(name);
+          if (!key.includes("cencosud") || !key.includes("lima")) return false;
+          return key.includes("cd") || key.includes("centro de distribucion");
+        });
+      }
+
+      const CENCOSUD_TRANSPORT_EMPRESA = "INDUAMERICA INTERNACIONAL S.A.C.";
+
+      function buildCencosudTransportRows(items, fecha, transporte, empresa) {
+        const rowCount = Math.max(items.length, 1);
+        const envio = formatEmissionDate(fecha);
+        if (!items.length) {
+          return `
+            <tr>
+              <td>1</td>
+              <td>${envio}</td>
+              <td rowspan="1">${empresa}</td>
+              <td rowspan="1">${transporte || ""}</td>
+              <td></td>
+              <td></td>
+            </tr>
+          `;
+        }
+        return items
+          .map((item, idx) => {
+            const productName = itemSnapshotField(item, "product_name_snapshot", "product");
+            const mergedCells =
+              idx === 0
+                ? `<td rowspan="${rowCount}">${empresa}</td><td rowspan="${rowCount}">${transporte || ""}</td>`
+                : "";
+            return `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>${envio}</td>
+              ${mergedCells}
+              <td>${productName}</td>
+              <td>${item.quantity ?? ""}</td>
+            </tr>
+          `;
+          })
+          .join("");
+      }
+
+      function buildCencosudTransportPage(constancia, items, fecha, numero, cliente, transporte) {
+        const transportRows = buildCencosudTransportRows(items, fecha, transporte, CENCOSUD_TRANSPORT_EMPRESA);
+        return `
+          <div class="page cencosud-transport-page last-page">
+            <div class="header">
+              <img class="logo" src="/static/logo.png" alt="Induamerica" />
+            </div>
+            <div class="box">
+              <div class="title">CONSTANCIA DE FUMIGACIÓN TRANSPORTE N° ${numero}</div>
+              <table class="meta ct-meta">
+                <tbody>
+                  <tr>
+                    <td class="label">FECHA DE EMISION</td>
+                    <td class="value">${formatEmissionDate(fecha)}</td>
+                  </tr>
+                  <tr>
+                    <td class="label">CLIENTE:</td>
+                    <td class="value">${cliente}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="note ct-note">
+                Mediante el presente documento dejamos constancia que las unidades de transporte son desinsectadas con S-DELTA 50 SC (10 ml x 1 l de agua) con mochila manual; y las parihuelas son fumigadas con fosfuro de aluminio (PHOSFIN) en dosis de 4 Tab/m3 .
+              </div>
+              <table class="meta ct-pest">
+                <tbody>
+                  <tr>
+                    <td class="label">Plaguicida Usado:</td>
+                    <td class="value">S-DELTA 50 SC</td>
+                    <td class="label">Proveedor:</td>
+                    <td class="value ct-proveedor">INDUAMERICA</td>
+                  </tr>
+                </tbody>
+              </table>
+              <table class="data ct-transport">
+                <thead>
+                  <tr>
+                    <th colspan="6">TRANSPORTE</th>
+                  </tr>
+                  <tr>
+                    <th>Item</th>
+                    <th>Fecha de Envio</th>
+                    <th>EMPRESA DE TRANSPORTE</th>
+                    <th>Nº DE PLACA</th>
+                    <th>PRODUCTO</th>
+                    <th>Cantidad (Und)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${transportRows}
+                </tbody>
+              </table>
+            </div>
+            <div class="footer">
+              <div class="firma-wrap">
+                <img class="firma" src="/static/firma.png" alt="Firma" />
+              </div>
+              <div class="footer-text">
+                <div>Av. Camino Real N° 931 Dpto. 201 San Isidro - Lima.</div>
+                <div class="email">induamerica@induamerica.com.pe</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      function applyConstanciaPageBreaks(pageHtmlList) {
+        return pageHtmlList
+          .map((html, index) => {
+            const breakClass = index < pageHtmlList.length - 1 ? "first-page" : "last-page";
+            return html.replace(/class="([^"]*)"/, (full, classNames) => {
+              if (!classNames.startsWith("page")) return full;
+              const modifiers = classNames
+                .split(/\s+/)
+                .filter((c) => c && c !== "page" && c !== "first-page" && c !== "last-page");
+              return `class="page${modifiers.length ? " " + modifiers.join(" ") : ""} ${breakClass}"`;
+            });
+          })
+          .join("");
+      }
+
       function buildConstanciaHtml(constancia, catalog, clients = null) {
         const numero = constancia.number || constancia.id || "";
         const fecha = constancia.issue_date || "";
@@ -3871,9 +4021,14 @@
         const pageQuality = isAjilesQuality
           ? buildAjilesQualityPage(constancia, clientMatch, items, fecha)
           : pageQualityStandard;
-        const selectedPages = [showFumigacion ? pageContent : "", showCalidad ? pageQuality : ""]
-          .filter((page) => page)
-          .join("");
+        const showTransport = isCencosudCdLimaClient(cliente, clientMatch);
+        const pageTransport = showTransport
+          ? buildCencosudTransportPage(constancia, items, fecha, numero, cliente, transporte)
+          : "";
+        const pageList = [showFumigacion ? pageContent : "", showCalidad ? pageQuality : "", showTransport ? pageTransport : ""].filter(
+          (page) => page
+        );
+        const selectedPages = applyConstanciaPageBreaks(pageList);
         const emptyMessage = `
           <div style="font-family: Arial, sans-serif; padding: 16px;">
             No hay constancias seleccionadas para mostrar.
@@ -4026,6 +4181,21 @@ async function savePdf(){
                 .aj-temp-line { margin-bottom: 0; }
                 .aj-footer { padding-top: 4px; text-align: right; font-size: 6.5pt; line-height: 1.3; flex-shrink: 0; }
                 .aj-email { color: #2563eb; text-decoration: underline; }
+                .ct-meta { table-layout: fixed; }
+                .ct-meta .label { width: 28%; text-align: left; padding-left: 6px; }
+                .ct-meta .value { text-align: center; }
+                .ct-note { font-size: 9px; line-height: 1.25; text-align: center; padding: 6px 8px; }
+                .ct-pest { table-layout: fixed; margin-top: 0; }
+                .ct-pest .label { width: 18%; text-align: left; padding-left: 6px; }
+                .ct-pest .value { text-align: center; }
+                .ct-pest .ct-proveedor { font-weight: 700; }
+                .ct-transport th, .ct-transport td { font-size: 8px; }
+                .ct-transport th:nth-child(1), .ct-transport td:nth-child(1) { width: 6%; }
+                .ct-transport th:nth-child(2), .ct-transport td:nth-child(2) { width: 12%; }
+                .ct-transport th:nth-child(3), .ct-transport td:nth-child(3) { width: 24%; }
+                .ct-transport th:nth-child(4), .ct-transport td:nth-child(4) { width: 10%; }
+                .ct-transport th:nth-child(5), .ct-transport td:nth-child(5) { width: 34%; }
+                .ct-transport th:nth-child(6), .ct-transport td:nth-child(6) { width: 14%; }
                 @media print {
                   body { background: #fff; }
                   .actions { display: none; }
@@ -4047,6 +4217,9 @@ async function savePdf(){
           </html>
         `;
       }
+
+      globalThis.buildConstanciaHtml = buildConstanciaHtml;
+      globalThis.isCencosudCdLimaClient = isCencosudCdLimaClient;
 
     </script>
     <script src="/static/auth-gate.js"></script>

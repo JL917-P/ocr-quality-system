@@ -1049,13 +1049,21 @@ def constancia_view_page(constancia_id: int = Query(..., alias="id")) -> HTMLRes
       </head>
       <body>
         <div style="font-family: Arial, sans-serif; padding: 16px;">Cargando constancia...</div>
+        <script src="/static/constancia-builder.js?v=1"></script>
         <script>
+          async function resolveBuilder() {{
+            if (window.opener && typeof window.opener.buildConstanciaHtml === "function") {{
+              return window.opener.buildConstanciaHtml.bind(window.opener);
+            }}
+            if (typeof window.buildConstanciaHtml === "function") {{
+              return window.buildConstanciaHtml;
+            }}
+            throw new Error("builder");
+          }}
+
           async function loadConstancia() {{
             try {{
-              if (!window.opener || typeof window.opener.buildConstanciaHtml !== "function") {{
-                document.body.innerHTML = '<div style="font-family: Arial, sans-serif; padding: 16px;">No se encontró la página principal para renderizar.</div>';
-                return;
-              }}
+              const buildConstanciaHtml = await resolveBuilder();
               const res = await fetch('/api/constancias/{constancia_id}');
               const data = await res.json();
               if (!res.ok) throw new Error();
@@ -1065,12 +1073,12 @@ def constancia_view_page(constancia_id: int = Query(..., alias="id")) -> HTMLRes
               const clientRes = await fetch('/api/clients');
               const clientData = await clientRes.json();
               const clients = clientData.clients || [];
-              const html = window.opener.buildConstanciaHtml(data, catalog, clients);
+              const html = buildConstanciaHtml(data, catalog, clients);
               document.open();
               document.write(html);
               document.close();
             }} catch (err) {{
-              document.body.innerHTML = '<div style="font-family: Arial, sans-serif; padding: 16px;">No se pudo cargar la constancia.</div>';
+              document.body.innerHTML = '<div style="font-family: Arial, sans-serif; padding: 16px;">No se pudo cargar la constancia. Recarga el panel admin (Ctrl+F5) e intenta de nuevo.</div>';
             }}
           }}
           loadConstancia();
