@@ -2855,26 +2855,8 @@
           }
           const viewBtn = row.querySelector(".view-btn");
           if (viewBtn) {
-            viewBtn.addEventListener("click", async () => {
-              try {
-                const res = await fetch(`/api/constancias/${item.id}`);
-                const data = await res.json();
-                if (!res.ok) throw new Error("fetch");
-                const prodRes = await fetch("/api/products");
-                const prodData = await prodRes.json();
-                const catalog = prodData.products || [];
-                const html = buildConstanciaHtml(data, catalog, allClients);
-                const win = window.open("", "_blank");
-                if (!win) throw new Error("popup");
-                win.document.open();
-                win.document.write(html);
-                win.document.close();
-              } catch (_) {
-                showErrorModal(
-                  "No se pudo abrir la plantilla. Recarga el panel (Ctrl+F5) e intenta de nuevo.",
-                  { title: "Plantilla" }
-                );
-              }
+            viewBtn.addEventListener("click", () => {
+              window.open(`/constancia-view?id=${item.id}`, "_blank");
             });
           }
           constanciasList.appendChild(row);

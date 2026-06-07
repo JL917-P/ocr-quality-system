@@ -96,6 +96,14 @@ def _read_frontend_html(filename: str) -> str:
     return (FRONTEND_DIR / filename).read_text(encoding="utf-8")
 
 
+def _constancia_builder_version() -> str:
+    path = FRONTEND_DIR / "constancia-builder.js"
+    try:
+        return str(int(path.stat().st_mtime))
+    except OSError:
+        return "1"
+
+
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -1039,46 +1047,39 @@ def admin_page() -> HTMLResponse:
 
 @app.get("/constancia-view", response_class=HTMLResponse)
 def constancia_view_page(constancia_id: int = Query(..., alias="id")) -> HTMLResponse:
+    builder_v = _constancia_builder_version()
     html = f"""
     <!doctype html>
     <html lang="es">
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Constancia</title>
+        <title>Constancia {constancia_id}</title>
       </head>
       <body>
         <div style="font-family: Arial, sans-serif; padding: 16px;">Cargando constancia...</div>
-        <script src="/static/constancia-builder.js?v=1"></script>
+        <script src="/static/constancia-builder.js?v={builder_v}"></script>
         <script>
-          async function resolveBuilder() {{
-            if (window.opener && typeof window.opener.buildConstanciaHtml === "function") {{
-              return window.opener.buildConstanciaHtml.bind(window.opener);
-            }}
-            if (typeof window.buildConstanciaHtml === "function") {{
-              return window.buildConstanciaHtml;
-            }}
-            throw new Error("builder");
-          }}
-
           async function loadConstancia() {{
             try {{
-              const buildConstanciaHtml = await resolveBuilder();
-              const res = await fetch('/api/constancias/{constancia_id}');
+              if (typeof window.buildConstanciaHtml !== "function") {{
+                throw new Error("builder");
+              }}
+              const res = await fetch('/api/constancias/{constancia_id}', {{ cache: 'no-store' }});
               const data = await res.json();
-              if (!res.ok) throw new Error();
-              const prodRes = await fetch('/api/products');
+              if (!res.ok) throw new Error("notfound");
+              const prodRes = await fetch('/api/products', {{ cache: 'no-store' }});
               const prodData = await prodRes.json();
               const catalog = prodData.products || [];
-              const clientRes = await fetch('/api/clients');
+              const clientRes = await fetch('/api/clients', {{ cache: 'no-store' }});
               const clientData = await clientRes.json();
               const clients = clientData.clients || [];
-              const html = buildConstanciaHtml(data, catalog, clients);
+              const html = window.buildConstanciaHtml(data, catalog, clients);
               document.open();
               document.write(html);
               document.close();
             }} catch (err) {{
-              document.body.innerHTML = '<div style="font-family: Arial, sans-serif; padding: 16px;">No se pudo cargar la constancia. Recarga el panel admin (Ctrl+F5) e intenta de nuevo.</div>';
+              document.body.innerHTML = '<div style="font-family: Arial, sans-serif; padding: 16px;">No se pudo cargar la constancia. Verifique que exista e intente recargar esta página.</div>';
             }}
           }}
           loadConstancia();
@@ -1086,7 +1087,10 @@ def constancia_view_page(constancia_id: int = Query(..., alias="id")) -> HTMLRes
       </body>
     </html>
     """
-    return HTMLResponse(content=html)
+    return HTMLResponse(
+        content=html,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
 
 
 @app.post("/api/ocr_preview")
