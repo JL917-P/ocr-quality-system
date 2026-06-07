@@ -3682,12 +3682,12 @@
         if (!items.length) {
           return `
             <tr>
-              <td>1</td>
-              <td>${envio}</td>
-              <td rowspan="1">${empresa}</td>
-              <td rowspan="1">${transporte || ""}</td>
-              <td></td>
-              <td></td>
+              <td class="ct-col-item">1</td>
+              <td class="ct-col-fecha">${envio}</td>
+              <td class="ct-col-empresa" rowspan="1">${empresa}</td>
+              <td class="ct-col-placa" rowspan="1">${transporte || ""}</td>
+              <td class="ct-col-producto"></td>
+              <td class="ct-col-cant"></td>
             </tr>
           `;
         }
@@ -3696,15 +3696,15 @@
             const productName = itemSnapshotField(item, "product_name_snapshot", "product");
             const mergedCells =
               idx === 0
-                ? `<td rowspan="${rowCount}">${empresa}</td><td rowspan="${rowCount}">${transporte || ""}</td>`
+                ? `<td class="ct-col-empresa" rowspan="${rowCount}">${empresa}</td><td class="ct-col-placa" rowspan="${rowCount}">${transporte || ""}</td>`
                 : "";
             return `
             <tr>
-              <td>${idx + 1}</td>
-              <td>${envio}</td>
+              <td class="ct-col-item">${idx + 1}</td>
+              <td class="ct-col-fecha">${envio}</td>
               ${mergedCells}
-              <td>${productName}</td>
-              <td>${item.quantity ?? ""}</td>
+              <td class="ct-col-producto">${productName}</td>
+              <td class="ct-col-cant">${item.quantity ?? ""}</td>
             </tr>
           `;
           })
@@ -3746,17 +3746,25 @@
                 </tbody>
               </table>
               <table class="data ct-transport">
+                <colgroup>
+                  <col class="ct-col-item" />
+                  <col class="ct-col-fecha" />
+                  <col class="ct-col-empresa" />
+                  <col class="ct-col-placa" />
+                  <col class="ct-col-producto" />
+                  <col class="ct-col-cant" />
+                </colgroup>
                 <thead>
                   <tr>
                     <th colspan="6">TRANSPORTE</th>
                   </tr>
                   <tr>
-                    <th>Item</th>
-                    <th>Fecha de Envio</th>
-                    <th>EMPRESA DE TRANSPORTE</th>
-                    <th>Nº DE PLACA</th>
-                    <th>PRODUCTO</th>
-                    <th>Cantidad (Und)</th>
+                    <th class="ct-col-item">Item</th>
+                    <th class="ct-col-fecha">Fecha de Envio</th>
+                    <th class="ct-col-empresa">EMPRESA DE TRANSPORTE</th>
+                    <th class="ct-col-placa">Nº DE PLACA</th>
+                    <th class="ct-col-producto">PRODUCTO</th>
+                    <th class="ct-col-cant">Cant.<br>(Und)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -4189,13 +4197,21 @@ async function savePdf(){
                 .ct-pest .label { width: 18%; text-align: left; padding-left: 6px; }
                 .ct-pest .value { text-align: center; }
                 .ct-pest .ct-proveedor { font-weight: 700; }
-                .ct-transport th, .ct-transport td { font-size: 8px; padding: 2px 3px; }
-                .ct-transport th:nth-child(1), .ct-transport td:nth-child(1) { width: 3%; white-space: nowrap; }
-                .ct-transport th:nth-child(2), .ct-transport td:nth-child(2) { width: 7%; white-space: nowrap; }
-                .ct-transport th:nth-child(3), .ct-transport td:nth-child(3) { width: 20%; }
-                .ct-transport th:nth-child(4), .ct-transport td:nth-child(4) { width: 6%; white-space: nowrap; }
-                .ct-transport th:nth-child(5), .ct-transport td:nth-child(5) { width: 54%; white-space: nowrap; }
-                .ct-transport th:nth-child(6), .ct-transport td:nth-child(6) { width: 10%; white-space: nowrap; }
+                .data.ct-transport { table-layout: fixed; }
+                .data.ct-transport th, .data.ct-transport td { font-size: 8px; padding: 2px 2px; word-break: normal; }
+                .data.ct-transport col.ct-col-item { width: 5mm; }
+                .data.ct-transport col.ct-col-fecha { width: 15mm; }
+                .data.ct-transport col.ct-col-empresa { width: 36mm; }
+                .data.ct-transport col.ct-col-placa { width: 13mm; }
+                .data.ct-transport col.ct-col-producto { width: auto; }
+                .data.ct-transport col.ct-col-cant { width: 11mm; }
+                .data.ct-transport .ct-col-item,
+                .data.ct-transport .ct-col-cant { white-space: nowrap; padding: 2px 1px; }
+                .data.ct-transport .ct-col-fecha,
+                .data.ct-transport .ct-col-placa { white-space: nowrap; }
+                .data.ct-transport .ct-col-producto { white-space: nowrap; font-size: 7.5px; letter-spacing: -0.02em; }
+                .data.ct-transport .ct-col-cant { font-size: 7.5px; }
+                .data.ct-transport th.ct-col-cant { line-height: 1.1; font-size: 7px; }
                 @media print {
                   body { background: #fff; }
                   .actions { display: none; }
