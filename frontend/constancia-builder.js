@@ -401,12 +401,12 @@ function parseConstanciaDate(dateText) {
               </table>
               <table class="data ct-transport">
                 <colgroup>
-                  <col class="ct-col-item" />
-                  <col class="ct-col-fecha" />
-                  <col class="ct-col-empresa" />
-                  <col class="ct-col-placa" />
-                  <col class="ct-col-producto" />
-                  <col class="ct-col-cant" />
+                  <col style="width:3%" />
+                  <col style="width:9%" />
+                  <col style="width:16%" />
+                  <col style="width:7%" />
+                  <col style="width:56%" />
+                  <col style="width:9%" />
                 </colgroup>
                 <thead>
                   <tr>
@@ -414,11 +414,11 @@ function parseConstanciaDate(dateText) {
                   </tr>
                   <tr>
                     <th class="ct-col-item">Item</th>
-                    <th class="ct-col-fecha">Fecha de Envio</th>
-                    <th class="ct-col-empresa">EMPRESA DE TRANSPORTE</th>
-                    <th class="ct-col-placa">Nº DE PLACA</th>
+                    <th class="ct-col-fecha">F. Envio</th>
+                    <th class="ct-col-empresa">Empresa<br>Transporte</th>
+                    <th class="ct-col-placa">Placa</th>
                     <th class="ct-col-producto">PRODUCTO</th>
-                    <th class="ct-col-cant">Cant.<br>(Und)</th>
+                    <th class="ct-col-cant">Cant.</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -851,21 +851,50 @@ async function savePdf(){
                 .ct-pest .label { width: 18%; text-align: left; padding-left: 6px; }
                 .ct-pest .value { text-align: center; }
                 .ct-pest .ct-proveedor { font-weight: 700; }
-                .data.ct-transport { table-layout: fixed; }
-                .data.ct-transport th, .data.ct-transport td { font-size: 8px; padding: 2px 2px; word-break: normal; }
-                .data.ct-transport col.ct-col-item { width: 5mm; }
-                .data.ct-transport col.ct-col-fecha { width: 15mm; }
-                .data.ct-transport col.ct-col-empresa { width: 36mm; }
-                .data.ct-transport col.ct-col-placa { width: 13mm; }
-                .data.ct-transport col.ct-col-producto { width: auto; }
-                .data.ct-transport col.ct-col-cant { width: 11mm; }
-                .data.ct-transport .ct-col-item,
-                .data.ct-transport .ct-col-cant { white-space: nowrap; padding: 2px 1px; }
-                .data.ct-transport .ct-col-fecha,
-                .data.ct-transport .ct-col-placa { white-space: nowrap; }
-                .data.ct-transport .ct-col-producto { white-space: nowrap; font-size: 7.5px; letter-spacing: -0.02em; }
-                .data.ct-transport .ct-col-cant { font-size: 7.5px; }
-                .data.ct-transport th.ct-col-cant { line-height: 1.1; font-size: 7px; }
+                .data.ct-transport { table-layout: fixed; width: 100%; border-collapse: collapse; }
+                .data.ct-transport th,
+                .data.ct-transport td {
+                  font-size: 7.5px;
+                  padding: 2px 2px;
+                  word-break: normal;
+                  overflow: hidden;
+                  vertical-align: middle;
+                  text-align: center;
+                }
+                .data.ct-transport .ct-col-item { width: 3%; white-space: nowrap; padding: 2px 0; }
+                .data.ct-transport .ct-col-fecha { width: 9%; white-space: nowrap; font-size: 7px; }
+                .data.ct-transport .ct-col-placa { width: 7%; white-space: nowrap; font-size: 7px; }
+                .data.ct-transport .ct-col-cant { width: 9%; white-space: nowrap; padding: 2px 0; font-size: 7px; }
+                .data.ct-transport .ct-col-empresa {
+                  width: 16%;
+                  font-size: 6.5px;
+                  line-height: 1.15;
+                  white-space: normal;
+                  word-break: break-word;
+                  hyphens: auto;
+                }
+                .data.ct-transport th.ct-col-empresa { font-size: 6px; line-height: 1.1; }
+                .data.ct-transport .ct-col-producto {
+                  width: 56%;
+                  white-space: nowrap;
+                  font-size: 7px;
+                  letter-spacing: -0.03em;
+                  text-align: center;
+                  overflow: hidden;
+                  text-overflow: clip;
+                }
+                .data.ct-transport th.ct-col-item,
+                .data.ct-transport td.ct-col-item { width: 3% !important; max-width: 3% !important; }
+                .data.ct-transport th.ct-col-fecha,
+                .data.ct-transport td.ct-col-fecha { width: 9% !important; max-width: 9% !important; }
+                .data.ct-transport th.ct-col-empresa,
+                .data.ct-transport td.ct-col-empresa { width: 16% !important; max-width: 16% !important; }
+                .data.ct-transport th.ct-col-placa,
+                .data.ct-transport td.ct-col-placa { width: 7% !important; max-width: 7% !important; }
+                .data.ct-transport th.ct-col-producto,
+                .data.ct-transport td.ct-col-producto { width: 56% !important; max-width: 56% !important; }
+                .data.ct-transport th.ct-col-cant,
+                .data.ct-transport td.ct-col-cant { width: 9% !important; max-width: 9% !important; }
                 @media print {
                   body { background: #fff; }
                   .actions { display: none; }
