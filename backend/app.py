@@ -1673,7 +1673,7 @@ async def create_constancia(payload: dict) -> JSONResponse:
 
 
 @app.get("/api/constancias")
-def list_constancias(limit: int = 200) -> JSONResponse:
+def list_constancias(limit: int = 500) -> JSONResponse:
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             """

@@ -4,14 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=mobile1" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=sidebar1" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
-      #adminLayout { display: flex; min-height: 100vh; position: relative; z-index: 1; }
+      #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
       #adminLayout .sidebar {
-        position: relative;
+        position: fixed;
+        top: 0;
+        left: 0;
         width: 52px;
-        min-height: 100vh;
+        height: 100vh;
+        height: 100dvh;
+        min-height: 0;
         flex-shrink: 0;
         display: flex;
         flex-direction: column;
@@ -20,6 +24,7 @@
         box-shadow: 4px 0 20px rgba(12, 35, 64, 0.2);
         transition: width 0.25s ease;
         overflow: visible;
+        z-index: 200;
       }
       #adminLayout .sidebar-toggle {
         position: absolute;
@@ -36,10 +41,26 @@
         z-index: 30;
       }
       #adminLayout.sidebar-open .sidebar { width: 248px; }
-      #adminLayout .sidebar-inner { display: none; flex-direction: column; flex: 1; min-height: 0; }
+      #adminLayout .sidebar-inner {
+        display: none;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+      }
       #adminLayout.sidebar-open .sidebar-inner { display: flex; }
       #adminLayout .sidebar .brand,
       #adminLayout .sidebar .brand-sub { color: #fff; }
+      #adminLayout .main-wrap {
+        margin-left: 52px;
+        width: calc(100% - 52px);
+        min-height: 100vh;
+        transition: margin-left 0.25s ease, width 0.25s ease;
+      }
+      #adminLayout.sidebar-open .main-wrap {
+        margin-left: 248px;
+        width: calc(100% - 248px);
+      }
     </style>
   </head>
   <body class="page-admin auth-locked">
@@ -216,6 +237,11 @@
               </thead>
               <tbody id="clientsList"></tbody>
             </table>
+            <div class="pager">
+              <span class="tag-muted" id="clientsCount">0</span>
+              <button class="btn btn-outline" id="clientsPrevBtn" type="button">Anterior</button>
+              <button class="btn btn-outline" id="clientsNextBtn" type="button">Siguiente</button>
+            </div>
           </div>
         </section>
 
@@ -239,6 +265,11 @@
               </thead>
               <tbody id="transportsList"></tbody>
             </table>
+            <div class="pager">
+              <span class="tag-muted" id="transportsCount">0</span>
+              <button class="btn btn-outline" id="transportsPrevBtn" type="button">Anterior</button>
+              <button class="btn btn-outline" id="transportsNextBtn" type="button">Siguiente</button>
+            </div>
           </div>
         </section>
 
@@ -378,6 +409,11 @@
               </thead>
               <tbody id="constanciasList"></tbody>
             </table>
+            <div class="pager">
+              <span class="tag-muted" id="constanciasCount">0</span>
+              <button class="btn btn-outline" id="constanciasPrevBtn" type="button">Anterior</button>
+              <button class="btn btn-outline" id="constanciasNextBtn" type="button">Siguiente</button>
+            </div>
           </div>
         </section>
 
@@ -463,6 +499,11 @@
                 </thead>
                 <tbody id="trasiegosBody"></tbody>
               </table>
+            </div>
+            <div class="pager">
+              <span class="tag-muted" id="trasiegosPagerCount">0</span>
+              <button class="btn btn-outline" id="trasiegosPrevBtn" type="button">Anterior</button>
+              <button class="btn btn-outline" id="trasiegosNextBtn" type="button">Siguiente</button>
             </div>
           </div>
         </section>
@@ -679,6 +720,9 @@
       const addTrasiegoRowBtn = document.getElementById("addTrasiegoRowBtn");
       const saveTrasiegosBtn = document.getElementById("saveTrasiegosBtn");
       const trasiegosCount = document.getElementById("trasiegosCount");
+      const trasiegosPagerCount = document.getElementById("trasiegosPagerCount");
+      const trasiegosPrevBtn = document.getElementById("trasiegosPrevBtn");
+      const trasiegosNextBtn = document.getElementById("trasiegosNextBtn");
       const trasiegosSaveStatus = document.getElementById("trasiegosSaveStatus");
       let trasiegosSaveTimers = new Map();
       const navLinks = document.querySelectorAll(".sidebar-nav a[data-target]");
@@ -805,6 +849,12 @@
       let selectedProductIds = new Set();
       let currentPage = 1;
       const pageSize = 12;
+      const listPageSize = 15;
+      let clientsPage = 1;
+      let transportsPage = 1;
+      let constanciasPage = 1;
+      let trasiegosPage = 1;
+      let allTrasiegosCache = [];
       let sortKey = "id";
       let sortDir = "desc";
       const constanciaClienteInput = document.getElementById("constanciaClienteInput");
@@ -825,6 +875,9 @@
       const constanciaApplyBtn = document.getElementById("constanciaApplyBtn");
       const selectAllConstancias = document.getElementById("selectAllConstancias");
       const constanciasList = document.getElementById("constanciasList");
+      const constanciasCount = document.getElementById("constanciasCount");
+      const constanciasPrevBtn = document.getElementById("constanciasPrevBtn");
+      const constanciasNextBtn = document.getElementById("constanciasNextBtn");
       const traceSearchInput = document.getElementById("traceSearchInput");
       const traceSearchType = document.getElementById("traceSearchType");
       const traceList = document.getElementById("traceList");
@@ -838,6 +891,9 @@
 
       const addClientBtn = document.getElementById("addClientBtn");
       const clientsList = document.getElementById("clientsList");
+      const clientsCount = document.getElementById("clientsCount");
+      const clientsPrevBtn = document.getElementById("clientsPrevBtn");
+      const clientsNextBtn = document.getElementById("clientsNextBtn");
       const clientModal = document.getElementById("clientModal");
       const closeClientModalBtn = document.getElementById("closeClientModal");
       const clientName = document.getElementById("clientName");
@@ -849,6 +905,9 @@
 
       const addTransportBtn = document.getElementById("addTransportBtn");
       const transportsList = document.getElementById("transportsList");
+      const transportsCount = document.getElementById("transportsCount");
+      const transportsPrevBtn = document.getElementById("transportsPrevBtn");
+      const transportsNextBtn = document.getElementById("transportsNextBtn");
       const transportModal = document.getElementById("transportModal");
       const closeTransportModalBtn = document.getElementById("closeTransportModal");
       const transportPlate = document.getElementById("transportPlate");
@@ -1958,7 +2017,7 @@
             filteredConstancias = filteredConstancias.filter((c) => !idsToDelete.has(c.id));
             selectedConstancias.clear();
             selectAllConstancias.checked = false;
-            renderConstancias(filteredConstancias);
+            paginateConstancias();
           },
           null,
           { title: "Eliminar constancias" }
@@ -1970,7 +2029,7 @@
         } else {
           selectedConstancias.clear();
         }
-        renderConstancias(filteredConstancias);
+        paginateConstancias();
       });
 
       let currentSectionId = null;
@@ -2052,9 +2111,47 @@
       }
 
       function updateTrasiegosCount() {
-        if (!trasiegosCount || !trasiegosBody) return;
-        const count = trasiegosBody.querySelectorAll("tr").length;
-        trasiegosCount.textContent = `${count} fila${count === 1 ? "" : "s"}`;
+        const total = allTrasiegosCache.length || (trasiegosBody ? trasiegosBody.querySelectorAll("tr").length : 0);
+        if (trasiegosCount) {
+          trasiegosCount.textContent = `${total} fila${total === 1 ? "" : "s"}`;
+        }
+      }
+
+      function syncVisibleTrasiegosToCache() {
+        if (!trasiegosBody) return;
+        const start = (trasiegosPage - 1) * listPageSize;
+        [...trasiegosBody.querySelectorAll("tr")].forEach((tr, i) => {
+          const cacheIdx = start + i;
+          if (!allTrasiegosCache[cacheIdx]) return;
+          const payload = readTrasiegoRow(tr);
+          const merged = { ...allTrasiegosCache[cacheIdx], ...payload };
+          if (tr.dataset.id) merged.id = Number(tr.dataset.id);
+          allTrasiegosCache[cacheIdx] = merged;
+        });
+      }
+
+      async function flushVisibleTrasiegosSaves() {
+        trasiegosSaveTimers.forEach((timer) => clearTimeout(timer));
+        trasiegosSaveTimers.clear();
+        if (!trasiegosBody) return;
+        for (const tr of [...trasiegosBody.querySelectorAll("tr")]) {
+          await saveTrasiegoRow(tr, { silent: true });
+        }
+        syncVisibleTrasiegosToCache();
+      }
+
+      async function renderTrasiegosPage() {
+        if (!trasiegosBody) return;
+        const slice = sliceForPage(allTrasiegosCache, trasiegosPage);
+        trasiegosPage = slice.page;
+        trasiegosBody.innerHTML = "";
+        const items = slice.items.length ? slice.items : [{ fecha: formatToday() }];
+        if (!slice.items.length) {
+          allTrasiegosCache = items;
+        }
+        items.forEach((item) => trasiegosBody.appendChild(buildTrasiegoRow(item)));
+        updateTrasiegosCount();
+        updatePagerUi(trasiegosPagerCount, trasiegosPrevBtn, trasiegosNextBtn, slice.label, slice.page, slice.maxPage);
       }
 
       function scheduleTrasiegoSave(tr) {
@@ -2095,6 +2192,7 @@
             const data = await res.json();
             if (res.ok && data.id) {
               tr.dataset.id = String(data.id);
+              syncVisibleTrasiegosToCache();
             }
           }
           if (!res.ok) {
@@ -2170,11 +2268,20 @@
             clearTimeout(trasiegosSaveTimers.get(tr));
             trasiegosSaveTimers.delete(tr);
           }
-          tr.remove();
-          if (!trasiegosBody.querySelector("tr")) {
-            trasiegosBody.appendChild(buildTrasiegoRow({ fecha: formatToday() }));
+          syncVisibleTrasiegosToCache();
+          const cacheIdx = rowId
+            ? allTrasiegosCache.findIndex((x) => String(x.id) === String(rowId))
+            : (trasiegosPage - 1) * listPageSize + [...trasiegosBody.querySelectorAll("tr")].indexOf(tr);
+          if (cacheIdx >= 0) {
+            allTrasiegosCache.splice(cacheIdx, 1);
           }
-          updateTrasiegosCount();
+          if (!allTrasiegosCache.length) {
+            allTrasiegosCache = [{ fecha: formatToday() }];
+          }
+          if (trasiegosPage > Math.ceil(allTrasiegosCache.length / listPageSize)) {
+            trasiegosPage = Math.max(1, Math.ceil(allTrasiegosCache.length / listPageSize));
+          }
+          await renderTrasiegosPage();
         });
       }
 
@@ -2283,31 +2390,31 @@
 
       async function loadTrasiegos() {
         if (!trasiegosBody) return;
-        trasiegosBody.innerHTML = "";
         trasiegosSaveTimers.forEach((timer) => clearTimeout(timer));
         trasiegosSaveTimers.clear();
         try {
           const res = await fetch("/api/trasiegos");
           const data = await res.json();
           const rows = res.ok ? data.trasiegos || [] : [];
-          if (!rows.length) {
-            trasiegosBody.appendChild(buildTrasiegoRow({ fecha: formatToday() }));
-          } else {
-            rows.forEach((item) => trasiegosBody.appendChild(buildTrasiegoRow(item)));
-          }
+          allTrasiegosCache = rows.length ? rows : [{ fecha: formatToday() }];
+          trasiegosPage = 1;
+          await renderTrasiegosPage();
         } catch (err) {
-          trasiegosBody.appendChild(buildTrasiegoRow({ fecha: formatToday() }));
+          allTrasiegosCache = [{ fecha: formatToday() }];
+          trasiegosPage = 1;
+          await renderTrasiegosPage();
         }
-        updateTrasiegosCount();
       }
 
       if (addTrasiegoRowBtn) {
-        addTrasiegoRowBtn.addEventListener("click", () => {
-          const tr = buildTrasiegoRow({ fecha: formatToday() });
-          trasiegosBody.appendChild(tr);
-          updateTrasiegosCount();
-          const fechaInput = tr.querySelector('[data-field="fecha"]');
-          fechaInput?.focus();
+        addTrasiegoRowBtn.addEventListener("click", async () => {
+          await flushVisibleTrasiegosSaves();
+          allTrasiegosCache.push({ fecha: formatToday() });
+          trasiegosPage = Math.max(1, Math.ceil(allTrasiegosCache.length / listPageSize));
+          await renderTrasiegosPage();
+          const rows = [...trasiegosBody.querySelectorAll("tr")];
+          const lastRow = rows[rows.length - 1];
+          lastRow?.querySelector('[data-field="fecha"]')?.focus();
         });
       }
 
@@ -2902,7 +3009,15 @@
             )
           );
         }
-        renderConstancias(filteredConstancias);
+        constanciasPage = 1;
+        paginateConstancias();
+      }
+
+      function paginateConstancias() {
+        const slice = sliceForPage(filteredConstancias, constanciasPage);
+        constanciasPage = slice.page;
+        renderConstancias(slice.items);
+        updatePagerUi(constanciasCount, constanciasPrevBtn, constanciasNextBtn, slice.label, slice.page, slice.maxPage);
       }
 
       function collectTraceRows() {
@@ -3007,6 +3122,26 @@
         applyTraceFilters();
       }
 
+      function sliceForPage(list, page, size = listPageSize) {
+        const total = list.length;
+        const maxPage = Math.max(1, Math.ceil(total / size) || 1);
+        const safePage = Math.min(Math.max(1, page), maxPage);
+        const start = (safePage - 1) * size;
+        return {
+          items: list.slice(start, start + size),
+          total,
+          page: safePage,
+          maxPage,
+          label: total ? `${start + 1}-${Math.min(start + size, total)} de ${total}` : "0",
+        };
+      }
+
+      function updatePagerUi(countEl, prevBtn, nextBtn, label, page, maxPage) {
+        if (countEl) countEl.textContent = label;
+        if (prevBtn) prevBtn.disabled = page <= 1;
+        if (nextBtn) nextBtn.disabled = page >= maxPage;
+      }
+
       function renderClients(list) {
         clientsList.innerHTML = "";
         list.forEach((client) => {
@@ -3038,12 +3173,19 @@
         });
       }
 
+      function paginateClients() {
+        const slice = sliceForPage(allClients, clientsPage);
+        clientsPage = slice.page;
+        renderClients(slice.items);
+        updatePagerUi(clientsCount, clientsPrevBtn, clientsNextBtn, slice.label, slice.page, slice.maxPage);
+      }
+
       async function loadClients() {
         const res = await fetch("/api/clients");
         const data = await res.json();
         if (!res.ok) return;
         allClients = data.clients || [];
-        renderClients(allClients);
+        paginateClients();
         if (clientesList) {
           clientesList.innerHTML = "";
           allClients.forEach((client) => {
@@ -3111,6 +3253,68 @@
 
       loadClients();
 
+      if (clientsPrevBtn) {
+        clientsPrevBtn.addEventListener("click", () => {
+          if (clientsPage > 1) {
+            clientsPage -= 1;
+            paginateClients();
+          }
+        });
+      }
+      if (clientsNextBtn) {
+        clientsNextBtn.addEventListener("click", () => {
+          clientsPage += 1;
+          paginateClients();
+        });
+      }
+
+      if (transportsPrevBtn) {
+        transportsPrevBtn.addEventListener("click", () => {
+          if (transportsPage > 1) {
+            transportsPage -= 1;
+            paginateTransports();
+          }
+        });
+      }
+      if (transportsNextBtn) {
+        transportsNextBtn.addEventListener("click", () => {
+          transportsPage += 1;
+          paginateTransports();
+        });
+      }
+
+      if (constanciasPrevBtn) {
+        constanciasPrevBtn.addEventListener("click", () => {
+          if (constanciasPage > 1) {
+            constanciasPage -= 1;
+            paginateConstancias();
+          }
+        });
+      }
+      if (constanciasNextBtn) {
+        constanciasNextBtn.addEventListener("click", () => {
+          constanciasPage += 1;
+          paginateConstancias();
+        });
+      }
+
+      if (trasiegosPrevBtn) {
+        trasiegosPrevBtn.addEventListener("click", async () => {
+          if (trasiegosPage > 1) {
+            await flushVisibleTrasiegosSaves();
+            trasiegosPage -= 1;
+            await renderTrasiegosPage();
+          }
+        });
+      }
+      if (trasiegosNextBtn) {
+        trasiegosNextBtn.addEventListener("click", async () => {
+          await flushVisibleTrasiegosSaves();
+          trasiegosPage += 1;
+          await renderTrasiegosPage();
+        });
+      }
+
       function renderTransports(list) {
         transportsList.innerHTML = "";
         list.forEach((item) => {
@@ -3140,12 +3344,19 @@
         });
       }
 
+      function paginateTransports() {
+        const slice = sliceForPage(allTransports, transportsPage);
+        transportsPage = slice.page;
+        renderTransports(slice.items);
+        updatePagerUi(transportsCount, transportsPrevBtn, transportsNextBtn, slice.label, slice.page, slice.maxPage);
+      }
+
       async function loadTransports() {
         const res = await fetch("/api/transports");
         const data = await res.json();
         if (!res.ok) return;
         allTransports = data.transports || [];
-        renderTransports(allTransports);
+        paginateTransports();
         if (transportesList) {
           transportesList.innerHTML = "";
           allTransports.forEach((item) => {

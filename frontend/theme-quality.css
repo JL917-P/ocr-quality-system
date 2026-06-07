@@ -369,9 +369,13 @@ body.page-admin {
 }
 
 .sidebar {
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 52px;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -381,6 +385,7 @@ body.page-admin {
   box-shadow: 4px 0 24px rgba(12, 35, 64, 0.22);
   transition: width 0.25s ease;
   overflow: visible;
+  z-index: 200;
 }
 
 .layout.sidebar-open .sidebar {
@@ -398,7 +403,8 @@ body.page-admin {
 
 .layout.sidebar-open .sidebar-inner {
   display: flex;
-  min-height: 100vh;
+  flex: 1;
+  min-height: 0;
 }
 
 .sidebar-brand {
@@ -425,6 +431,15 @@ body.page-admin {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  margin-left: 52px;
+  width: calc(100% - 52px);
+  min-height: 100vh;
+  transition: margin-left 0.25s ease, width 0.25s ease;
+}
+
+.layout.sidebar-open .main-wrap {
+  margin-left: 248px;
+  width: calc(100% - 248px);
 }
 
 .page-header {
@@ -1261,6 +1276,7 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
 
   .main-wrap {
     width: 100%;
+    margin-left: 0;
   }
 
   .page-header {
