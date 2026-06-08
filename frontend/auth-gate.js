@@ -74,6 +74,9 @@
   function unlockApp() {
     document.body.classList.remove("auth-locked");
     hideScreen(welcomeScreen);
+    try {
+      window.dispatchEvent(new CustomEvent("qc-panel-ready"));
+    } catch (e) {}
   }
 
   function runWelcome() {
@@ -140,6 +143,9 @@
     hideScreen(loadingScreen);
     hideScreen(welcomeScreen);
     document.body.classList.remove("auth-locked");
+    try {
+      window.dispatchEvent(new CustomEvent("qc-panel-ready"));
+    } catch (e) {}
   } else {
     document.body.classList.add("auth-locked");
     showScreen(loginScreen);

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=sidebar1" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home7" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -115,7 +115,7 @@
             <a href="#" data-target="section-clients">Clientes</a>
             <a href="#" data-target="section-products">Productos</a>
             <a href="#" data-target="section-transports">Transporte</a>
-            <a class="active" href="#" data-target="section-ocr">OCR</a>
+            <a href="#" data-target="section-ocr">OCR</a>
             <a href="#" data-target="section-constancias">Constancias</a>
             <a href="#" data-target="section-trazabilidad">Trazabilidad</a>
             <a href="#" data-target="section-trasiegos">Trasiegos</a>
@@ -141,10 +141,10 @@
       <div id="sidebarBackdrop" class="sidebar-backdrop hidden" aria-hidden="true"></div>
       <div class="main-wrap">
       <header class="page-header">
-        <div class="page-header-brand">
+        <button type="button" class="page-header-brand" id="pageHeaderHomeBtn" title="Volver al resumen">
           <div class="brand-mark">QC</div>
           <span class="page-header-title">Control de Calidad</span>
-        </div>
+        </button>
         <div class="page-header-actions">
           <button type="button" id="importSheetsBtn" class="btn btn-secondary btn-import-sheets" title="Restaurar SQLite desde Google Sheets">
             Importar desde Google Sheets
@@ -155,9 +155,99 @@
           <span class="topbar-badge">Área Calidad</span>
         </div>
       </header>
-      <main class="content">
+      <main class="content" id="mainContent">
         <div class="container">
-        <section id="section-ocr">
+        <section id="section-home">
+          <div class="home-dashboard">
+            <header class="home-hero">
+              <div>
+                <p class="home-hero-kicker" id="homeGreeting">Bienvenido</p>
+                <h1 class="home-hero-title">Panel de Control de Calidad</h1>
+              </div>
+              <div class="home-hero-date" id="homeTodayDate"></div>
+            </header>
+
+            <div class="home-stats home-stats--five" id="homeStats">
+              <article class="home-stat-card">
+                <span class="home-stat-label">Constancias</span>
+                <strong class="home-stat-value" id="homeStatConstancias">0</strong>
+              </article>
+              <article class="home-stat-card home-stat-card--accent">
+                <span class="home-stat-label">Por confirmar</span>
+                <strong class="home-stat-value" id="homeStatPending">0</strong>
+              </article>
+              <article class="home-stat-card">
+                <span class="home-stat-label">Confirmadas</span>
+                <strong class="home-stat-value" id="homeStatConfirmed">0</strong>
+              </article>
+              <article class="home-stat-card hidden" id="homeDraftsCard">
+                <span class="home-stat-label">Borradores</span>
+                <strong class="home-stat-value" id="homeStatDrafts">0</strong>
+              </article>
+              <article class="home-stat-card">
+                <span class="home-stat-label">Clientes</span>
+                <strong class="home-stat-value" id="homeStatClients">0</strong>
+              </article>
+              <article class="home-stat-card">
+                <span class="home-stat-label">Productos</span>
+                <strong class="home-stat-value" id="homeStatProducts">0</strong>
+              </article>
+            </div>
+
+            <div class="home-grid">
+              <div class="card home-panel home-panel--actions">
+                <div class="home-panel-head">
+                  <h2 class="home-panel-title">Accesos rápidos</h2>
+                </div>
+                <div class="home-actions">
+                  <button type="button" class="home-action-btn" id="homeNewConstanciaBtn">
+                    <span class="home-action-icon">+</span>
+                    <span class="home-action-text">Nueva constancia</span>
+                  </button>
+                  <button type="button" class="home-action-btn" id="homeConstanciasBtn">
+                    <span class="home-action-icon">C</span>
+                    <span class="home-action-text">Ver constancias</span>
+                  </button>
+                  <button type="button" class="home-action-btn" id="homeTraceBtn">
+                    <span class="home-action-icon">T</span>
+                    <span class="home-action-text">Trazabilidad</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="card home-panel home-panel--pending">
+                <div class="home-panel-head">
+                  <h2 class="home-panel-title">Pendientes por confirmar</h2>
+                  <span class="tag-muted" id="homePendingCount">0</span>
+                </div>
+                <div class="home-pending-list" id="homePendingList">
+                  <p class="home-empty">No hay constancias pendientes.</p>
+                </div>
+              </div>
+
+              <div class="card home-panel home-panel--week">
+                <div class="home-panel-head">
+                  <h2 class="home-panel-title">Constancias esta semana</h2>
+                  <span class="tag-muted" id="homeWeekTotal">0 esta semana</span>
+                </div>
+                <div class="home-week-chart" id="homeWeekChart" aria-label="Constancias por día de la semana"></div>
+                <p class="home-chart-hint" id="homeWeekHint"></p>
+              </div>
+
+              <div class="card home-panel home-panel--top">
+                <div class="home-panel-head">
+                  <h2 class="home-panel-title">Top clientes del mes</h2>
+                  <span class="tag-muted" id="homeMonthLabel"></span>
+                </div>
+                <div class="home-top-clients" id="homeTopClients">
+                  <p class="home-empty">Sin constancias este mes.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="section-ocr" class="hidden">
         <div class="card">
           <div class="row">
             <div>
@@ -706,7 +796,24 @@
       const ocrBandejaBtn = document.getElementById("ocrBandejaBtn");
       const ocrBandejaPanel = document.getElementById("ocrBandejaPanel");
       let cachedResults = [];
+      const pageHeaderHomeBtn = document.getElementById("pageHeaderHomeBtn");
+      const homeGreeting = document.getElementById("homeGreeting");
+      const homeTodayDate = document.getElementById("homeTodayDate");
+      const homeStatConstancias = document.getElementById("homeStatConstancias");
+      const homeStatPending = document.getElementById("homeStatPending");
+      const homeStatConfirmed = document.getElementById("homeStatConfirmed");
+      const homeStatDrafts = document.getElementById("homeStatDrafts");
+      const homeStatClients = document.getElementById("homeStatClients");
+      const homeStatProducts = document.getElementById("homeStatProducts");
+      const homePendingCount = document.getElementById("homePendingCount");
+      const homePendingList = document.getElementById("homePendingList");
+      const homeNewConstanciaBtn = document.getElementById("homeNewConstanciaBtn");
+      const homeConstanciasBtn = document.getElementById("homeConstanciasBtn");
+      const homeTraceBtn = document.getElementById("homeTraceBtn");
+      const homeDraftsCard = document.getElementById("homeDraftsCard");
+      const homeStats = document.getElementById("homeStats");
       const sections = {
+        home: document.getElementById("section-home"),
         ocr: document.getElementById("section-ocr"),
         clients: document.getElementById("section-clients"),
         products: document.getElementById("section-products"),
@@ -2032,7 +2139,246 @@
         paginateConstancias();
       });
 
-      let currentSectionId = null;
+      let currentSectionId = "section-home";
+
+      const homeWeekChart = document.getElementById("homeWeekChart");
+      const homeWeekTotal = document.getElementById("homeWeekTotal");
+      const homeWeekHint = document.getElementById("homeWeekHint");
+      const homeMonthLabel = document.getElementById("homeMonthLabel");
+      const homeTopClients = document.getElementById("homeTopClients");
+
+      function updateHomeGreeting() {
+        if (!homeGreeting) return;
+        const hour = new Date().getHours();
+        const saludo = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches";
+        homeGreeting.textContent = saludo;
+        if (homeTodayDate) {
+          homeTodayDate.textContent = new Date().toLocaleDateString("es-PE", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          });
+        }
+      }
+
+      function escapeHomeHtml(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function parseIssueDateToLocalDate(rawDate) {
+        const value = (rawDate || "").trim();
+        if (!value) return null;
+        let match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+        match = value.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{4})$/);
+        if (match) return new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+        match = value.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{2})$/);
+        if (match) {
+          let year = Number(match[3]);
+          year += year < 100 ? 2000 : 0;
+          return new Date(year, Number(match[2]) - 1, Number(match[1]));
+        }
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+      }
+
+      function startOfWeekMonday(date) {
+        const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const weekday = start.getDay();
+        const offset = weekday === 0 ? -6 : 1 - weekday;
+        start.setDate(start.getDate() + offset);
+        return start;
+      }
+
+      function isSameCalendarDay(a, b) {
+        return (
+          a.getFullYear() === b.getFullYear() &&
+          a.getMonth() === b.getMonth() &&
+          a.getDate() === b.getDate()
+        );
+      }
+
+      function collectClientTotals(list, filterFn) {
+        const totals = new Map();
+        (list || []).forEach((item) => {
+          const issueDate = parseIssueDateToLocalDate(item.issue_date);
+          if (!issueDate || !filterFn(issueDate)) return;
+          const clientName = (item.client_name || "Sin cliente").trim() || "Sin cliente";
+          totals.set(clientName, (totals.get(clientName) || 0) + 1);
+        });
+        return [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+      }
+
+      function renderHomeWeekChart(list) {
+        if (!homeWeekChart) return;
+        const today = new Date();
+        const weekStart = startOfWeekMonday(today);
+        const days = Array.from({ length: 7 }, (_, index) => {
+          const day = new Date(weekStart);
+          day.setDate(weekStart.getDate() + index);
+          return day;
+        });
+        const counts = days.map(() => 0);
+        (list || []).forEach((item) => {
+          const issueDate = parseIssueDateToLocalDate(item.issue_date);
+          if (!issueDate) return;
+          days.forEach((day, index) => {
+            if (isSameCalendarDay(issueDate, day)) counts[index] += 1;
+          });
+        });
+        const weekTotal = counts.reduce((sum, count) => sum + count, 0);
+        const maxCount = Math.max(1, ...counts);
+        const dayLabels = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+        if (homeWeekTotal) {
+          homeWeekTotal.textContent = weekTotal === 1 ? "1 esta semana" : `${weekTotal} esta semana`;
+        }
+        if (homeWeekHint) {
+          homeWeekHint.textContent =
+            !list.length
+              ? "Sin datos cargados. Usa «Importar desde Google Sheets» para ver el gráfico."
+              : weekTotal === 0
+                ? "No hay constancias en esta semana calendario."
+                : "";
+        }
+        homeWeekChart.innerHTML = days
+          .map((day, index) => {
+            const count = counts[index];
+            const barHeight = count ? Math.max(12, Math.round((count / maxCount) * 100)) : 6;
+            const isToday = isSameCalendarDay(day, today);
+            return `
+              <div class="home-week-col${isToday ? " home-week-col--today" : ""}">
+                <span class="home-week-count">${count}</span>
+                <div class="home-week-bar-track" aria-hidden="true">
+                  <div class="home-week-bar${count ? "" : " home-week-bar--empty"}" style="height:${barHeight}%"></div>
+                </div>
+                <span class="home-week-day">${dayLabels[index]}</span>
+                <span class="home-week-date">${day.getDate()}</span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function renderHomeTopClients(list) {
+        if (!homeTopClients) return;
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        const monthLabel = now.toLocaleDateString("es-PE", { month: "long", year: "numeric" });
+        let ranked = collectClientTotals(
+          list,
+          (issueDate) => issueDate.getFullYear() === year && issueDate.getMonth() === month
+        );
+        let periodLabel = monthLabel;
+        if (!ranked.length) {
+          const since = new Date(now);
+          since.setDate(since.getDate() - 30);
+          ranked = collectClientTotals(list, (issueDate) => issueDate >= since);
+          periodLabel = ranked.length ? "últimos 30 días" : monthLabel;
+        }
+        if (homeMonthLabel) homeMonthLabel.textContent = periodLabel;
+        if (!ranked.length) {
+          homeTopClients.innerHTML =
+            !list.length
+              ? '<p class="home-empty">Sin datos cargados.<br>Importa desde Google Sheets para ver el ranking.</p>'
+              : '<p class="home-empty">Sin constancias este mes ni en los últimos 30 días.</p>';
+          return;
+        }
+        const topCount = ranked[0][1];
+        homeTopClients.innerHTML = ranked
+          .map(([name, count], index) => {
+            const width = Math.max(8, Math.round((count / topCount) * 100));
+            return `
+              <div class="home-top-row">
+                <span class="home-top-rank">${index + 1}</span>
+                <div class="home-top-body">
+                  <div class="home-top-line">
+                    <span class="home-top-name">${escapeHomeHtml(name)}</span>
+                    <span class="home-top-count">${count}</span>
+                  </div>
+                  <div class="home-top-bar-track" aria-hidden="true">
+                    <div class="home-top-bar" style="width:${width}%"></div>
+                  </div>
+                </div>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function renderHomeDashboard() {
+        updateHomeGreeting();
+        const list = allConstancias || [];
+        const pending = list.filter((c) => c.status === "por_confirmar");
+        const confirmed = list.filter((c) => c.status === "confirmada").length;
+        const drafts = list.filter((c) => c.status === "borrador").length;
+        if (homeStatConstancias) homeStatConstancias.textContent = String(list.length);
+        if (homeStatPending) homeStatPending.textContent = String(pending.length);
+        if (homeStatConfirmed) homeStatConfirmed.textContent = String(confirmed);
+        if (homeStatDrafts) homeStatDrafts.textContent = String(drafts);
+        if (homeDraftsCard) homeDraftsCard.classList.toggle("hidden", drafts === 0);
+        if (homeStats) {
+          homeStats.classList.toggle("home-stats--five", drafts === 0);
+          homeStats.classList.toggle("home-stats--six", drafts > 0);
+        }
+        if (homeStatClients) homeStatClients.textContent = String((allClients || []).length);
+        if (homeStatProducts) homeStatProducts.textContent = String((allProducts || []).length);
+        if (homePendingCount) homePendingCount.textContent = String(pending.length);
+        if (homePendingList) {
+          if (!pending.length) {
+            homePendingList.innerHTML = '<p class="home-empty">No hay constancias pendientes.</p>';
+          } else {
+        homePendingList.innerHTML = "";
+        pending.slice(0, 8).forEach((item) => {
+          const el = document.createElement("div");
+          el.className = "home-pending-item";
+          const label = item.number || `#${item.id}`;
+          const meta = [item.issue_date, item.client_name].filter(Boolean).join(" · ");
+          el.innerHTML = `
+            <div class="home-pending-meta">
+              <strong>${label}</strong>
+              <span>${meta || "Sin detalle"}</span>
+            </div>
+            <div class="home-pending-actions">
+              <button type="button" class="btn btn-success btn-mini home-confirm-btn">Confirmar</button>
+              <button type="button" class="btn btn-outline btn-mini home-edit-btn">Editar</button>
+              <button type="button" class="btn btn-outline btn-mini home-view-btn">Ver</button>
+            </div>
+          `;
+          el.querySelector(".home-confirm-btn").addEventListener("click", () => {
+            showConfirmModal(
+              "¿Desea confirmar la constancia?",
+              async () => {
+                await fetch(`/api/constancias/${item.id}/confirm`, { method: "POST" });
+                await loadConstancias();
+                showSuccessModal("La constancia quedó confirmada.", { title: "Constancia confirmada" });
+              },
+              null,
+              { title: "Confirmar constancia" }
+            );
+          });
+          el.querySelector(".home-edit-btn").addEventListener("click", () => openConstanciaInOcr(item.id));
+          el.querySelector(".home-view-btn").addEventListener("click", () => {
+            window.open(`/constancia-view?id=${item.id}`, "_blank");
+          });
+          homePendingList.appendChild(el);
+        });
+        if (pending.length > 8) {
+          const more = document.createElement("p");
+          more.className = "home-empty";
+          more.textContent = `+${pending.length - 8} más en Constancias`;
+          homePendingList.appendChild(more);
+        }
+          }
+        }
+        renderHomeWeekChart(list);
+        renderHomeTopClients(list);
+      }
 
       function hideAllSections() {
         document.querySelectorAll("section[id^='section-']").forEach((section) => {
@@ -2041,10 +2387,22 @@
         navLinks.forEach((link) => link.classList.remove("active"));
       }
 
+      function showHomeDashboard() {
+        hideAllSections();
+        const section = document.getElementById("section-home");
+        if (section) section.classList.remove("hidden");
+        currentSectionId = "section-home";
+        renderHomeDashboard();
+        closeSidebarIfMobile();
+      }
+
       function showSection(targetId, toggle = false) {
+        if (targetId === "section-home") {
+          showHomeDashboard();
+          return;
+        }
         if (toggle && currentSectionId === targetId) {
-          hideAllSections();
-          currentSectionId = null;
+          showHomeDashboard();
           return;
         }
         hideAllSections();
@@ -2073,6 +2431,27 @@
           showSection(link.dataset.target, true);
         });
       }
+
+      if (homeNewConstanciaBtn) {
+        homeNewConstanciaBtn.addEventListener("click", () => {
+          currentConstanciaId = null;
+          resetConstanciaForm();
+          showSection("section-ocr");
+        });
+      }
+      if (homeConstanciasBtn) {
+        homeConstanciasBtn.addEventListener("click", () => showSection("section-constancias"));
+      }
+      if (homeTraceBtn) {
+        homeTraceBtn.addEventListener("click", () => showSection("section-trazabilidad"));
+      }
+      if (pageHeaderHomeBtn) {
+        pageHeaderHomeBtn.addEventListener("click", () => showHomeDashboard());
+      }
+
+      window.addEventListener("qc-panel-ready", () => {
+        showHomeDashboard();
+      });
 
       if (adminLayout && sidebarToggle) {
         sidebarToggle.addEventListener("click", () => {
@@ -2432,8 +2811,6 @@
         });
       }
 
-      hideAllSections();
-
       function getProductPayload() {
         return {
           name: prodName.value.trim(),
@@ -2664,6 +3041,7 @@
         }
         allProducts = data.products || [];
         applyFilters();
+        renderHomeDashboard();
       }
 
       saveProductBtn.addEventListener("click", () => saveProduct(true));
@@ -2889,6 +3267,29 @@
         return "por_confirmar";
       }
 
+      async function openConstanciaInOcr(id) {
+        const res = await fetch(`/api/constancias/${id}`);
+        const data = await res.json();
+        if (!res.ok) return;
+        currentConstanciaId = data.id;
+        currentConstanciaStatus = data.status || "confirmada";
+        constanciaNumero.value = data.number || "";
+        constanciaFecha.value = toInputDateValue(data.issue_date);
+        constanciaClienteInput.value = data.client_name || "";
+        constanciaTransporteInput.value = data.transport_plate || "";
+        constanciaFumigacion.checked = data.fumigacion !== 0 && data.fumigacion !== false;
+        constanciaCalidad.checked = data.calidad !== 0 && data.calidad !== false;
+        fillConstanciaItems(data.items || []);
+        updateRestoreConstanciaButton(data.items || []);
+        if (data.repaired_from_duplicate) {
+          showSuccessModal(
+            "Se recuperaron los productos de otra copia de esta constancia (mismo número y cliente).",
+            { title: "Productos recuperados" }
+          );
+        }
+        showSection("section-ocr");
+      }
+
       function renderConstancias(list) {
         constanciasList.innerHTML = "";
         list.forEach((item) => {
@@ -2921,28 +3322,7 @@
             else selectedConstancias.delete(item.id);
           });
           const editBtn = row.querySelector(".edit-btn");
-          editBtn.addEventListener("click", async () => {
-            const res = await fetch(`/api/constancias/${item.id}`);
-            const data = await res.json();
-            if (!res.ok) return;
-            currentConstanciaId = data.id;
-            currentConstanciaStatus = data.status || "confirmada";
-            constanciaNumero.value = data.number || "";
-            constanciaFecha.value = toInputDateValue(data.issue_date);
-            constanciaClienteInput.value = data.client_name || "";
-            constanciaTransporteInput.value = data.transport_plate || "";
-            constanciaFumigacion.checked = data.fumigacion !== 0 && data.fumigacion !== false;
-            constanciaCalidad.checked = data.calidad !== 0 && data.calidad !== false;
-            fillConstanciaItems(data.items || []);
-            updateRestoreConstanciaButton(data.items || []);
-            if (data.repaired_from_duplicate) {
-              showSuccessModal(
-                "Se recuperaron los productos de otra copia de esta constancia (mismo número y cliente).",
-                { title: "Productos recuperados" }
-              );
-            }
-            showSection("section-ocr");
-          });
+          editBtn.addEventListener("click", () => openConstanciaInOcr(item.id));
           const confirmBtn = row.querySelector(".confirm-btn");
           if (confirmBtn) {
             confirmBtn.addEventListener("click", async () => {
@@ -3120,6 +3500,7 @@
         allConstancias = sortConstanciasByIssueDate(data.constancias || []);
         applyConstanciaFilters();
         applyTraceFilters();
+        renderHomeDashboard();
       }
 
       function sliceForPage(list, page, size = listPageSize) {
@@ -3195,6 +3576,7 @@
             clientesList.appendChild(opt);
           });
         }
+        renderHomeDashboard();
       }
 
 
@@ -3423,6 +3805,7 @@
 
       loadTransports();
       loadConstancias();
+      showHomeDashboard();
 
       function openModal(item) {
         const backdrop = document.createElement("div");
