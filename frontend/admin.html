@@ -773,6 +773,7 @@
       const adminLayout = document.getElementById("adminLayout");
       const sidebarToggle = document.getElementById("sidebarToggle");
       const sidebarBackdrop = document.getElementById("sidebarBackdrop");
+      const sidebarEl = document.getElementById("sidebar");
 
       function setSidebarOpen(open) {
         if (!adminLayout) return;
@@ -788,10 +789,17 @@
         }
       }
 
-      function closeSidebarIfMobile() {
-        if (window.matchMedia("(max-width: 768px)").matches) {
-          setSidebarOpen(false);
-        }
+      function isClickInsideSidebar(event) {
+        if (!event || !event.target) return false;
+        const target = event.target;
+        if (sidebarEl && sidebarEl.contains(target)) return true;
+        return false;
+      }
+
+      function closeSidebarOnOutsideClick(event) {
+        if (!adminLayout || !adminLayout.classList.contains("sidebar-open")) return;
+        if (isClickInsideSidebar(event)) return;
+        setSidebarOpen(false);
       }
       const ocrBandejaBtn = document.getElementById("ocrBandejaBtn");
       const ocrBandejaPanel = document.getElementById("ocrBandejaPanel");
@@ -2393,7 +2401,6 @@
         if (section) section.classList.remove("hidden");
         currentSectionId = "section-home";
         renderHomeDashboard();
-        closeSidebarIfMobile();
       }
 
       function showSection(targetId, toggle = false) {
@@ -2419,7 +2426,6 @@
           loadTrasiegos();
         }
         suppressOcrReset = false;
-        closeSidebarIfMobile();
       }
 
       const navContainer = document.querySelector(".sidebar-nav");
@@ -2454,13 +2460,15 @@
       });
 
       if (adminLayout && sidebarToggle) {
-        sidebarToggle.addEventListener("click", () => {
+        sidebarToggle.addEventListener("click", (event) => {
+          event.stopPropagation();
           setSidebarOpen(!adminLayout.classList.contains("sidebar-open"));
         });
       }
       if (sidebarBackdrop) {
         sidebarBackdrop.addEventListener("click", () => setSidebarOpen(false));
       }
+      document.addEventListener("click", closeSidebarOnOutsideClick);
 
       function isTrasiegoRowMeaningful(payload) {
         return !!(
