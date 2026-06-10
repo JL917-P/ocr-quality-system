@@ -499,13 +499,18 @@ function parseConstanciaDate(dateText) {
           `)
           .join("");
         const itemQuality = (item, snapKey, legacyKey) => {
+          const key = (itemSnapshotField(item, "product_name_snapshot", "product") || "").trim().toLowerCase();
+          const prod = (catalog || []).find((p) => (p.name || "").trim().toLowerCase() === key);
+          if (prod && legacyKey) {
+            const catalogVal = prod[legacyKey];
+            if (catalogVal !== undefined && catalogVal !== null && catalogVal !== "") {
+              return catalogVal;
+            }
+          }
           if (item[snapKey] !== undefined && item[snapKey] !== null && item[snapKey] !== "") return item[snapKey];
           if (legacyKey && item[legacyKey] !== undefined && item[legacyKey] !== null && item[legacyKey] !== "") {
             return item[legacyKey];
           }
-          const key = (itemSnapshotField(item, "product_name_snapshot", "product") || "").trim().toLowerCase();
-          const prod = (catalog || []).find((p) => (p.name || "").trim().toLowerCase() === key);
-          if (prod && legacyKey && prod[legacyKey] !== undefined) return prod[legacyKey];
           return "";
         };
         const qualityRows = items

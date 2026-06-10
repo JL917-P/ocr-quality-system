@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home10" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home11" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -1154,6 +1154,20 @@
         blurTimer: null,
       };
 
+      function isGranChalanProduct(name) {
+        const normalized = normalizeSearchText(name);
+        return normalized.includes("gran chalan");
+      }
+
+      function sortProductMatches(matches) {
+        return [...matches].sort((a, b) => {
+          const aPriority = isGranChalanProduct(a) ? 1 : 0;
+          const bPriority = isGranChalanProduct(b) ? 1 : 0;
+          if (bPriority !== aPriority) return bPriority - aPriority;
+          return a.localeCompare(b, "es", { sensitivity: "base" });
+        });
+      }
+
       function getProductMatches(query) {
         if (!allProducts.length) return [];
         const rawQuery = (query || "").toString().trim();
@@ -1178,9 +1192,8 @@
             ok = normalizedName.includes(normalizedQuery);
           }
           if (ok) matches.push(name);
-          if (matches.length >= 30) break;
         }
-        return matches;
+        return sortProductMatches(matches).slice(0, 30);
       }
 
       function ensureProductAutocompleteDropdown() {
@@ -1840,6 +1853,71 @@
         );
       }
 
+      function isKnownClient(value) {
+        const target = (value || "").trim().toLowerCase();
+        if (!target) return false;
+        return allClients.some((client) => (client.name || "").trim().toLowerCase() === target);
+      }
+
+      function isKnownTransport(value) {
+        const target = (value || "").trim().toUpperCase();
+        if (!target) return false;
+        return allTransports.some((item) => (item.plate || "").trim().toUpperCase() === target);
+      }
+
+      function promptNewClient(clientNameValue, inputEl) {
+        const trimmed = (clientNameValue || "").trim();
+        if (!trimmed) return;
+        const normalized = trimmed.toLowerCase();
+        if (inputEl?.dataset.promptedValue === normalized) return;
+        inputEl.dataset.promptedValue = normalized;
+        showConfirmModal(
+          `Este cliente es nuevo: "${trimmed}". ¿Deseas guardarlo en el catálogo?`,
+          () => {
+            currentClientId = null;
+            clientName.value = trimmed;
+            clientRuc.value = "";
+            openClientModal();
+            clientName.focus();
+          },
+          null,
+          { title: "Cliente nuevo" }
+        );
+      }
+
+      function promptNewTransport(plateValue, inputEl) {
+        const trimmed = (plateValue || "").trim();
+        if (!trimmed) return;
+        const normalized = trimmed.toUpperCase();
+        if (inputEl?.dataset.promptedValue === normalized) return;
+        inputEl.dataset.promptedValue = normalized;
+        showConfirmModal(
+          `Esta matrícula es nueva: "${trimmed}". ¿Deseas guardarla en el catálogo?`,
+          () => {
+            currentTransportId = null;
+            transportPlate.value = trimmed;
+            openTransportModal();
+            transportPlate.focus();
+          },
+          null,
+          { title: "Matrícula nueva" }
+        );
+      }
+
+      function checkUnknownCliente() {
+        const value = constanciaClienteInput?.value || "";
+        if (value.trim() && !isKnownClient(value)) {
+          promptNewClient(value, constanciaClienteInput);
+        }
+      }
+
+      function checkUnknownTransporte() {
+        const value = constanciaTransporteInput?.value || "";
+        if (value.trim() && !isKnownTransport(value)) {
+          promptNewTransport(value, constanciaTransporteInput);
+        }
+      }
+
       function applyProductDetailsForRow(tr) {
         if (!allProducts.length) return;
         const inputs = tr.querySelectorAll("input");
@@ -2013,6 +2091,15 @@
           promptNewProduct(value, input);
         }
       });
+
+      if (constanciaClienteInput) {
+        constanciaClienteInput.addEventListener("change", checkUnknownCliente);
+        constanciaClienteInput.addEventListener("blur", checkUnknownCliente);
+      }
+      if (constanciaTransporteInput) {
+        constanciaTransporteInput.addEventListener("change", checkUnknownTransporte);
+        constanciaTransporteInput.addEventListener("blur", checkUnknownTransporte);
+      }
 
       async function loadResults() {
         try {
@@ -4554,13 +4641,18 @@
           `)
           .join("");
         const itemQuality = (item, snapKey, legacyKey) => {
+          const key = (itemSnapshotField(item, "product_name_snapshot", "product") || "").trim().toLowerCase();
+          const prod = (catalog || []).find((p) => (p.name || "").trim().toLowerCase() === key);
+          if (prod && legacyKey) {
+            const catalogVal = prod[legacyKey];
+            if (catalogVal !== undefined && catalogVal !== null && catalogVal !== "") {
+              return catalogVal;
+            }
+          }
           if (item[snapKey] !== undefined && item[snapKey] !== null && item[snapKey] !== "") return item[snapKey];
           if (legacyKey && item[legacyKey] !== undefined && item[legacyKey] !== null && item[legacyKey] !== "") {
             return item[legacyKey];
           }
-          const key = (itemSnapshotField(item, "product_name_snapshot", "product") || "").trim().toLowerCase();
-          const prod = (catalog || []).find((p) => (p.name || "").trim().toLowerCase() === key);
-          if (prod && legacyKey && prod[legacyKey] !== undefined) return prod[legacyKey];
           return "";
         };
         const qualityRows = items

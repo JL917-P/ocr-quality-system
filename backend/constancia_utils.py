@@ -76,7 +76,14 @@ def item_display_expiration(item: dict[str, Any]) -> str:
     return _str(item_field(item, "expiration_date_snapshot", "expiration_text"))
 
 
-def item_quality_value(item: dict[str, Any], catalog_key: str, snapshot_key: str) -> Any:
+def item_quality_value(
+    item: dict[str, Any],
+    catalog_key: str,
+    snapshot_key: str,
+    catalog: Optional[dict[str, Any]] = None,
+) -> Any:
+    if catalog and catalog.get(catalog_key) is not None:
+        return catalog[catalog_key]
     if snapshot_key in item and item[snapshot_key] not in (None, ""):
         return item[snapshot_key]
     legacy = {
@@ -128,15 +135,12 @@ def build_item_snapshot(
     catalog: Optional[dict[str, Any]],
     previous: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    """Construye snapshot completo; no sobrescribe calidad si el producto no cambió."""
+    """Construye snapshot completo; la calidad siempre se toma del catálogo cuando existe."""
     product_name = _str(item.get("product") or item.get("product_name_snapshot"))
     lot = _str(item.get("lot") or item.get("lote_snapshot"))
     production = _str(item.get("production_text") or item.get("production_date_snapshot"))
     expiration = _str(item.get("expiration_text") or item.get("expiration_date_snapshot"))
     quantity = item.get("quantity")
-
-    prev_name = _str((previous or {}).get("product_name_snapshot") or (previous or {}).get("product"))
-    product_changed = bool(previous) and product_name.lower() != prev_name.lower()
 
     snap: dict[str, Any] = {
         "product_id": item.get("product_id") or (catalog or {}).get("id") or (previous or {}).get("product_id"),
@@ -153,12 +157,12 @@ def build_item_snapshot(
         snap["quantity"] = quantity
 
     for cat_key, snap_key in QUALITY_SNAPSHOT_MAP:
-        if previous and not product_changed and snap_key in previous:
-            snap[snap_key] = previous[snap_key]
-        elif catalog and catalog.get(cat_key) is not None:
+        if catalog and catalog.get(cat_key) is not None:
             snap[snap_key] = catalog[cat_key]
-        elif snap_key in (item or {}):
+        elif snap_key in item and item[snap_key] not in (None, ""):
             snap[snap_key] = item[snap_key]
+        elif previous and snap_key in previous:
+            snap[snap_key] = previous[snap_key]
 
     return snap
 

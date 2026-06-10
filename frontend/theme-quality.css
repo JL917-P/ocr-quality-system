@@ -1646,9 +1646,11 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   position: fixed;
   z-index: 300;
   background: #ffffff;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #64748b;
   border-radius: 8px;
-  box-shadow: 0 12px 28px rgba(12, 35, 64, 0.18);
+  box-shadow:
+    0 10px 32px rgba(12, 35, 64, 0.42),
+    0 4px 12px rgba(12, 35, 64, 0.28);
   max-height: 240px;
   overflow-y: auto;
 }
@@ -1671,8 +1673,8 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
 
 .product-autocomplete-item:hover,
 .product-autocomplete-item.active {
-  background: #e0f2fe;
-  color: #0c2340;
+  background: #0c2340;
+  color: #f8fafc;
 }
 
 .trasiegos-sheet-card {
