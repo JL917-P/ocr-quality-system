@@ -699,6 +699,43 @@ body.page-admin {
   transform: rotate(180deg);
 }
 
+.sidebar-home-btn {
+  position: absolute;
+  top: calc(50% - 52px);
+  right: 0;
+  left: auto;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  max-width: 40px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  transform: translate(50%, -50%);
+  transition: background 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease;
+}
+
+.sidebar-home-btn:hover {
+  background: rgba(255, 255, 255, 0.26);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+.sidebar-home-icon {
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+}
+
 .caret {
   display: inline-block;
   margin-left: 4px;
@@ -738,6 +775,30 @@ body.page-admin {
   flex-direction: column;
   gap: clamp(10px, 1.4vh, 14px);
 }
+
+.home-stat-card,
+.home-grid .home-panel {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.home-dashboard--ready .home-stat-card,
+.home-dashboard--ready .home-grid .home-panel {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+.home-dashboard--ready .home-stat-card:nth-child(1) { transition-delay: 0.03s; }
+.home-dashboard--ready .home-stat-card:nth-child(2) { transition-delay: 0.06s; }
+.home-dashboard--ready .home-stat-card:nth-child(3) { transition-delay: 0.09s; }
+.home-dashboard--ready .home-stat-card:nth-child(4) { transition-delay: 0.12s; }
+.home-dashboard--ready .home-stat-card:nth-child(5) { transition-delay: 0.15s; }
+.home-dashboard--ready .home-stat-card:nth-child(6) { transition-delay: 0.18s; }
+.home-dashboard--ready .home-grid .home-panel:nth-child(1) { transition-delay: 0.08s; }
+.home-dashboard--ready .home-grid .home-panel:nth-child(2) { transition-delay: 0.12s; }
+.home-dashboard--ready .home-grid .home-panel:nth-child(3) { transition-delay: 0.16s; }
+.home-dashboard--ready .home-grid .home-panel:nth-child(4) { transition-delay: 0.2s; }
 
 .home-hero {
   display: flex;
@@ -962,6 +1023,28 @@ body.page-admin {
   min-width: 0;
 }
 
+.home-week-col--btn {
+  margin: 0;
+  padding: 4px 2px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--qc-radius);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.home-week-col--btn:hover {
+  background: rgba(14, 116, 144, 0.08);
+  transform: translateY(-2px);
+}
+
+.home-week-col--btn:focus-visible {
+  outline: 2px solid var(--qc-teal);
+  outline-offset: 2px;
+}
+
 .home-week-col--today .home-week-day,
 .home-week-col--today .home-week-date {
   color: var(--qc-teal);
@@ -991,10 +1074,25 @@ body.page-admin {
 
 .home-week-bar {
   width: 100%;
+  height: var(--bar-h, 6%);
   border-radius: 8px 8px 2px 2px;
   background: linear-gradient(180deg, var(--qc-teal) 0%, var(--qc-navy) 100%);
-  transition: height 0.25s ease;
+  transform: scaleY(0);
+  transform-origin: bottom center;
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+.home-dashboard--ready .home-week-bar {
+  transform: scaleY(1);
+}
+
+.home-dashboard--ready .home-week-col:nth-child(1) .home-week-bar { transition-delay: 0.1s; }
+.home-dashboard--ready .home-week-col:nth-child(2) .home-week-bar { transition-delay: 0.15s; }
+.home-dashboard--ready .home-week-col:nth-child(3) .home-week-bar { transition-delay: 0.2s; }
+.home-dashboard--ready .home-week-col:nth-child(4) .home-week-bar { transition-delay: 0.25s; }
+.home-dashboard--ready .home-week-col:nth-child(5) .home-week-bar { transition-delay: 0.3s; }
+.home-dashboard--ready .home-week-col:nth-child(6) .home-week-bar { transition-delay: 0.35s; }
+.home-dashboard--ready .home-week-col:nth-child(7) .home-week-bar { transition-delay: 0.4s; }
 
 .home-week-bar--empty {
   background: #cbd5e1;
@@ -1039,6 +1137,30 @@ body.page-admin {
   grid-template-columns: 24px 1fr;
   gap: 8px;
   align-items: center;
+}
+
+.home-top-row--btn {
+  width: 100%;
+  margin: 0;
+  padding: 6px 4px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--qc-radius);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.home-top-row--btn:hover {
+  background: rgba(14, 116, 144, 0.08);
+  transform: translateX(3px);
+}
+
+.home-top-row--btn:focus-visible {
+  outline: 2px solid var(--qc-teal);
+  outline-offset: 2px;
 }
 
 .home-top-rank {
@@ -1099,9 +1221,42 @@ body.page-admin {
 
 .home-top-bar {
   height: 100%;
+  width: var(--bar-w, 0%);
   border-radius: 999px;
   background: linear-gradient(90deg, var(--qc-teal) 0%, var(--qc-navy) 100%);
-  transition: width 0.25s ease;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.home-dashboard--ready .home-top-bar {
+  transform: scaleX(1);
+}
+
+.home-dashboard--ready .home-top-row--btn:nth-child(1) .home-top-bar { transition-delay: 0.12s; }
+.home-dashboard--ready .home-top-row--btn:nth-child(2) .home-top-bar { transition-delay: 0.18s; }
+.home-dashboard--ready .home-top-row--btn:nth-child(3) .home-top-bar { transition-delay: 0.24s; }
+.home-dashboard--ready .home-top-row--btn:nth-child(4) .home-top-bar { transition-delay: 0.3s; }
+.home-dashboard--ready .home-top-row--btn:nth-child(5) .home-top-bar { transition-delay: 0.36s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .home-stat-card,
+  .home-grid .home-panel {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .home-week-bar,
+  .home-top-bar {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .home-week-col--btn:hover,
+  .home-top-row--btn:hover {
+    transform: none;
+  }
 }
 
 .title {
@@ -1684,6 +1839,23 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   .layout.sidebar-open .sidebar-toggle {
     position: absolute;
     top: 50%;
+    left: auto;
+    right: 0;
+    transform: translate(50%, -50%);
+  }
+
+  .layout .sidebar-home-btn {
+    position: fixed;
+    top: max(58px, env(safe-area-inset-top, 0px) + 56px);
+    left: max(10px, env(safe-area-inset-left, 0px) + 8px);
+    transform: none;
+    z-index: 300;
+    box-shadow: 0 4px 16px rgba(12, 35, 64, 0.35);
+  }
+
+  .layout.sidebar-open .sidebar-home-btn {
+    position: absolute;
+    top: calc(50% - 52px);
     left: auto;
     right: 0;
     transform: translate(50%, -50%);

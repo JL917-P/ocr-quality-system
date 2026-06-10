@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home8" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home10" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -129,6 +129,17 @@
         </div>
         <button
           type="button"
+          id="sidebarHomeBtn"
+          class="sidebar-home-btn hidden"
+          aria-label="Volver al inicio"
+          title="Volver al inicio"
+        >
+          <svg class="sidebar-home-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M12 3.2 3 10v10h7v-6h4v6h7V10L12 3.2z" />
+          </svg>
+        </button>
+        <button
+          type="button"
           id="sidebarToggle"
           class="sidebar-toggle"
           aria-label="Mostrar menú"
@@ -158,7 +169,7 @@
       <main class="content" id="mainContent">
         <div class="container">
         <section id="section-home">
-          <div class="home-dashboard">
+          <div class="home-dashboard" id="homeDashboard">
             <header class="home-hero">
               <div>
                 <p class="home-hero-kicker" id="homeGreeting">Bienvenido</p>
@@ -772,6 +783,7 @@
       const addRowBtn = document.getElementById("addRowBtn");
       const adminLayout = document.getElementById("adminLayout");
       const sidebarToggle = document.getElementById("sidebarToggle");
+      const sidebarHomeBtn = document.getElementById("sidebarHomeBtn");
       const sidebarBackdrop = document.getElementById("sidebarBackdrop");
       const sidebarEl = document.getElementById("sidebar");
 
@@ -2222,6 +2234,98 @@
         return [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
       }
 
+      function formatDateIso(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, "0");
+        const d = String(date.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      }
+
+      function escapeHomeAttr(value) {
+        return escapeHomeHtml(value).replace(/"/g, "&quot;");
+      }
+
+      function prefersReducedMotion() {
+        return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      }
+
+      function animateHomeStat(el, target) {
+        if (!el) return;
+        const to = Number(target) || 0;
+        if (prefersReducedMotion()) {
+          el.textContent = String(to);
+          return;
+        }
+        const from = Number(el.textContent) || 0;
+        if (from === to) {
+          el.textContent = String(to);
+          return;
+        }
+        const duration = 550;
+        const start = performance.now();
+        function frame(now) {
+          const t = Math.min(1, (now - start) / duration);
+          const eased = 1 - Math.pow(1 - t, 3);
+          el.textContent = String(Math.round(from + (to - from) * eased));
+          if (t < 1) requestAnimationFrame(frame);
+          else el.textContent = String(to);
+        }
+        requestAnimationFrame(frame);
+      }
+
+      function triggerHomeAnimations() {
+        const dash = document.getElementById("homeDashboard");
+        if (!dash) return;
+        dash.classList.remove("home-dashboard--ready");
+        void dash.offsetWidth;
+        requestAnimationFrame(() => dash.classList.add("home-dashboard--ready"));
+      }
+
+      function navigateToConstanciasFilter(value, options = {}) {
+        if (options.dayDate instanceof Date) {
+          if (constanciaSearch) {
+            constanciaSearch.value = options.dayDate.toLocaleDateString("es-PE");
+          }
+          filteredConstancias = sortConstanciasByIssueDate(
+            (allConstancias || []).filter((c) => {
+              const d = parseIssueDateToLocalDate(c.issue_date);
+              return d && isSameCalendarDay(d, options.dayDate);
+            })
+          );
+          constanciasPage = 1;
+          paginateConstancias();
+          showSection("section-constancias");
+          return;
+        }
+        if (constanciaSearch) constanciaSearch.value = value;
+        applyConstanciaFilters();
+        showSection("section-constancias");
+      }
+
+      function bindHomeChartInteractions() {
+        if (homeWeekChart) {
+          homeWeekChart.querySelectorAll("[data-filter-date]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const iso = btn.dataset.filterDate || "";
+              const parts = iso.split("-");
+              if (parts.length === 3) {
+                const dayDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                navigateToConstanciasFilter(iso, { dayDate });
+              } else {
+                navigateToConstanciasFilter(iso);
+              }
+            });
+          });
+        }
+        if (homeTopClients) {
+          homeTopClients.querySelectorAll("[data-filter-client]").forEach((row) => {
+            row.addEventListener("click", () => {
+              navigateToConstanciasFilter(row.dataset.filterClient || "");
+            });
+          });
+        }
+      }
+
       function renderHomeWeekChart(list) {
         if (!homeWeekChart) return;
         const today = new Date();
@@ -2258,15 +2362,20 @@
             const count = counts[index];
             const barHeight = count ? Math.max(12, Math.round((count / maxCount) * 100)) : 6;
             const isToday = isSameCalendarDay(day, today);
+            const isoDate = formatDateIso(day);
+            const tip =
+              count === 1
+                ? `${dayLabels[index]} ${day.getDate()}: 1 constancia · Clic para ver`
+                : `${dayLabels[index]} ${day.getDate()}: ${count} constancias · Clic para ver`;
             return `
-              <div class="home-week-col${isToday ? " home-week-col--today" : ""}">
+              <button type="button" class="home-week-col home-week-col--btn${isToday ? " home-week-col--today" : ""}" data-filter-date="${isoDate}" title="${tip}" aria-label="${tip}">
                 <span class="home-week-count">${count}</span>
                 <div class="home-week-bar-track" aria-hidden="true">
-                  <div class="home-week-bar${count ? "" : " home-week-bar--empty"}" style="height:${barHeight}%"></div>
+                  <div class="home-week-bar${count ? "" : " home-week-bar--empty"}" style="--bar-h:${barHeight}%"></div>
                 </div>
                 <span class="home-week-day">${dayLabels[index]}</span>
                 <span class="home-week-date">${day.getDate()}</span>
-              </div>
+              </button>
             `;
           })
           .join("");
@@ -2301,8 +2410,9 @@
         homeTopClients.innerHTML = ranked
           .map(([name, count], index) => {
             const width = Math.max(8, Math.round((count / topCount) * 100));
+            const tip = `Ver constancias de ${name} (${count})`;
             return `
-              <div class="home-top-row">
+              <button type="button" class="home-top-row home-top-row--btn" data-filter-client="${escapeHomeAttr(name)}" title="${escapeHomeAttr(tip)}" aria-label="${escapeHomeAttr(tip)}">
                 <span class="home-top-rank">${index + 1}</span>
                 <div class="home-top-body">
                   <div class="home-top-line">
@@ -2310,10 +2420,10 @@
                     <span class="home-top-count">${count}</span>
                   </div>
                   <div class="home-top-bar-track" aria-hidden="true">
-                    <div class="home-top-bar" style="width:${width}%"></div>
+                    <div class="home-top-bar" style="--bar-w:${width}%"></div>
                   </div>
                 </div>
-              </div>
+              </button>
             `;
           })
           .join("");
@@ -2325,17 +2435,17 @@
         const pending = list.filter((c) => c.status === "por_confirmar");
         const confirmed = list.filter((c) => c.status === "confirmada").length;
         const drafts = list.filter((c) => c.status === "borrador").length;
-        if (homeStatConstancias) homeStatConstancias.textContent = String(list.length);
-        if (homeStatPending) homeStatPending.textContent = String(pending.length);
-        if (homeStatConfirmed) homeStatConfirmed.textContent = String(confirmed);
-        if (homeStatDrafts) homeStatDrafts.textContent = String(drafts);
+        if (homeStatConstancias) animateHomeStat(homeStatConstancias, list.length);
+        if (homeStatPending) animateHomeStat(homeStatPending, pending.length);
+        if (homeStatConfirmed) animateHomeStat(homeStatConfirmed, confirmed);
+        if (homeStatDrafts) animateHomeStat(homeStatDrafts, drafts);
         if (homeDraftsCard) homeDraftsCard.classList.toggle("hidden", drafts === 0);
         if (homeStats) {
           homeStats.classList.toggle("home-stats--five", drafts === 0);
           homeStats.classList.toggle("home-stats--six", drafts > 0);
         }
-        if (homeStatClients) homeStatClients.textContent = String((allClients || []).length);
-        if (homeStatProducts) homeStatProducts.textContent = String((allProducts || []).length);
+        if (homeStatClients) animateHomeStat(homeStatClients, (allClients || []).length);
+        if (homeStatProducts) animateHomeStat(homeStatProducts, (allProducts || []).length);
         if (homePendingCount) homePendingCount.textContent = String(pending.length);
         if (homePendingList) {
           if (!pending.length) {
@@ -2386,6 +2496,8 @@
         }
         renderHomeWeekChart(list);
         renderHomeTopClients(list);
+        bindHomeChartInteractions();
+        if (currentSectionId === "section-home") triggerHomeAnimations();
       }
 
       function hideAllSections() {
@@ -2395,11 +2507,17 @@
         navLinks.forEach((link) => link.classList.remove("active"));
       }
 
+      function updateSidebarHomeBtn() {
+        if (!sidebarHomeBtn) return;
+        sidebarHomeBtn.classList.toggle("hidden", currentSectionId === "section-home");
+      }
+
       function showHomeDashboard() {
         hideAllSections();
         const section = document.getElementById("section-home");
         if (section) section.classList.remove("hidden");
         currentSectionId = "section-home";
+        updateSidebarHomeBtn();
         renderHomeDashboard();
       }
 
@@ -2419,6 +2537,7 @@
           link.classList.toggle("active", link.dataset.target === targetId);
         });
         currentSectionId = targetId;
+        updateSidebarHomeBtn();
         if (targetId === "section-ocr" && !currentConstanciaId && !suppressOcrReset) {
           resetConstanciaForm();
         }
@@ -2463,6 +2582,12 @@
         sidebarToggle.addEventListener("click", (event) => {
           event.stopPropagation();
           setSidebarOpen(!adminLayout.classList.contains("sidebar-open"));
+        });
+      }
+      if (sidebarHomeBtn) {
+        sidebarHomeBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          showHomeDashboard();
         });
       }
       if (sidebarBackdrop) {
@@ -3391,7 +3516,7 @@
         } else {
           filteredConstancias = sortConstanciasByIssueDate(
             allConstancias.filter((c) =>
-              `${c.number || ""} ${c.client_name || ""} ${c.transport_plate || ""}`
+              `${c.number || ""} ${c.client_name || ""} ${c.transport_plate || ""} ${c.issue_date || ""}`
                 .toLowerCase()
                 .includes(query)
             )
