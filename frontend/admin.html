@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home11" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home14" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -478,6 +478,30 @@
               <div class="field" style="flex: 1;">
                 <label>Buscar constancia</label>
                 <input id="constanciaSearch" type="text" placeholder="Buscar..." />
+              </div>
+              <div class="field constancia-date-filter">
+                <label>Filtrar por fecha</label>
+                <div class="constancia-date-bar">
+                  <label class="constancia-date-trigger" title="Elegir fecha">
+                    <input id="constanciaDateFilter" type="date" class="constancia-date-input-overlay" aria-label="Elegir fecha de emisión" />
+                    <svg class="constancia-date-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <rect x="3" y="4" width="18" height="18" rx="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
+                  </label>
+                  <span id="constanciaDateLabel" class="constancia-date-label">Todas las fechas</span>
+                  <button
+                    type="button"
+                    class="constancia-date-clear hidden"
+                    id="constanciaDateClearBtn"
+                    title="Quitar filtro de fecha"
+                    aria-label="Quitar filtro de fecha"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
               <div class="field">
                 <label>Acción</label>
@@ -998,6 +1022,9 @@
       const draftBtn = document.getElementById("draftBtn");
       const cancelBtn = document.getElementById("cancelBtn");
       const constanciaSearch = document.getElementById("constanciaSearch");
+      const constanciaDateFilter = document.getElementById("constanciaDateFilter");
+      const constanciaDateLabel = document.getElementById("constanciaDateLabel");
+      const constanciaDateClearBtn = document.getElementById("constanciaDateClearBtn");
       const constanciaBulkAction = document.getElementById("constanciaBulkAction");
       const constanciaApplyBtn = document.getElementById("constanciaApplyBtn");
       const selectAllConstancias = document.getElementById("selectAllConstancias");
@@ -2207,6 +2234,15 @@
       });
 
       constanciaSearch.addEventListener("input", applyConstanciaFilters);
+      if (constanciaDateFilter) {
+        constanciaDateFilter.addEventListener("change", applyConstanciaFilters);
+      }
+      if (constanciaDateClearBtn) {
+        constanciaDateClearBtn.addEventListener("click", () => {
+          if (constanciaDateFilter) constanciaDateFilter.value = "";
+          applyConstanciaFilters();
+        });
+      }
       if (traceSearchInput) {
         traceSearchInput.addEventListener("input", applyTraceFilters);
       }
@@ -2311,14 +2347,26 @@
       }
 
       function collectClientTotals(list, filterFn) {
-        const totals = new Map();
+        const monthly = new Map();
+        const allTime = new Map();
         (list || []).forEach((item) => {
+          const clientName = (item.client_name || "Sin cliente").trim() || "Sin cliente";
+          allTime.set(clientName, (allTime.get(clientName) || 0) + 1);
           const issueDate = parseIssueDateToLocalDate(item.issue_date);
           if (!issueDate || !filterFn(issueDate)) return;
-          const clientName = (item.client_name || "Sin cliente").trim() || "Sin cliente";
-          totals.set(clientName, (totals.get(clientName) || 0) + 1);
+          monthly.set(clientName, (monthly.get(clientName) || 0) + 1);
         });
-        return [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+        return [...monthly.entries()]
+          .sort((a, b) => {
+            if (b[1] !== a[1]) return b[1] - a[1];
+            return (allTime.get(b[0]) || 0) - (allTime.get(a[0]) || 0);
+          })
+          .slice(0, 5)
+          .map(([name, monthCount]) => ({
+            name,
+            totalCount: allTime.get(name) || monthCount,
+            monthCount,
+          }));
       }
 
       function formatDateIso(date) {
@@ -2370,17 +2418,9 @@
 
       function navigateToConstanciasFilter(value, options = {}) {
         if (options.dayDate instanceof Date) {
-          if (constanciaSearch) {
-            constanciaSearch.value = options.dayDate.toLocaleDateString("es-PE");
-          }
-          filteredConstancias = sortConstanciasByIssueDate(
-            (allConstancias || []).filter((c) => {
-              const d = parseIssueDateToLocalDate(c.issue_date);
-              return d && isSameCalendarDay(d, options.dayDate);
-            })
-          );
-          constanciasPage = 1;
-          paginateConstancias();
+          if (constanciaDateFilter) constanciaDateFilter.value = formatDateIso(options.dayDate);
+          if (constanciaSearch) constanciaSearch.value = "";
+          applyConstanciaFilters();
           showSection("section-constancias");
           return;
         }
@@ -2493,18 +2533,34 @@
               : '<p class="home-empty">Sin constancias este mes ni en los últimos 30 días.</p>';
           return;
         }
-        const topCount = ranked[0][1];
+        const topCount = Math.max(...ranked.map((entry) => entry.totalCount), 1);
+        const periodSuffix =
+          periodLabel === monthLabel
+            ? "este mes"
+            : periodLabel.includes("30")
+              ? "en el periodo"
+              : periodLabel;
         homeTopClients.innerHTML = ranked
-          .map(([name, count], index) => {
-            const width = Math.max(8, Math.round((count / topCount) * 100));
-            const tip = `Ver constancias de ${name} (${count})`;
+          .map((entry, index) => {
+            const { name, totalCount, monthCount } = entry;
+            const width = Math.max(8, Math.round((totalCount / topCount) * 100));
+            const monthPart =
+              monthCount === 1
+                ? `1 en ${periodSuffix}`
+                : `${monthCount} en ${periodSuffix}`;
+            const totalPart =
+              totalCount === 1 ? "1 constancia en total" : `${totalCount} constancias en total`;
+            const tip = `${name}: ${totalPart} · ${monthPart}`;
             return `
               <button type="button" class="home-top-row home-top-row--btn" data-filter-client="${escapeHomeAttr(name)}" title="${escapeHomeAttr(tip)}" aria-label="${escapeHomeAttr(tip)}">
                 <span class="home-top-rank">${index + 1}</span>
                 <div class="home-top-body">
                   <div class="home-top-line">
                     <span class="home-top-name">${escapeHomeHtml(name)}</span>
-                    <span class="home-top-count">${count}</span>
+                    <span class="home-top-count">${totalCount}</span>
+                  </div>
+                  <div class="home-top-subline">
+                    <span class="home-top-period">${escapeHomeHtml(monthPart)}</span>
                   </div>
                   <div class="home-top-bar-track" aria-hidden="true">
                     <div class="home-top-bar" style="--bar-w:${width}%"></div>
@@ -3596,19 +3652,71 @@
         );
       }
 
+      function getConstanciaDateFilterDate() {
+        const iso = (constanciaDateFilter?.value || "").trim();
+        if (!iso) return null;
+        const parts = iso.split("-");
+        if (parts.length !== 3) return null;
+        return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      }
+
+      function formatConstanciaFilterDateLabel(date) {
+        const months = [
+          "ene.",
+          "feb.",
+          "mar.",
+          "abr.",
+          "may.",
+          "jun.",
+          "jul.",
+          "ago.",
+          "sep.",
+          "oct.",
+          "nov.",
+          "dic.",
+        ];
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${day} ${months[date.getMonth()]} ${date.getFullYear()}`;
+      }
+
+      function updateConstanciaDateLabel(isoValue) {
+        if (!constanciaDateLabel) return;
+        if (!isoValue) {
+          constanciaDateLabel.textContent = "Todas las fechas";
+          constanciaDateLabel.classList.remove("constancia-date-label--active");
+          constanciaDateClearBtn?.classList.add("hidden");
+          return;
+        }
+        const parts = isoValue.split("-");
+        const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        constanciaDateLabel.textContent = formatConstanciaFilterDateLabel(date);
+        constanciaDateLabel.classList.add("constancia-date-label--active");
+        constanciaDateClearBtn?.classList.remove("hidden");
+      }
+
       function applyConstanciaFilters() {
         const query = constanciaSearch.value.toLowerCase().trim();
-        if (!query) {
-          filteredConstancias = sortConstanciasByIssueDate(allConstancias);
-        } else {
-          filteredConstancias = sortConstanciasByIssueDate(
-            allConstancias.filter((c) =>
-              `${c.number || ""} ${c.client_name || ""} ${c.transport_plate || ""} ${c.issue_date || ""}`
-                .toLowerCase()
-                .includes(query)
-            )
+        const filterDate = getConstanciaDateFilterDate();
+        const isoValue = (constanciaDateFilter?.value || "").trim();
+        let list = allConstancias;
+
+        if (filterDate) {
+          list = list.filter((c) => {
+            const issueDate = parseIssueDateToLocalDate(c.issue_date);
+            return issueDate && isSameCalendarDay(issueDate, filterDate);
+          });
+        }
+
+        if (query) {
+          list = list.filter((c) =>
+            `${c.number || ""} ${c.client_name || ""} ${c.transport_plate || ""} ${c.issue_date || ""}`
+              .toLowerCase()
+              .includes(query)
           );
         }
+
+        filteredConstancias = sortConstanciasByIssueDate(list);
+        updateConstanciaDateLabel(isoValue);
         constanciasPage = 1;
         paginateConstancias();
       }

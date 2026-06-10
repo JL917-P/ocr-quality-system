@@ -1206,9 +1206,20 @@ body.page-admin {
 
 .home-top-count {
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--qc-teal);
+  line-height: 1;
+}
+
+.home-top-subline {
+  margin: -2px 0 6px;
+}
+
+.home-top-period {
+  font-size: 11px;
+  color: var(--qc-slate-light);
+  white-space: nowrap;
 }
 
 .home-top-bar-track {
@@ -1313,6 +1324,99 @@ body.page-admin {
   flex-wrap: wrap;
   gap: 10px;
   align-items: flex-end;
+}
+
+.constancia-date-filter {
+  flex: 0 0 240px;
+  max-width: 280px;
+}
+
+.constancia-date-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--qc-border);
+  border-radius: var(--qc-radius);
+  background: #fff;
+}
+
+.constancia-date-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid #c9a227;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.constancia-date-icon {
+  display: block;
+  flex-shrink: 0;
+  color: #0c2340;
+  pointer-events: none;
+}
+
+.constancia-date-input-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  margin: 0;
+  box-shadow: none;
+}
+
+.constancia-date-input-overlay:focus {
+  outline: none;
+}
+
+.constancia-date-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.constancia-date-label--active {
+  color: #0c2340;
+  font-weight: 600;
+}
+
+.constancia-date-clear {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.constancia-date-clear:hover {
+  background: #cbd5e1;
+  color: #0c2340;
+}
+
+.constancia-date-clear.hidden {
+  display: none;
 }
 
 .toolbar-right {
@@ -1981,6 +2085,11 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   .toolbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .constancia-date-filter {
+    flex: 1 1 auto;
+    max-width: none;
   }
 
   .toolbar-right {
