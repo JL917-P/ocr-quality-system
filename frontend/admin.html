@@ -3581,7 +3581,7 @@
             <td><input type="checkbox" class="const-check" data-id="${item.id}" /></td>
             <td>${item.number || item.id}</td>
             <td>${itemCountLabel}</td>
-            <td>${item.issue_date || ""}</td>
+            <td>${formatIssueDateDisplay(item.issue_date)}</td>
             <td>${item.client_name || ""}</td>
             <td>${item.transport_plate || ""}</td>
             <td><span class="status ${statusClass}">${statusLabel}</span></td>
@@ -3646,10 +3646,29 @@
         return 0;
       }
 
+      function formatIssueDateDisplay(rawDate) {
+        const date = parseIssueDateToLocalDate(rawDate);
+        if (!date) return (rawDate || "").trim();
+        const day = String(date.getDate()).padStart(2, "0");
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        return `${day}/${month}/${date.getFullYear()}`;
+      }
+
+      function constanciaIngresoSortKey(item) {
+        const created = (item?.created_at || "").trim();
+        if (created) {
+          const ts = Date.parse(created);
+          if (!Number.isNaN(ts)) return ts;
+        }
+        return Number(item?.id) || 0;
+      }
+
       function sortConstanciasByIssueDate(list) {
-        return [...list].sort(
-          (a, b) => parseIssueDateSortKey(b.issue_date) - parseIssueDateSortKey(a.issue_date)
-        );
+        return [...list].sort((a, b) => {
+          const dateDiff = parseIssueDateSortKey(b.issue_date) - parseIssueDateSortKey(a.issue_date);
+          if (dateDiff !== 0) return dateDiff;
+          return constanciaIngresoSortKey(b) - constanciaIngresoSortKey(a);
+        });
       }
 
       function getConstanciaDateFilterDate() {

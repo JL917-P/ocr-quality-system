@@ -366,8 +366,12 @@ def issue_date_sort_key(issue_date: Any) -> tuple[int, int, int]:
 
 
 def sort_constancia_rows_by_issue_date(rows: list[tuple]) -> list[tuple]:
-    """Más reciente primero según fecha de emisión (independiente de id o status)."""
-    return sorted(rows, key=lambda r: issue_date_sort_key(r[2]), reverse=True)
+    """Más reciente primero por fecha de emisión; si empatan, por ingreso (created_at, luego id)."""
+    return sorted(
+        rows,
+        key=lambda r: (*issue_date_sort_key(r[2]), _str(r[9]), int(r[0] or 0)),
+        reverse=True,
+    )
 
 
 def dedupe_constancia_rows(rows: list[tuple]) -> list[tuple]:
