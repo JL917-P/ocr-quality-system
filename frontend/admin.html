@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home14" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home16" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -242,6 +242,12 @@
                   <span class="tag-muted" id="homeWeekTotal">0 esta semana</span>
                 </div>
                 <div class="home-week-chart" id="homeWeekChart" aria-label="Constancias por día de la semana"></div>
+                <div class="home-week-extra">
+                  <div class="home-week-heatmap-wrap">
+                    <div class="home-week-heatmap-title">Actividad · últimas 4 semanas</div>
+                    <div class="home-week-heatmap" id="homeWeekHeatmap"></div>
+                  </div>
+                </div>
                 <p class="home-chart-hint" id="homeWeekHint"></p>
               </div>
 
@@ -1248,6 +1254,7 @@
         if (productAutocomplete.dropdown) {
           productAutocomplete.dropdown.classList.add("hidden");
           productAutocomplete.dropdown.innerHTML = "";
+          productAutocomplete.dropdown.classList.remove("product-autocomplete--above");
         }
         productAutocomplete.input = null;
         productAutocomplete.items = [];
@@ -1276,9 +1283,44 @@
       function positionProductAutocomplete(input) {
         const dropdown = ensureProductAutocompleteDropdown();
         const rect = input.getBoundingClientRect();
-        dropdown.style.left = `${Math.max(8, rect.left)}px`;
-        dropdown.style.top = `${rect.bottom + 4}px`;
-        dropdown.style.width = `${Math.max(rect.width, 280)}px`;
+        const gap = 4;
+        const pad = 8;
+        const defaultMax = 240;
+        const width = Math.max(rect.width, 280);
+        const left = Math.min(Math.max(pad, rect.left), Math.max(pad, window.innerWidth - width - pad));
+
+        dropdown.style.width = `${width}px`;
+        dropdown.style.left = `${left}px`;
+        dropdown.style.bottom = "auto";
+        dropdown.style.maxHeight = `${defaultMax}px`;
+        dropdown.classList.remove("product-autocomplete--above");
+
+        const naturalHeight = dropdown.scrollHeight || 120;
+        const dropdownHeight = Math.min(defaultMax, naturalHeight);
+        const spaceBelow = window.innerHeight - rect.bottom - gap - pad;
+        const spaceAbove = rect.top - gap - pad;
+        const openAbove = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+
+        let maxHeight;
+        let top;
+        if (openAbove) {
+          maxHeight = Math.max(120, Math.min(defaultMax, spaceAbove));
+          const visibleHeight = Math.min(dropdownHeight, maxHeight);
+          top = Math.max(pad, rect.top - gap - visibleHeight);
+          dropdown.classList.add("product-autocomplete--above");
+        } else {
+          maxHeight = Math.max(120, Math.min(defaultMax, spaceBelow));
+          top = rect.bottom + gap;
+        }
+
+        dropdown.style.maxHeight = `${maxHeight}px`;
+        dropdown.style.top = `${top}px`;
+      }
+
+      function onProductAutocompleteScroll() {
+        if (productAutocomplete.input && isProductAutocompleteOpen()) {
+          positionProductAutocomplete(productAutocomplete.input);
+        }
       }
 
       function showProductAutocomplete(input) {
@@ -1292,8 +1334,12 @@
         productAutocomplete.activeIndex = -1;
         const dropdown = ensureProductAutocompleteDropdown();
         renderProductAutocomplete();
-        positionProductAutocomplete(input);
         dropdown.classList.remove("hidden");
+        positionProductAutocomplete(input);
+        if (!productAutocomplete.scrollBound) {
+          window.addEventListener("scroll", onProductAutocompleteScroll, true);
+          productAutocomplete.scrollBound = true;
+        }
       }
 
       function moveProductAutocompleteHighlight(delta) {
@@ -1307,6 +1353,9 @@
           productAutocomplete.activeIndex = next;
         }
         renderProductAutocomplete();
+        if (productAutocomplete.input) {
+          positionProductAutocomplete(productAutocomplete.input);
+        }
         const dropdown = productAutocomplete.dropdown;
         const activeEl = dropdown?.querySelector(".product-autocomplete-item.active");
         activeEl?.scrollIntoView({ block: "nearest" });
@@ -2285,6 +2334,7 @@
       let currentSectionId = "section-home";
 
       const homeWeekChart = document.getElementById("homeWeekChart");
+      const homeWeekHeatmap = document.getElementById("homeWeekHeatmap");
       const homeWeekTotal = document.getElementById("homeWeekTotal");
       const homeWeekHint = document.getElementById("homeWeekHint");
       const homeMonthLabel = document.getElementById("homeMonthLabel");
@@ -2451,6 +2501,18 @@
             });
           });
         }
+        if (homeWeekHeatmap) {
+          homeWeekHeatmap.querySelectorAll("[data-filter-date]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const iso = btn.dataset.filterDate || "";
+              const parts = iso.split("-");
+              if (parts.length === 3) {
+                const dayDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                navigateToConstanciasFilter(iso, { dayDate });
+              }
+            });
+          });
+        }
       }
 
       function renderHomeWeekChart(list) {
@@ -2506,6 +2568,114 @@
             `;
           })
           .join("");
+        renderHomeWeekHeatmap(list);
+      }
+
+      function countConstanciasByDate(list) {
+        const map = new Map();
+        (list || []).forEach((item) => {
+          const issueDate = parseIssueDateToLocalDate(item.issue_date);
+          if (!issueDate) return;
+          const key = formatDateIso(issueDate);
+          map.set(key, (map.get(key) || 0) + 1);
+        });
+        return map;
+      }
+
+      function formatWeekRangeLabel(weekStart) {
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        const monthStart = weekStart.toLocaleDateString("es-PE", { month: "short" }).replace(".", "");
+        const monthEnd = weekEnd.toLocaleDateString("es-PE", { month: "short" }).replace(".", "");
+        if (weekStart.getMonth() === weekEnd.getMonth()) {
+          return `${weekStart.getDate()}–${weekEnd.getDate()} ${monthStart}`;
+        }
+        return `${weekStart.getDate()} ${monthStart} – ${weekEnd.getDate()} ${monthEnd}`;
+      }
+
+      function heatmapLevel(count, maxCount) {
+        if (!count) return 0;
+        if (maxCount <= 1) return 4;
+        const ratio = count / maxCount;
+        if (ratio >= 0.75) return 4;
+        if (ratio >= 0.5) return 3;
+        if (ratio >= 0.25) return 2;
+        return 1;
+      }
+
+      function renderHomeWeekHeatmap(list) {
+        if (!homeWeekHeatmap) return;
+        const today = new Date();
+        const dayLabels = ["L", "M", "X", "J", "V", "S", "D"];
+        const countsByDate = countConstanciasByDate(list);
+        const weeks = [];
+        for (let w = 0; w < 4; w++) {
+          const ref = new Date(today);
+          ref.setDate(ref.getDate() - w * 7);
+          const weekStart = startOfWeekMonday(ref);
+          const days = Array.from({ length: 7 }, (_, index) => {
+            const day = new Date(weekStart);
+            day.setDate(weekStart.getDate() + index);
+            return day;
+          });
+          weeks.push({
+            label: w === 0 ? "Esta sem." : formatWeekRangeLabel(weekStart),
+            days,
+          });
+        }
+
+        let maxCount = 0;
+        weeks.forEach((week) => {
+          week.days.forEach((day) => {
+            const count = countsByDate.get(formatDateIso(day)) || 0;
+            if (count > maxCount) maxCount = count;
+          });
+        });
+
+        const header = `
+          <div class="home-heat-row home-heat-row--head">
+            <span class="home-heat-label"></span>
+            ${dayLabels.map((label) => `<span class="home-heat-day">${label}</span>`).join("")}
+          </div>
+        `;
+        const body = weeks
+          .map((week) => {
+            const cells = week.days
+              .map((day) => {
+                const iso = formatDateIso(day);
+                const count = countsByDate.get(iso) || 0;
+                const level = heatmapLevel(count, maxCount);
+                const isToday = isSameCalendarDay(day, today);
+                const dateLabel = formatIssueDateDisplay(iso);
+                const tip =
+                  count === 0
+                    ? `Sin constancias · ${dateLabel} · Clic para filtrar`
+                    : count === 1
+                      ? `1 constancia · ${dateLabel} · Clic para ver`
+                      : `${count} constancias · ${dateLabel} · Clic para ver`;
+                return `
+                  <button
+                    type="button"
+                    class="home-heat-cell home-heat-cell--${level}${isToday ? " home-heat-cell--today" : ""}${count ? "" : " home-heat-cell--empty"}"
+                    data-filter-date="${iso}"
+                    title="${escapeHomeAttr(tip)}"
+                    aria-label="${escapeHomeAttr(tip)}"
+                  >
+                    ${count > 0 ? `<span class="home-heat-count">${count}</span>` : ""}
+                  </button>
+                `;
+              })
+              .join("");
+            return `
+              <div class="home-heat-row">
+                <span class="home-heat-label">${escapeHomeHtml(week.label)}</span>
+                ${cells}
+              </div>
+            `;
+          })
+          .join("");
+
+        homeWeekHeatmap.innerHTML = header + body;
       }
 
       function renderHomeTopClients(list) {
@@ -2559,9 +2729,7 @@
                     <span class="home-top-name">${escapeHomeHtml(name)}</span>
                     <span class="home-top-count">${totalCount}</span>
                   </div>
-                  <div class="home-top-subline">
-                    <span class="home-top-period">${escapeHomeHtml(monthPart)}</span>
-                  </div>
+                  <div class="home-top-meta">${escapeHomeHtml(monthPart)}</div>
                   <div class="home-top-bar-track" aria-hidden="true">
                     <div class="home-top-bar" style="--bar-w:${width}%"></div>
                   </div>
