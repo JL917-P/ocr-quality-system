@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home17" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home18" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -242,12 +242,6 @@
                   <span class="tag-muted" id="homeWeekTotal">0 esta semana</span>
                 </div>
                 <div class="home-week-chart" id="homeWeekChart" aria-label="Constancias por día de la semana"></div>
-                <div class="home-week-extra">
-                  <div class="home-week-heatmap-wrap">
-                    <div class="home-week-heatmap-title">Actividad · últimas 4 semanas</div>
-                    <div class="home-week-heatmap" id="homeWeekHeatmap"></div>
-                  </div>
-                </div>
                 <p class="home-chart-hint" id="homeWeekHint"></p>
               </div>
 
@@ -2334,7 +2328,6 @@
       let currentSectionId = "section-home";
 
       const homeWeekChart = document.getElementById("homeWeekChart");
-      const homeWeekHeatmap = document.getElementById("homeWeekHeatmap");
       const homeWeekTotal = document.getElementById("homeWeekTotal");
       const homeWeekHint = document.getElementById("homeWeekHint");
       const homeMonthLabel = document.getElementById("homeMonthLabel");
@@ -2501,18 +2494,6 @@
             });
           });
         }
-        if (homeWeekHeatmap) {
-          homeWeekHeatmap.querySelectorAll("[data-filter-date]").forEach((btn) => {
-            btn.addEventListener("click", () => {
-              const iso = btn.dataset.filterDate || "";
-              const parts = iso.split("-");
-              if (parts.length === 3) {
-                const dayDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-                navigateToConstanciasFilter(iso, { dayDate });
-              }
-            });
-          });
-        }
       }
 
       function weekChartYMax(maxCount) {
@@ -2642,114 +2623,6 @@
             <div class="home-week-line-labels">${xLabelsHtml}</div>
           </div>
         `;
-        renderHomeWeekHeatmap(list);
-      }
-
-      function countConstanciasByDate(list) {
-        const map = new Map();
-        (list || []).forEach((item) => {
-          const issueDate = parseIssueDateToLocalDate(item.issue_date);
-          if (!issueDate) return;
-          const key = formatDateIso(issueDate);
-          map.set(key, (map.get(key) || 0) + 1);
-        });
-        return map;
-      }
-
-      function formatWeekRangeLabel(weekStart) {
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekStart.getDate() + 6);
-        const monthStart = weekStart.toLocaleDateString("es-PE", { month: "short" }).replace(".", "");
-        const monthEnd = weekEnd.toLocaleDateString("es-PE", { month: "short" }).replace(".", "");
-        if (weekStart.getMonth() === weekEnd.getMonth()) {
-          return `${weekStart.getDate()}–${weekEnd.getDate()} ${monthStart}`;
-        }
-        return `${weekStart.getDate()} ${monthStart} – ${weekEnd.getDate()} ${monthEnd}`;
-      }
-
-      function heatmapLevel(count, maxCount) {
-        if (!count) return 0;
-        if (maxCount <= 1) return 4;
-        const ratio = count / maxCount;
-        if (ratio >= 0.75) return 4;
-        if (ratio >= 0.5) return 3;
-        if (ratio >= 0.25) return 2;
-        return 1;
-      }
-
-      function renderHomeWeekHeatmap(list) {
-        if (!homeWeekHeatmap) return;
-        const today = new Date();
-        const dayLabels = ["L", "M", "X", "J", "V", "S", "D"];
-        const countsByDate = countConstanciasByDate(list);
-        const weeks = [];
-        for (let w = 0; w < 4; w++) {
-          const ref = new Date(today);
-          ref.setDate(ref.getDate() - w * 7);
-          const weekStart = startOfWeekMonday(ref);
-          const days = Array.from({ length: 7 }, (_, index) => {
-            const day = new Date(weekStart);
-            day.setDate(weekStart.getDate() + index);
-            return day;
-          });
-          weeks.push({
-            label: w === 0 ? "Esta sem." : formatWeekRangeLabel(weekStart),
-            days,
-          });
-        }
-
-        let maxCount = 0;
-        weeks.forEach((week) => {
-          week.days.forEach((day) => {
-            const count = countsByDate.get(formatDateIso(day)) || 0;
-            if (count > maxCount) maxCount = count;
-          });
-        });
-
-        const header = `
-          <div class="home-heat-row home-heat-row--head">
-            <span class="home-heat-label"></span>
-            ${dayLabels.map((label) => `<span class="home-heat-day">${label}</span>`).join("")}
-          </div>
-        `;
-        const body = weeks
-          .map((week) => {
-            const cells = week.days
-              .map((day) => {
-                const iso = formatDateIso(day);
-                const count = countsByDate.get(iso) || 0;
-                const level = heatmapLevel(count, maxCount);
-                const isToday = isSameCalendarDay(day, today);
-                const dateLabel = formatIssueDateDisplay(iso);
-                const tip =
-                  count === 0
-                    ? `Sin constancias · ${dateLabel} · Clic para filtrar`
-                    : count === 1
-                      ? `1 constancia · ${dateLabel} · Clic para ver`
-                      : `${count} constancias · ${dateLabel} · Clic para ver`;
-                return `
-                  <button
-                    type="button"
-                    class="home-heat-cell home-heat-cell--${level}${isToday ? " home-heat-cell--today" : ""}${count ? "" : " home-heat-cell--empty"}"
-                    data-filter-date="${iso}"
-                    title="${escapeHomeAttr(tip)}"
-                    aria-label="${escapeHomeAttr(tip)}"
-                  >
-                    ${count > 0 ? `<span class="home-heat-count">${count}</span>` : ""}
-                  </button>
-                `;
-              })
-              .join("");
-            return `
-              <div class="home-heat-row">
-                <span class="home-heat-label">${escapeHomeHtml(week.label)}</span>
-                ${cells}
-              </div>
-            `;
-          })
-          .join("");
-
-        homeWeekHeatmap.innerHTML = header + body;
       }
 
       function renderHomeTopClients(list) {
