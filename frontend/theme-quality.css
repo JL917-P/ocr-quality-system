@@ -1007,59 +1007,149 @@ body.page-admin {
 }
 
 .home-week-chart {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
-  align-items: end;
   min-height: 0;
   padding-top: 2px;
 }
 
-.home-week-col {
+.home-week-line-wrap {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
+  gap: 4px;
 }
 
-.home-week-col--btn {
+.home-week-line-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--qc-slate);
+}
+
+.home-week-line-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #0891b2;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px #0891b2;
+}
+
+.home-week-line-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+.home-week-grid-line {
+  stroke: #e2e8f0;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.home-week-y-label {
+  fill: #94a3b8;
+  font-size: 9px;
+  font-family: inherit;
+}
+
+.home-week-line-area {
+  opacity: 0;
+  transition: opacity 0.5s ease 0.15s;
+}
+
+.home-dashboard--ready .home-week-line-area {
+  opacity: 1;
+}
+
+.home-week-line-path {
+  fill: none;
+  stroke: #0891b2;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 420;
+  stroke-dashoffset: 420;
+  transition: stroke-dashoffset 0.75s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.home-dashboard--ready .home-week-line-path {
+  stroke-dashoffset: 0;
+}
+
+.home-week-line-point {
+  fill: #ffffff;
+  stroke: #0891b2;
+  stroke-width: 2;
+  cursor: pointer;
+  vector-effect: non-scaling-stroke;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.home-dashboard--ready .home-week-line-point {
+  opacity: 1;
+}
+
+.home-week-line-point--today {
+  fill: #0891b2;
+  stroke: #0c2340;
+  stroke-width: 2.5;
+}
+
+.home-week-line-point:hover,
+.home-week-line-point:focus {
+  fill: #0c2340;
+  stroke: #0891b2;
+  outline: none;
+}
+
+.home-week-line-labels {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  padding: 0 4px 0 20px;
+}
+
+.home-week-line-x {
   margin: 0;
-  padding: 4px 2px;
+  padding: 2px 0;
   border: none;
   background: transparent;
   font: inherit;
-  color: inherit;
+  color: var(--qc-slate-light);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
   cursor: pointer;
-  border-radius: var(--qc-radius);
-  transition: background 0.15s ease, transform 0.15s ease;
+  border-radius: 6px;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.home-week-col--btn:hover {
-  background: rgba(14, 116, 144, 0.08);
-  transform: translateY(-2px);
-}
-
-.home-week-col--btn:focus-visible {
-  outline: 2px solid var(--qc-teal);
-  outline-offset: 2px;
-}
-
-.home-week-col--today .home-week-day,
-.home-week-col--today .home-week-date {
-  color: var(--qc-teal);
-  font-weight: 700;
-}
-
-.home-week-count {
-  min-height: 18px;
-  font-size: 12px;
+.home-week-line-x span {
+  display: block;
+  font-size: 11px;
   font-weight: 700;
   color: var(--qc-navy);
-  line-height: 1;
+  text-transform: none;
+  margin-top: 1px;
 }
 
-.home-panel--week,
+.home-week-line-x--today,
+.home-week-line-x--today span {
+  color: var(--qc-teal);
+}
+
+.home-week-line-x:hover {
+  background: rgba(14, 116, 144, 0.08);
+}
+
+.home-panel--week {
+  display: flex;
+  flex-direction: column;
+}
+
 .home-panel--top {
   align-self: start;
 }
@@ -1175,75 +1265,11 @@ body.page-admin {
   line-height: 1;
 }
 
-.home-panel--week {
-  display: flex;
-  flex-direction: column;
-}
-
-.home-week-bar-track {
-  width: 100%;
-  max-width: 32px;
-  height: clamp(52px, 8vh, 72px);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  border-radius: 10px 10px 4px 4px;
-  background: #f1f5f9;
-  border: 1px solid var(--qc-border);
-  overflow: hidden;
-}
-
-.home-week-bar {
-  width: 100%;
-  height: var(--bar-h, 6%);
-  border-radius: 8px 8px 2px 2px;
-  background: linear-gradient(180deg, var(--qc-teal) 0%, var(--qc-navy) 100%);
-  transform: scaleY(0);
-  transform-origin: bottom center;
-  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.home-dashboard--ready .home-week-bar {
-  transform: scaleY(1);
-}
-
-.home-dashboard--ready .home-week-col:nth-child(1) .home-week-bar { transition-delay: 0.1s; }
-.home-dashboard--ready .home-week-col:nth-child(2) .home-week-bar { transition-delay: 0.15s; }
-.home-dashboard--ready .home-week-col:nth-child(3) .home-week-bar { transition-delay: 0.2s; }
-.home-dashboard--ready .home-week-col:nth-child(4) .home-week-bar { transition-delay: 0.25s; }
-.home-dashboard--ready .home-week-col:nth-child(5) .home-week-bar { transition-delay: 0.3s; }
-.home-dashboard--ready .home-week-col:nth-child(6) .home-week-bar { transition-delay: 0.35s; }
-.home-dashboard--ready .home-week-col:nth-child(7) .home-week-bar { transition-delay: 0.4s; }
-
-.home-week-bar--empty {
-  background: #cbd5e1;
-  opacity: 0.85;
-}
-
 .home-chart-hint {
   margin: 10px 0 0;
   font-size: 12px;
   color: var(--qc-slate-light);
   text-align: center;
-}
-
-.home-week-col--today .home-week-bar-track {
-  border-color: rgba(14, 116, 144, 0.35);
-  background: var(--qc-teal-light);
-}
-
-.home-week-day {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--qc-slate);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.home-week-date {
-  font-size: 11px;
-  color: var(--qc-slate-light);
-  margin-top: -4px;
 }
 
 .home-top-clients {
@@ -1378,13 +1404,16 @@ body.page-admin {
     transition: none !important;
   }
 
-  .home-week-bar,
+  .home-week-line-path,
+  .home-week-line-area,
   .home-top-bar {
     transform: none !important;
     transition: none !important;
+    stroke-dashoffset: 0 !important;
+    opacity: 1 !important;
   }
 
-  .home-week-col--btn:hover,
+  .home-week-line-x:hover,
   .home-top-row--btn:hover {
     transform: none;
   }
@@ -2154,13 +2183,7 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   }
 
   .home-week-chart {
-    gap: 4px;
-    min-height: 160px;
-  }
-
-  .home-week-bar-track {
-    max-width: 28px;
-    height: 90px;
+    min-height: 0;
   }
 
   .home-pending-item {

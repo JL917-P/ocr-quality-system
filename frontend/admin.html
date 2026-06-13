@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home16" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home17" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -2515,6 +2515,20 @@
         }
       }
 
+      function weekChartYMax(maxCount) {
+        if (maxCount <= 5) return 5;
+        if (maxCount <= 10) return 10;
+        return Math.ceil(maxCount / 5) * 5;
+      }
+
+      function weekChartYTicks(yMax) {
+        const step = yMax <= 5 ? 1 : yMax <= 10 ? 2 : Math.max(1, Math.ceil(yMax / 4));
+        const ticks = [];
+        for (let value = 0; value <= yMax; value += step) ticks.push(value);
+        if (ticks[ticks.length - 1] !== yMax) ticks.push(yMax);
+        return ticks;
+      }
+
       function renderHomeWeekChart(list) {
         if (!homeWeekChart) return;
         const today = new Date();
@@ -2533,7 +2547,8 @@
           });
         });
         const weekTotal = counts.reduce((sum, count) => sum + count, 0);
-        const maxCount = Math.max(1, ...counts);
+        const rawMax = Math.max(...counts, 0);
+        const yMax = weekChartYMax(rawMax);
         const dayLabels = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
         if (homeWeekTotal) {
           homeWeekTotal.textContent = weekTotal === 1 ? "1 esta semana" : `${weekTotal} esta semana`;
@@ -2546,28 +2561,87 @@
                 ? "No hay constancias en esta semana calendario."
                 : "";
         }
-        homeWeekChart.innerHTML = days
-          .map((day, index) => {
-            const count = counts[index];
-            const barHeight = count ? Math.max(12, Math.round((count / maxCount) * 100)) : 6;
-            const isToday = isSameCalendarDay(day, today);
-            const isoDate = formatDateIso(day);
-            const tip =
-              count === 1
-                ? `${dayLabels[index]} ${day.getDate()}: 1 constancia · Clic para ver`
-                : `${dayLabels[index]} ${day.getDate()}: ${count} constancias · Clic para ver`;
+
+        const W = 300;
+        const H = 112;
+        const pad = { t: 10, r: 10, b: 8, l: 26 };
+        const cw = W - pad.l - pad.r;
+        const ch = H - pad.t - pad.b;
+        const points = counts.map((count, index) => {
+          const x = pad.l + (index / 6) * cw;
+          const y = pad.t + ch - (yMax ? (count / yMax) * ch : 0);
+          return { x, y, count, index, day: days[index], iso: formatDateIso(days[index]) };
+        });
+        const linePoints = points.map((p) => `${p.x},${p.y}`).join(" ");
+        const areaPath =
+          points.length > 0
+            ? `M ${points[0].x} ${pad.t + ch} L ${points.map((p) => `${p.x} ${p.y}`).join(" L ")} L ${points[points.length - 1].x} ${pad.t + ch} Z`
+            : "";
+        const yTicks = weekChartYTicks(yMax);
+        const gridSvg = yTicks
+          .map((tick) => {
+            const y = pad.t + ch - (yMax ? (tick / yMax) * ch : 0);
             return `
-              <button type="button" class="home-week-col home-week-col--btn${isToday ? " home-week-col--today" : ""}" data-filter-date="${isoDate}" title="${tip}" aria-label="${tip}">
-                <span class="home-week-count">${count}</span>
-                <div class="home-week-bar-track" aria-hidden="true">
-                  <div class="home-week-bar${count ? "" : " home-week-bar--empty"}" style="--bar-h:${barHeight}%"></div>
-                </div>
-                <span class="home-week-day">${dayLabels[index]}</span>
-                <span class="home-week-date">${day.getDate()}</span>
+              <line class="home-week-grid-line" x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" />
+              <text class="home-week-y-label" x="${pad.l - 6}" y="${y + 3}" text-anchor="end">${tick}</text>
+            `;
+          })
+          .join("");
+        const dotsSvg = points
+          .map((p) => {
+            const isToday = isSameCalendarDay(p.day, today);
+            const tip =
+              p.count === 1
+                ? `${dayLabels[p.index]} ${p.day.getDate()}: 1 constancia · Clic para ver`
+                : `${dayLabels[p.index]} ${p.day.getDate()}: ${p.count} constancias · Clic para ver`;
+            return `
+              <circle
+                class="home-week-line-point${isToday ? " home-week-line-point--today" : ""}"
+                cx="${p.x}"
+                cy="${p.y}"
+                r="4.5"
+                data-filter-date="${p.iso}"
+                role="button"
+                tabindex="0"
+                aria-label="${escapeHomeAttr(tip)}"
+              >
+                <title>${escapeHomeHtml(tip)}</title>
+              </circle>
+            `;
+          })
+          .join("");
+        const xLabelsHtml = points
+          .map((p, index) => {
+            const isToday = isSameCalendarDay(p.day, today);
+            return `
+              <button type="button" class="home-week-line-x${isToday ? " home-week-line-x--today" : ""}" data-filter-date="${p.iso}">
+                ${dayLabels[index]}<span>${p.day.getDate()}</span>
               </button>
             `;
           })
           .join("");
+
+        homeWeekChart.innerHTML = `
+          <div class="home-week-line-wrap">
+            <div class="home-week-line-legend">
+              <span class="home-week-line-legend-dot" aria-hidden="true"></span>
+              <span>Constancias por día</span>
+            </div>
+            <svg class="home-week-line-svg" viewBox="0 0 ${W} ${H}" aria-hidden="false" aria-label="Constancias por día esta semana">
+              <defs>
+                <linearGradient id="homeWeekLineFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#0891b2" stop-opacity="0.28" />
+                  <stop offset="100%" stop-color="#0891b2" stop-opacity="0.02" />
+                </linearGradient>
+              </defs>
+              ${gridSvg}
+              ${areaPath ? `<path class="home-week-line-area" d="${areaPath}" fill="url(#homeWeekLineFill)" />` : ""}
+              <polyline class="home-week-line-path" points="${linePoints}" />
+              ${dotsSvg}
+            </svg>
+            <div class="home-week-line-labels">${xLabelsHtml}</div>
+          </div>
+        `;
         renderHomeWeekHeatmap(list);
       }
 
