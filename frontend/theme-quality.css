@@ -1813,7 +1813,6 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   border-bottom: none;
 }
 
-.product-autocomplete-item:hover,
 .product-autocomplete-item.active {
   background: #0c2340;
   color: #f8fafc;

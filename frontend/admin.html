@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home18" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home19" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -1235,6 +1235,14 @@
           if (!item) return;
           selectProductAutocompleteItem(Number(item.dataset.index));
         });
+        dropdown.addEventListener("mouseover", (event) => {
+          const item = event.target.closest("[data-index]");
+          if (!item) return;
+          setProductAutocompleteHighlight(Number(item.dataset.index));
+        });
+        dropdown.addEventListener("mouseleave", () => {
+          setProductAutocompleteHighlight(-1);
+        });
         document.body.appendChild(dropdown);
         productAutocomplete.dropdown = dropdown;
         return dropdown;
@@ -1272,6 +1280,22 @@
             return `<div class="product-autocomplete-item${active}" data-index="${index}" role="option">${safe}</div>`;
           })
           .join("");
+      }
+
+      function setProductAutocompleteHighlight(index) {
+        const dropdown = productAutocomplete.dropdown;
+        if (!dropdown) return;
+        const max = productAutocomplete.items.length;
+        const nextIndex = index >= 0 && index < max ? index : -1;
+        if (nextIndex === productAutocomplete.activeIndex) return;
+        productAutocomplete.activeIndex = nextIndex;
+        dropdown.querySelectorAll(".product-autocomplete-item.active").forEach((el) => {
+          el.classList.remove("active");
+        });
+        if (nextIndex < 0) return;
+        const activeEl = dropdown.querySelector(`.product-autocomplete-item[data-index="${nextIndex}"]`);
+        activeEl?.classList.add("active");
+        activeEl?.scrollIntoView({ block: "nearest" });
       }
 
       function positionProductAutocomplete(input) {
@@ -1338,21 +1362,18 @@
 
       function moveProductAutocompleteHighlight(delta) {
         if (!productAutocomplete.items.length) return;
+        let next;
         if (productAutocomplete.activeIndex < 0 && delta > 0) {
-          productAutocomplete.activeIndex = 0;
+          next = 0;
         } else {
-          let next = productAutocomplete.activeIndex + delta;
+          next = productAutocomplete.activeIndex + delta;
           if (next < 0) next = productAutocomplete.items.length - 1;
           if (next >= productAutocomplete.items.length) next = 0;
-          productAutocomplete.activeIndex = next;
         }
-        renderProductAutocomplete();
+        setProductAutocompleteHighlight(next);
         if (productAutocomplete.input) {
           positionProductAutocomplete(productAutocomplete.input);
         }
-        const dropdown = productAutocomplete.dropdown;
-        const activeEl = dropdown?.querySelector(".product-autocomplete-item.active");
-        activeEl?.scrollIntoView({ block: "nearest" });
       }
 
       function focusNextProductInput(currentInput) {
