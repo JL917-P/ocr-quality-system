@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home19" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home20" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -112,13 +112,31 @@
             </div>
           </div>
           <nav id="navWrap" class="sidebar-nav" aria-label="Menú principal">
-            <a href="#" data-target="section-clients">Clientes</a>
-            <a href="#" data-target="section-products">Productos</a>
-            <a href="#" data-target="section-transports">Transporte</a>
-            <a href="#" data-target="section-ocr">OCR</a>
-            <a href="#" data-target="section-constancias">Constancias</a>
-            <a href="#" data-target="section-trazabilidad">Trazabilidad</a>
-            <a href="#" data-target="section-trasiegos">Trasiegos</a>
+            <a href="#" data-target="section-home" class="sidebar-nav-home">
+              <span class="sidebar-nav-label">Inicio</span>
+            </a>
+            <a href="#" data-target="section-clients">
+              <span class="sidebar-nav-label">Clientes</span>
+            </a>
+            <a href="#" data-target="section-products">
+              <span class="sidebar-nav-label">Productos</span>
+            </a>
+            <a href="#" data-target="section-transports">
+              <span class="sidebar-nav-label">Transporte</span>
+            </a>
+            <a href="#" data-target="section-ocr">
+              <span class="sidebar-nav-label">OCR</span>
+            </a>
+            <a href="#" data-target="section-constancias">
+              <span class="sidebar-nav-label">Constancias</span>
+              <span class="nav-badge hidden" id="navConstanciasBadge" title="Por confirmar">0</span>
+            </a>
+            <a href="#" data-target="section-trazabilidad">
+              <span class="sidebar-nav-label">Trazabilidad</span>
+            </a>
+            <a href="#" data-target="section-trasiegos">
+              <span class="sidebar-nav-label">Trasiegos</span>
+            </a>
           </nav>
         </div>
         <div class="sidebar-footer">
@@ -168,6 +186,12 @@
       </header>
       <main class="content" id="mainContent">
         <div class="container">
+        <header class="section-page-header hidden" id="sectionPageHeader" aria-live="polite">
+          <div>
+            <h1 class="section-page-title" id="sectionPageTitle">Inicio</h1>
+            <p class="section-page-subtitle" id="sectionPageSubtitle">Resumen y accesos rápidos</p>
+          </div>
+        </header>
         <section id="section-home">
           <div class="home-dashboard" id="homeDashboard">
             <header class="home-hero">
@@ -291,22 +315,24 @@
           </div>
         </div>
 
-        <div class="card">
-          <table>
-            <thead>
-              <tr>
-                <th style="width:50px;">Item</th>
-                <th style="width:35%;">Producto *</th>
-                <th style="width:110px;">Lote</th>
-                <th style="width:110px;">F. Producción</th>
-                <th style="width:110px;">F. Vencimiento</th>
-                <th style="width:90px;">Cantidad (u)</th>
-                <th style="width:60px;">Eliminar</th>
-              </tr>
-            </thead>
-            <tbody id="productsBody"></tbody>
-          </table>
-          <div class="actions">
+        <div class="card ocr-products-card">
+          <div class="ocr-products-scroll">
+            <table class="ocr-products-table">
+              <thead>
+                <tr>
+                  <th style="width:50px;">Item</th>
+                  <th style="width:35%;">Producto *</th>
+                  <th style="width:110px;">Lote</th>
+                  <th style="width:110px;">F. Producción</th>
+                  <th style="width:110px;">F. Vencimiento</th>
+                  <th style="width:90px;">Cantidad (u)</th>
+                  <th style="width:60px;">Eliminar</th>
+                </tr>
+              </thead>
+              <tbody id="productsBody"></tbody>
+            </table>
+          </div>
+          <div class="actions ocr-actions-bar" id="ocrActionsBar">
             <button class="btn btn-success" id="addRowBtn">+ Agregar fila</button>
             <button class="btn btn-secondary hidden" id="restoreConstanciaItemsBtn" type="button">Restaurar productos del historial</button>
             <button class="btn btn-primary" id="saveBtn">Guardar Constancia</button>
@@ -1083,6 +1109,7 @@
 
       function addRow(productValue = "") {
         const row = document.createElement("tr");
+        row.className = "ocr-product-row";
         row.innerHTML = `
           <td class="itemCell"></td>
           <td><input type="text" class="product-input" value="${productValue.replace(/"/g, "&quot;")}" placeholder="Buscar producto..." autocomplete="off" /></td>
@@ -1109,6 +1136,7 @@
 
       function insertRowAfter(targetRow) {
         const newRow = document.createElement("tr");
+        newRow.className = "ocr-product-row";
         newRow.innerHTML = `
           <td class="itemCell"></td>
           <td><input type="text" class="product-input" placeholder="Buscar producto..." autocomplete="off" /></td>
@@ -1135,6 +1163,22 @@
       function reindexRows() {
         [...productsBody.querySelectorAll("tr")].forEach((tr, idx) => {
           tr.querySelector(".row-number").textContent = String(idx + 1);
+        });
+        refreshOcrRowStates();
+      }
+
+      function refreshOcrRowStates() {
+        if (!productsBody) return;
+        productsBody.querySelectorAll("tr").forEach((row) => {
+          const productInput = row.querySelector(".product-input");
+          const product = (productInput?.value || "").trim();
+          const otherInputs = Array.from(row.querySelectorAll("input")).filter(
+            (el) => !el.classList.contains("product-input")
+          );
+          const lot = (otherInputs[0]?.value || "").trim();
+          const hasOtherData = otherInputs.some((el) => (el.value || "").trim());
+          const incomplete = (!product && hasOtherData) || (product && !lot);
+          row.classList.toggle("ocr-row-incomplete", incomplete);
         });
       }
 
@@ -2145,8 +2189,16 @@
       productsBody.addEventListener("input", (event) => {
         const input = event.target;
         if (!(input instanceof HTMLInputElement)) return;
-        if (!input.classList.contains("product-input")) return;
+        if (!input.classList.contains("product-input")) {
+          refreshOcrRowStates();
+          return;
+        }
         showProductAutocomplete(input);
+        refreshOcrRowStates();
+      });
+
+      productsBody.addEventListener("change", () => {
+        refreshOcrRowStates();
       });
 
       productsBody.addEventListener("focusin", (event) => {
@@ -2347,6 +2399,46 @@
       });
 
       let currentSectionId = "section-home";
+
+      const SECTION_META = {
+        "section-home": { title: "Inicio", subtitle: "Resumen y accesos rápidos" },
+        "section-clients": { title: "Clientes", subtitle: "Catálogo y gestión de clientes" },
+        "section-products": { title: "Productos", subtitle: "Catálogo de productos y parámetros de calidad" },
+        "section-transports": { title: "Transporte", subtitle: "Matrículas y unidades de transporte" },
+        "section-ocr": { title: "OCR · Nueva constancia", subtitle: "Captura de datos y emisión de constancias" },
+        "section-constancias": { title: "Constancias", subtitle: "Lista, filtros y confirmación de emisiones" },
+        "section-trazabilidad": { title: "Trazabilidad", subtitle: "Historial por producto, lote o tienda" },
+        "section-trasiegos": { title: "Trasiegos", subtitle: "Registro y seguimiento de trasiegos" },
+        "section-analisis": { title: "Análisis", subtitle: "Importación CSV y aplicación a constancias" },
+      };
+
+      function updateSectionHeader(targetId) {
+        const header = document.getElementById("sectionPageHeader");
+        const titleEl = document.getElementById("sectionPageTitle");
+        const subtitleEl = document.getElementById("sectionPageSubtitle");
+        const meta = SECTION_META[targetId];
+        if (!header || !titleEl || !subtitleEl || !meta) return;
+        if (targetId === "section-home") {
+          header.classList.add("hidden");
+          return;
+        }
+        header.classList.remove("hidden");
+        titleEl.textContent = meta.title;
+        subtitleEl.textContent = meta.subtitle;
+      }
+
+      function updateNavConstanciasBadge() {
+        const badge = document.getElementById("navConstanciasBadge");
+        if (!badge) return;
+        const pending = (allConstancias || []).filter((c) => c.status === "por_confirmar").length;
+        if (pending > 0) {
+          badge.textContent = pending > 99 ? "99+" : String(pending);
+          badge.classList.remove("hidden");
+          badge.title = `${pending} por confirmar`;
+        } else {
+          badge.classList.add("hidden");
+        }
+      }
 
       const homeWeekChart = document.getElementById("homeWeekChart");
       const homeWeekTotal = document.getElementById("homeWeekTotal");
@@ -2777,6 +2869,7 @@
         renderHomeTopClients(list);
         bindHomeChartInteractions();
         if (currentSectionId === "section-home") triggerHomeAnimations();
+        updateNavConstanciasBadge();
       }
 
       function hideAllSections() {
@@ -2796,6 +2889,10 @@
         const section = document.getElementById("section-home");
         if (section) section.classList.remove("hidden");
         currentSectionId = "section-home";
+        navLinks.forEach((link) => {
+          link.classList.toggle("active", link.dataset.target === "section-home");
+        });
+        updateSectionHeader("section-home");
         updateSidebarHomeBtn();
         renderHomeDashboard();
       }
@@ -2816,6 +2913,7 @@
           link.classList.toggle("active", link.dataset.target === targetId);
         });
         currentSectionId = targetId;
+        updateSectionHeader(targetId);
         updateSidebarHomeBtn();
         if (targetId === "section-ocr" && !currentConstanciaId && !suppressOcrReset) {
           resetConstanciaForm();
@@ -3679,6 +3777,12 @@
         return "por_confirmar";
       }
 
+      function constanciaStatusHtml(status) {
+        const statusClass = constanciaStatusClass(status);
+        const statusLabel = constanciaStatusLabel(status);
+        return `<span class="status ${statusClass}"><span class="status-dot" aria-hidden="true"></span>${statusLabel}</span>`;
+      }
+
       async function openConstanciaInOcr(id) {
         const res = await fetch(`/api/constancias/${id}`);
         const data = await res.json();
@@ -3706,8 +3810,8 @@
         constanciasList.innerHTML = "";
         list.forEach((item) => {
           const row = document.createElement("tr");
-          const statusLabel = constanciaStatusLabel(item.status);
           const statusClass = constanciaStatusClass(item.status);
+          row.className = `constancia-row--${statusClass}`;
           const itemCount = Array.isArray(item.items) ? item.items.length : 0;
           const itemCountLabel =
             itemCount === 0
@@ -3720,7 +3824,7 @@
             <td>${formatIssueDateDisplay(item.issue_date)}</td>
             <td>${item.client_name || ""}</td>
             <td>${item.transport_plate || ""}</td>
-            <td><span class="status ${statusClass}">${statusLabel}</span></td>
+            <td>${constanciaStatusHtml(item.status)}</td>
             <td><button class="btn btn-outline btn-mini edit-btn">Editar</button></td>
             <td>
               ${item.status === "por_confirmar" ? '<button class="btn btn-success btn-mini confirm-btn">Confirmar</button>' : "-"}
