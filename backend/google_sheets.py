@@ -258,6 +258,14 @@ def _fmt_cell(value: Any) -> Any:
     return value
 
 
+def preserve_user_text(value: Any) -> str:
+    """Conserva mayúsculas/minúsculas; solo quita espacios y prefijo de texto forzado en Sheets."""
+    text = str(value or "").strip()
+    if text.startswith("'"):
+        text = text[1:].strip()
+    return text
+
+
 def _parse_id_cell(value: str) -> Optional[int]:
     value = (value or "").strip()
     if not value or value.lower() == "id":
@@ -328,7 +336,7 @@ def read_trasiegos_sheet_rows() -> list[dict[str, str]]:
             rec: dict[str, str] = {}
             for h in canonical:
                 idx = col_map.get(h)
-                rec[h] = (row[idx] if idx is not None and idx < len(row) else "") or ""
+                rec[h] = preserve_user_text(row[idx] if idx is not None and idx < len(row) else "")
             records.append(repair_shifted_trasiego(rec))
         return records
 
@@ -390,7 +398,7 @@ def read_sheet_rows(tab: str, headers: Sequence[str]) -> list[dict[str, str]]:
         rec: dict[str, str] = {}
         for h in headers:
             idx = col_map.get(h)
-            rec[h] = (row[idx] if idx is not None and idx < len(row) else "") or ""
+            rec[h] = preserve_user_text(row[idx] if idx is not None and idx < len(row) else "")
         records.append(rec)
     return records
 
@@ -477,7 +485,7 @@ def _append_rows_batch(state: TabState, rows: list[list[Any]]) -> int:
         chunk = to_write[i : i + BATCH_APPEND_SIZE]
 
         def _append(chunk_rows: list = chunk) -> None:
-            state.sheet.append_rows(chunk_rows, value_input_option="USER_ENTERED")
+            state.sheet.append_rows(chunk_rows, value_input_option="RAW")
 
         _with_retry(f"append_rows({state.tab})", _append)
         _metrics.writes += 1
@@ -574,7 +582,7 @@ def upsert_row_by_id(tab: str, headers: Sequence[str], values: Sequence[Any]) ->
             state.sheet.update(
                 [row_values],
                 range_name=range_name,
-                value_input_option="USER_ENTERED",
+                value_input_option="RAW",
             )
 
         _with_retry(f"update_row({tab},{record_id})", _update)

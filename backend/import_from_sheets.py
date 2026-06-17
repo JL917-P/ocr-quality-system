@@ -49,6 +49,8 @@ def _utc_now() -> str:
 
 def _str_or_none(value: str) -> Optional[str]:
     text = (value or "").strip()
+    if text.startswith("'"):
+        text = text[1:].strip()
     return text or None
 
 

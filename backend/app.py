@@ -53,6 +53,7 @@ from google_sheets import (
     TAB_TRASIEGOS,
     TAB_TRANSPORTES,
     delete_row_by_id,
+    preserve_user_text,
     run_manual_resync,
     run_startup_sheets_backup_check,
     run_sync_after_create,
@@ -340,6 +341,11 @@ if resolved_cmd:
 
 PRODUCT_CATALOG = load_product_catalog()
 EASYOCR_READER = None
+
+
+def _user_text_or_none(value: object) -> str | None:
+    text = preserve_user_text(value)
+    return text or None
 
 
 def order_points(pts: np.ndarray) -> np.ndarray:
@@ -1196,7 +1202,10 @@ def list_products(limit: int = 200) -> JSONResponse:
         }
         for row in rows
     ]
-    return JSONResponse({"products": products})
+    return JSONResponse(
+        {"products": products},
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.post("/api/products")
@@ -1210,9 +1219,9 @@ async def create_product(payload: dict) -> JSONResponse:
         "origin": (payload.get("origin") or "").strip() or None,
         "um": (payload.get("um") or "").strip() or None,
         "active": 1 if payload.get("active", True) else 0,
-        "lot": (payload.get("lot") or "").strip() or None,
-        "production_text": (payload.get("production_text") or "").strip() or None,
-        "expiration_text": (payload.get("expiration_text") or "").strip() or None,
+        "lot": _user_text_or_none(payload.get("lot")),
+        "production_text": _user_text_or_none(payload.get("production_text")),
+        "expiration_text": _user_text_or_none(payload.get("expiration_text")),
         "humidity": payload.get("humidity"),
         "broken_grains": payload.get("broken_grains"),
         "chalky_1": payload.get("chalky_1"),
@@ -1269,9 +1278,9 @@ async def update_product(product_id: int, payload: dict) -> JSONResponse:
         "origin": (payload.get("origin") or "").strip() or None,
         "um": (payload.get("um") or "").strip() or None,
         "active": 1 if payload.get("active", True) else 0,
-        "lot": (payload.get("lot") or "").strip() or None,
-        "production_text": (payload.get("production_text") or "").strip() or None,
-        "expiration_text": (payload.get("expiration_text") or "").strip() or None,
+        "lot": _user_text_or_none(payload.get("lot")),
+        "production_text": _user_text_or_none(payload.get("production_text")),
+        "expiration_text": _user_text_or_none(payload.get("expiration_text")),
         "humidity": payload.get("humidity"),
         "broken_grains": payload.get("broken_grains"),
         "chalky_1": payload.get("chalky_1"),

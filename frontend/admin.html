@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home20" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home21" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -714,13 +714,13 @@
             <div class="row-2">
               <div class="field">
                 <label>Fecha Producción (texto)</label>
-                <input id="prodProduction" type="text" placeholder="Ej: 01DIC25" />
+                <input id="prodProduction" type="text" placeholder="Ej: 01DIC25" autocapitalize="off" spellcheck="false" />
               </div>
             </div>
             <div class="row-2">
               <div class="field">
                 <label>Fecha Vencimiento (texto)</label>
-                <input id="prodExpiration" type="text" placeholder="Ej: AGO26" />
+                <input id="prodExpiration" type="text" placeholder="Ej: AGO26" autocapitalize="off" spellcheck="false" />
               </div>
             </div>
 
@@ -3453,8 +3453,8 @@
             <td>${prod.code || ""}</td>
             <td>${prod.um || ""}</td>
             <td>${prod.lot || ""}</td>
-            <td>${prod.production_text || ""}</td>
-            <td>${prod.expiration_text || ""}</td>
+            <td class="product-date-cell">${escapeHomeHtml(prod.production_text || "")}</td>
+            <td class="product-date-cell">${escapeHomeHtml(prod.expiration_text || "")}</td>
             <td>${prod.active ? "Sí" : "No"}</td>
             <td><button class="btn btn-danger btn-mini" type="button">Eliminar</button></td>
           `;
@@ -3544,7 +3544,7 @@
       }
 
       async function loadProducts() {
-        const res = await fetch("/api/products");
+        const res = await fetch("/api/products", { cache: "no-store" });
         const data = await res.json();
         if (!res.ok) {
           return;

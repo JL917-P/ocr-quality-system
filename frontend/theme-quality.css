@@ -1650,8 +1650,10 @@ th {
   box-shadow: inset 3px 0 0 #f59e0b;
 }
 
-#section-ocr .ocr-products-table tbody tr.ocr-row-incomplete:hover {
-  background: #fef3c7;
+#section-products td.product-date-cell,
+#productModal #prodProduction,
+#productModal #prodExpiration {
+  text-transform: none;
 }
 
 /* —— Constancias: filas por estado —— */
