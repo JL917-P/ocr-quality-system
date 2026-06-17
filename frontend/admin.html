@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home22" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home23" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -540,25 +540,29 @@
             </div>
           </div>
 
-          <div class="card">
-            <table>
-              <thead>
-                <tr>
-                  <th style="width:34px;"><input id="selectAllConstancias" type="checkbox" /></th>
-                  <th style="width:80px;">Número</th>
-                  <th style="width:90px;">Productos</th>
-                  <th style="width:140px;">Fecha emisión</th>
-                  <th>Cliente</th>
-                  <th style="width:160px;">Unidad transporte</th>
-                  <th style="width:140px;">Estado</th>
-                  <th style="width:90px;">Editar</th>
-                  <th style="width:90px;">Confirmar</th>
-                  <th style="width:90px;">Plantilla</th>
-                </tr>
-              </thead>
-              <tbody id="constanciasList"></tbody>
-            </table>
-            <div class="pager">
+          <div class="constancia-filter-chips hidden" id="constanciaFilterChips" aria-live="polite"></div>
+
+          <div class="card constancias-table-card">
+            <div class="constancias-table-scroll">
+              <table class="constancias-table">
+                <thead>
+                  <tr>
+                    <th style="width:34px;"><input id="selectAllConstancias" type="checkbox" /></th>
+                    <th style="width:72px;">Número</th>
+                    <th style="width:72px;">Productos</th>
+                    <th style="width:108px;">Fecha emisión</th>
+                    <th>Cliente</th>
+                    <th style="width:140px;">Unidad transporte</th>
+                    <th style="width:128px;">Estado</th>
+                    <th style="width:72px;">Editar</th>
+                    <th style="width:80px;">Confirmar</th>
+                    <th style="width:64px;">Plantilla</th>
+                  </tr>
+                </thead>
+                <tbody id="constanciasList"></tbody>
+              </table>
+            </div>
+            <div class="pager constancias-pager">
               <span class="tag-muted" id="constanciasCount">0</span>
               <button class="btn btn-outline" id="constanciasPrevBtn" type="button">Anterior</button>
               <button class="btn btn-outline" id="constanciasNextBtn" type="button">Siguiente</button>
@@ -2357,6 +2361,25 @@
           applyConstanciaFilters();
         });
       }
+      const constanciaFilterChips = document.getElementById("constanciaFilterChips");
+      if (constanciaFilterChips) {
+        constanciaFilterChips.addEventListener("click", (event) => {
+          const chip = event.target.closest("[data-chip]");
+          if (chip?.dataset.chip === "search") {
+            constanciaSearch.value = "";
+            applyConstanciaFilters();
+            return;
+          }
+          if (chip?.dataset.chip === "date") {
+            if (constanciaDateFilter) constanciaDateFilter.value = "";
+            applyConstanciaFilters();
+            return;
+          }
+          if (event.target.closest("[data-action='clear-all']")) {
+            clearAllConstanciaFilters();
+          }
+        });
+      }
       if (traceSearchInput) {
         traceSearchInput.addEventListener("input", applyTraceFilters);
       }
@@ -3951,6 +3974,45 @@
         constanciaDateClearBtn?.classList.remove("hidden");
       }
 
+      function clearAllConstanciaFilters() {
+        constanciaSearch.value = "";
+        if (constanciaDateFilter) constanciaDateFilter.value = "";
+        applyConstanciaFilters();
+      }
+
+      function renderConstanciaFilterChips() {
+        const bar = document.getElementById("constanciaFilterChips");
+        if (!bar) return;
+        const query = constanciaSearch.value.trim();
+        const isoValue = (constanciaDateFilter?.value || "").trim();
+        const hasFilters = Boolean(query || isoValue);
+        if (!hasFilters) {
+          bar.classList.add("hidden");
+          bar.innerHTML = "";
+          return;
+        }
+        const total = filteredConstancias.length;
+        const countLabel = `${total} resultado${total === 1 ? "" : "s"}`;
+        const parts = [`<span class="constancia-filter-chips-label">${escapeHomeHtml(countLabel)}</span>`];
+        if (query) {
+          parts.push(
+            `<button type="button" class="constancia-filter-chip" data-chip="search">Búsqueda: ${escapeHomeHtml(query)} <span class="constancia-filter-chip-x" aria-hidden="true">×</span></button>`
+          );
+        }
+        if (isoValue) {
+          const filterDate = getConstanciaDateFilterDate();
+          const dateLabel = filterDate ? formatConstanciaFilterDateLabel(filterDate) : isoValue;
+          parts.push(
+            `<button type="button" class="constancia-filter-chip" data-chip="date">Fecha: ${escapeHomeHtml(dateLabel)} <span class="constancia-filter-chip-x" aria-hidden="true">×</span></button>`
+          );
+        }
+        parts.push(
+          `<button type="button" class="constancia-filter-clear-all" data-action="clear-all">Limpiar todo</button>`
+        );
+        bar.classList.remove("hidden");
+        bar.innerHTML = parts.join("");
+      }
+
       function applyConstanciaFilters() {
         const query = constanciaSearch.value.toLowerCase().trim();
         const filterDate = getConstanciaDateFilterDate();
@@ -3976,6 +4038,7 @@
         updateConstanciaDateLabel(isoValue);
         constanciasPage = 1;
         paginateConstancias();
+        renderConstanciaFilterChips();
       }
 
       function paginateConstancias() {

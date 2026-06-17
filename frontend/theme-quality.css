@@ -1671,6 +1671,132 @@ th {
   text-transform: none;
 }
 
+/* —— Constancias: tabla compacta + filtros —— */
+.constancia-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  background: #ffffff;
+  border: 1px solid var(--qc-border);
+  border-radius: var(--qc-radius);
+  box-shadow: var(--qc-shadow);
+}
+
+.constancia-filter-chips-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--qc-slate);
+  margin-right: 4px;
+}
+
+.constancia-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid #bae6fd;
+  border-radius: 999px;
+  background: #f0f9ff;
+  color: #0c4a6e;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.constancia-filter-chip:hover {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+}
+
+.constancia-filter-chip-x {
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.75;
+}
+
+.constancia-filter-clear-all {
+  margin-left: auto;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--qc-teal);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.constancia-filter-clear-all:hover {
+  color: #0c6378;
+}
+
+.constancias-table-card {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
+.constancias-table-scroll {
+  overflow: auto;
+  max-height: min(64vh, 580px);
+}
+
+.constancias-table {
+  margin-top: 0;
+}
+
+.constancias-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  box-shadow: 0 1px 0 var(--qc-border);
+}
+
+#section-constancias .constancias-table th,
+#section-constancias .constancias-table td {
+  padding: 5px 7px;
+  font-size: 11px;
+  height: auto;
+  min-height: 30px;
+  vertical-align: middle;
+}
+
+#section-constancias .constancias-table th {
+  font-size: 10px;
+  padding: 6px 7px;
+}
+
+#section-constancias .constancias-table .btn-mini {
+  padding: 3px 7px;
+  font-size: 10px;
+  min-height: 24px;
+}
+
+#section-constancias .constancias-table .status {
+  padding: 3px 8px;
+  font-size: 10px;
+}
+
+#section-constancias .constancias-table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+.constancias-pager {
+  margin-top: 0;
+  padding: 10px 12px;
+  border-top: 1px solid var(--qc-border);
+  background: #fafbfc;
+}
+
 /* —— Constancias: filas por estado —— */
 #section-constancias tbody tr.constancia-row--confirmada {
   box-shadow: inset 4px 0 0 #047857;
@@ -2261,7 +2387,7 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
     min-width: 680px;
   }
 
-  #section-constancias .card > table,
+  #section-constancias .constancias-table-scroll,
   #section-trazabilidad .card > table {
     min-width: 920px;
   }
