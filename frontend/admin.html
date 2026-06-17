@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home21" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home22" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -174,6 +174,10 @@
           <div class="brand-mark">QC</div>
           <span class="page-header-title">Control de Calidad</span>
         </button>
+        <div class="page-header-section hidden" id="sectionPageHeader" aria-live="polite">
+          <h1 class="page-header-section-title" id="sectionPageTitle">Inicio</h1>
+          <p class="page-header-section-subtitle" id="sectionPageSubtitle">Resumen y accesos rápidos</p>
+        </div>
         <div class="page-header-actions">
           <button type="button" id="importSheetsBtn" class="btn btn-secondary btn-import-sheets" title="Restaurar SQLite desde Google Sheets">
             Importar desde Google Sheets
@@ -186,12 +190,6 @@
       </header>
       <main class="content" id="mainContent">
         <div class="container">
-        <header class="section-page-header hidden" id="sectionPageHeader" aria-live="polite">
-          <div>
-            <h1 class="section-page-title" id="sectionPageTitle">Inicio</h1>
-            <p class="section-page-subtitle" id="sectionPageSubtitle">Resumen y accesos rápidos</p>
-          </div>
-        </header>
         <section id="section-home">
           <div class="home-dashboard" id="homeDashboard">
             <header class="home-hero">

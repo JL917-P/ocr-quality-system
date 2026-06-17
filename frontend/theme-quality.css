@@ -483,6 +483,41 @@ body.page-admin {
   flex-shrink: 0;
 }
 
+.page-header-section {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  padding: 0 10px;
+}
+
+.page-header-section-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page-header-section-subtitle {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.layout.sidebar-open .page-header-section {
+  text-align: left;
+  padding-left: 2px;
+}
+
 .btn-sync-sheets {
   font-size: 12px;
   padding: 8px 14px;
@@ -1370,26 +1405,6 @@ body.page-admin {
   letter-spacing: 0.04em;
 }
 
-.section-page-header {
-  margin-bottom: 18px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--qc-border);
-}
-
-.section-page-title {
-  margin: 0;
-  font-size: 1.45rem;
-  font-weight: 700;
-  color: var(--qc-navy);
-  letter-spacing: -0.02em;
-}
-
-.section-page-subtitle {
-  margin: 4px 0 0;
-  font-size: 0.92rem;
-  color: var(--qc-slate);
-}
-
 .field {
   display: flex;
   flex-direction: column;
@@ -2172,6 +2187,21 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
     white-space: normal;
     line-height: 1.25;
     text-align: center;
+  }
+
+  .page-header-section {
+    width: 100%;
+    text-align: left;
+    padding: 0;
+    order: 2;
+  }
+
+  .page-header-brand {
+    order: 1;
+  }
+
+  .page-header-actions {
+    order: 3;
   }
 
   .topbar-badge {
