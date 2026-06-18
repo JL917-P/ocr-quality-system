@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home23" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home27" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -281,63 +281,82 @@
         </section>
 
         <section id="section-ocr" class="hidden">
-        <div class="card">
-          <div class="row">
-            <div>
-              <label>Número de Constancia</label>
-              <input id="constanciaNumero" type="text" placeholder="Ej: CONST-001" />
+        <div class="ocr-workspace">
+            <div class="card ocr-header-card" id="ocrHeaderCard">
+              <div class="ocr-header-form" id="ocrHeaderForm">
+                <div class="row">
+                  <div>
+                    <label>Número de Constancia</label>
+                    <input id="constanciaNumero" type="text" placeholder="Ej: CONST-001" />
+                  </div>
+                  <div>
+                    <label>Fecha de Emisión</label>
+                    <input id="constanciaFecha" type="date" />
+                  </div>
+                  <div>
+                    <label>Cliente *</label>
+                    <input id="constanciaClienteInput" list="clientesList" placeholder="Escribe para buscar..." />
+                    <datalist id="clientesList"></datalist>
+                  </div>
+                  <div>
+                    <label>Unidad de Transporte</label>
+                    <input id="constanciaTransporteInput" list="transportesList" placeholder="Escribe para buscar..." />
+                    <datalist id="transportesList"></datalist>
+                  </div>
+                </div>
+                <div class="row ocr-header-types-row">
+                  <div>
+                    <label>Constancias a emitir</label>
+                    <div class="checkbox-inline">
+                      <label><input id="constanciaFumigacion" type="checkbox" checked /> Fumigación</label>
+                      <label><input id="constanciaCalidad" type="checkbox" checked /> Calidad</label>
+                    </div>
+                  </div>
+                  <div class="ocr-header-form-actions">
+                    <button type="button" class="ocr-header-collapse-btn hidden" id="ocrHeaderCollapseBtn">
+                      Contraer encabezado
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="ocr-header-summary hidden"
+                id="ocrHeaderSummary"
+                aria-expanded="false"
+                title="Mostrar y editar datos de la constancia"
+              >
+                <span class="ocr-header-summary-text" id="ocrHeaderSummaryText"></span>
+                <span class="ocr-header-summary-hint">Editar</span>
+              </button>
             </div>
-            <div>
-              <label>Fecha de Emisión</label>
-              <input id="constanciaFecha" type="date" />
-            </div>
-            <div>
-              <label>Cliente *</label>
-              <input id="constanciaClienteInput" list="clientesList" placeholder="Escribe para buscar..." />
-              <datalist id="clientesList"></datalist>
-            </div>
-            <div>
-              <label>Unidad de Transporte</label>
-              <input id="constanciaTransporteInput" list="transportesList" placeholder="Escribe para buscar..." />
-              <datalist id="transportesList"></datalist>
-            </div>
-          </div>
-          <div class="row">
-            <div>
-              <label>Constancias a emitir</label>
-              <div class="checkbox-inline">
-                <label><input id="constanciaFumigacion" type="checkbox" checked /> Fumigación</label>
-                <label><input id="constanciaCalidad" type="checkbox" checked /> Calidad</label>
+
+            <div class="card ocr-products-card">
+              <div class="ocr-products-toolbar actions" id="ocrActionsBar" aria-label="Acciones de constancia">
+                <button class="btn btn-success" id="addRowBtn" type="button">+ Agregar fila</button>
+                <button class="btn btn-secondary hidden" id="restoreConstanciaItemsBtn" type="button">Restaurar productos del historial</button>
+                <button class="btn btn-primary" id="saveBtn" type="button">Guardar Constancia</button>
+                <button class="btn btn-warning" id="reserveBtn" type="button">Reserva</button>
+                <button class="btn btn-outline hidden" id="draftBtn" type="button">Borrador</button>
+                <button class="btn btn-outline" id="cancelBtn" type="button">Cancelar</button>
+              </div>
+              <div class="ocr-products-scroll" id="ocrProductsScroll">
+                <table class="ocr-products-table">
+                  <thead>
+                    <tr>
+                      <th style="width:50px;">Item</th>
+                      <th style="width:35%;">Producto *</th>
+                      <th style="width:110px;">Lote</th>
+                      <th style="width:110px;">F. Producción</th>
+                      <th style="width:110px;">F. Vencimiento</th>
+                      <th style="width:90px;">Cantidad (u)</th>
+                      <th style="width:60px;">Eliminar</th>
+                    </tr>
+                  </thead>
+                  <tbody id="productsBody"></tbody>
+                </table>
               </div>
             </div>
-          </div>
-        </div>
-
-        <div class="card ocr-products-card">
-          <div class="ocr-products-scroll">
-            <table class="ocr-products-table">
-              <thead>
-                <tr>
-                  <th style="width:50px;">Item</th>
-                  <th style="width:35%;">Producto *</th>
-                  <th style="width:110px;">Lote</th>
-                  <th style="width:110px;">F. Producción</th>
-                  <th style="width:110px;">F. Vencimiento</th>
-                  <th style="width:90px;">Cantidad (u)</th>
-                  <th style="width:60px;">Eliminar</th>
-                </tr>
-              </thead>
-              <tbody id="productsBody"></tbody>
-            </table>
-          </div>
-          <div class="actions ocr-actions-bar" id="ocrActionsBar">
-            <button class="btn btn-success" id="addRowBtn">+ Agregar fila</button>
-            <button class="btn btn-secondary hidden" id="restoreConstanciaItemsBtn" type="button">Restaurar productos del historial</button>
-            <button class="btn btn-primary" id="saveBtn">Guardar Constancia</button>
-            <button class="btn btn-warning" id="reserveBtn">Reserva</button>
-            <button class="btn btn-outline" id="draftBtn">Borrador</button>
-            <button class="btn btn-outline" id="cancelBtn">Cancelar</button>
-          </div>
         </div>
         </section>
 
@@ -1049,6 +1068,11 @@
       const reserveBtn = document.getElementById("reserveBtn");
       const draftBtn = document.getElementById("draftBtn");
       const cancelBtn = document.getElementById("cancelBtn");
+      const sectionOcr = document.getElementById("section-ocr");
+      const ocrHeaderCard = document.getElementById("ocrHeaderCard");
+      const ocrHeaderSummary = document.getElementById("ocrHeaderSummary");
+      const ocrHeaderSummaryText = document.getElementById("ocrHeaderSummaryText");
+      const ocrHeaderCollapseBtn = document.getElementById("ocrHeaderCollapseBtn");
       const constanciaSearch = document.getElementById("constanciaSearch");
       const constanciaDateFilter = document.getElementById("constanciaDateFilter");
       const constanciaDateLabel = document.getElementById("constanciaDateLabel");
@@ -1108,6 +1132,122 @@
       let analysisStores = [];
       let analysisMeta = {};
       let analysisStoreNames = {};
+
+      function formatOcrHeaderDate(iso) {
+        const value = (iso || "").trim();
+        if (!value) return "Sin fecha";
+        const parts = value.split("-");
+        if (parts.length !== 3) return value;
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+
+      function buildOcrHeaderSummaryText() {
+        const parts = [];
+        const number = constanciaNumero.value.trim();
+        if (number) parts.push(number);
+        parts.push(formatOcrHeaderDate(constanciaFecha.value.trim()));
+        const client = constanciaClienteInput.value.trim();
+        if (client) parts.push(client);
+        const plate = constanciaTransporteInput.value.trim();
+        if (plate) parts.push(plate);
+        const types = [];
+        if (constanciaFumigacion.checked) types.push("Fumigación");
+        if (constanciaCalidad.checked) types.push("Calidad");
+        if (types.length) parts.push(types.join(" + "));
+        return parts.join(" · ") || "Datos de constancia";
+      }
+
+      function isOcrHeaderReadyToCollapse() {
+        return Boolean(
+          constanciaNumero.value.trim() &&
+            constanciaFecha.value.trim() &&
+            constanciaClienteInput.value.trim() &&
+            constanciaTransporteInput.value.trim() &&
+            (constanciaFumigacion.checked || constanciaCalidad.checked)
+        );
+      }
+
+      function setOcrHeaderCollapsed(collapsed) {
+        if (!ocrHeaderCard || !sectionOcr) return;
+        const ready = isOcrHeaderReadyToCollapse();
+        const shouldCollapse = Boolean(collapsed && ready);
+        ocrHeaderCard.classList.toggle("is-collapsed", shouldCollapse);
+        sectionOcr.classList.toggle("ocr-compact", shouldCollapse);
+        if (ocrHeaderSummary) {
+          ocrHeaderSummary.classList.toggle("hidden", !shouldCollapse);
+          ocrHeaderSummary.setAttribute("aria-expanded", shouldCollapse ? "false" : "true");
+        }
+        if (ocrHeaderSummaryText) {
+          ocrHeaderSummaryText.textContent = buildOcrHeaderSummaryText();
+        }
+        if (ocrHeaderCollapseBtn) {
+          ocrHeaderCollapseBtn.classList.toggle("hidden", !ready || shouldCollapse);
+        }
+      }
+
+      function updateOcrHeaderCollapseUi() {
+        const ready = isOcrHeaderReadyToCollapse();
+        if (!ready && ocrHeaderCard?.classList.contains("is-collapsed")) {
+          setOcrHeaderCollapsed(false);
+        }
+        if (ocrHeaderCollapseBtn) {
+          ocrHeaderCollapseBtn.classList.toggle(
+            "hidden",
+            !ready || ocrHeaderCard?.classList.contains("is-collapsed")
+          );
+        }
+        if (ocrHeaderCard?.classList.contains("is-collapsed") && ocrHeaderSummaryText) {
+          ocrHeaderSummaryText.textContent = buildOcrHeaderSummaryText();
+        }
+      }
+
+      function tryAutoCollapseOcrHeader() {
+        if (isOcrHeaderReadyToCollapse()) {
+          setOcrHeaderCollapsed(true);
+        }
+      }
+
+      function expandOcrHeader() {
+        setOcrHeaderCollapsed(false);
+        const first = document.querySelector("#ocrHeaderForm input:not([type='checkbox'])");
+        first?.focus();
+      }
+
+      function bindOcrHeaderCollapse() {
+        const headerInputs = [
+          constanciaNumero,
+          constanciaFecha,
+          constanciaClienteInput,
+          constanciaTransporteInput,
+          constanciaFumigacion,
+          constanciaCalidad,
+        ];
+        headerInputs.forEach((input) => {
+          if (!input) return;
+          input.addEventListener("input", updateOcrHeaderCollapseUi);
+          input.addEventListener("change", updateOcrHeaderCollapseUi);
+        });
+        if (constanciaTransporteInput) {
+          constanciaTransporteInput.addEventListener("blur", () => {
+            updateOcrHeaderCollapseUi();
+            tryAutoCollapseOcrHeader();
+          });
+        }
+        if (ocrHeaderCollapseBtn) {
+          ocrHeaderCollapseBtn.addEventListener("click", () => setOcrHeaderCollapsed(true));
+        }
+        if (ocrHeaderSummary) {
+          ocrHeaderSummary.addEventListener("click", expandOcrHeader);
+        }
+        if (productsBody) {
+          productsBody.addEventListener("focusin", (event) => {
+            if (!(event.target instanceof HTMLInputElement)) return;
+            tryAutoCollapseOcrHeader();
+          });
+        }
+      }
+
+      bindOcrHeaderCollapse();
 
       function addRow(productValue = "") {
         const row = document.createElement("tr");
@@ -3731,6 +3871,8 @@
         currentConstanciaId = null;
         currentConstanciaStatus = "confirmada";
         updateRestoreConstanciaButton([]);
+        setOcrHeaderCollapsed(false);
+        updateOcrHeaderCollapseUi();
       }
 
       async function saveConstancia(status) {
@@ -3825,6 +3967,8 @@
           );
         }
         showSection("section-ocr");
+        setOcrHeaderCollapsed(true);
+        updateOcrHeaderCollapseUi();
       }
 
       function renderConstancias(list) {
