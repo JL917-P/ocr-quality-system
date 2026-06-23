@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home27" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home28" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -295,12 +295,12 @@
                   </div>
                   <div>
                     <label>Cliente *</label>
-                    <input id="constanciaClienteInput" list="clientesList" placeholder="Escribe para buscar..." />
+                    <input id="constanciaClienteInput" type="text" placeholder="Escribe para buscar..." autocomplete="off" />
                     <datalist id="clientesList"></datalist>
                   </div>
                   <div>
                     <label>Unidad de Transporte</label>
-                    <input id="constanciaTransporteInput" list="transportesList" placeholder="Escribe para buscar..." />
+                    <input id="constanciaTransporteInput" type="text" placeholder="Escribe para buscar..." autocomplete="off" />
                     <datalist id="transportesList"></datalist>
                   </div>
                 </div>
@@ -1528,6 +1528,8 @@
       }
 
       function showProductAutocomplete(input) {
+        clientFieldAutocomplete.hide();
+        transportFieldAutocomplete.hide();
         const matches = getProductMatches(input.value || "");
         if (!matches.length) {
           hideProductAutocomplete();
@@ -1590,6 +1592,252 @@
         }
         focusNextProductInput(input);
       }
+
+      function getClientMatches(query) {
+        if (!allClients.length) return [];
+        const rawQuery = (query || "").toString().trim();
+        if (!rawQuery) return [];
+        const normalizedQuery = normalizeSearchText(rawQuery);
+        if (!normalizedQuery) return [];
+        const matches = [];
+        for (const client of allClients) {
+          const name = (client.name || "").trim();
+          if (!name) continue;
+          if (normalizeSearchText(name).includes(normalizedQuery)) matches.push(name);
+        }
+        return matches.sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" })).slice(0, 30);
+      }
+
+      function getTransportMatches(query) {
+        if (!allTransports.length) return [];
+        const rawQuery = (query || "").toString().trim();
+        if (!rawQuery) return [];
+        const normalizedQuery = normalizeSearchText(rawQuery);
+        if (!normalizedQuery) return [];
+        const matches = [];
+        for (const item of allTransports) {
+          const plate = (item.plate || "").trim();
+          if (!plate) continue;
+          if (normalizeSearchText(plate).includes(normalizedQuery)) matches.push(plate);
+        }
+        return matches.sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" })).slice(0, 30);
+      }
+
+      function createFieldAutocomplete(config) {
+        const state = {
+          input: null,
+          items: [],
+          activeIndex: -1,
+          dropdown: null,
+          blurTimer: null,
+          scrollBound: false,
+        };
+
+        function hide() {
+          if (state.blurTimer) {
+            clearTimeout(state.blurTimer);
+            state.blurTimer = null;
+          }
+          if (state.dropdown) {
+            state.dropdown.classList.add("hidden");
+            state.dropdown.innerHTML = "";
+            state.dropdown.classList.remove("product-autocomplete--above");
+          }
+          state.input = null;
+          state.items = [];
+          state.activeIndex = -1;
+        }
+
+        function isOpen() {
+          return Boolean(
+            state.dropdown && !state.dropdown.classList.contains("hidden") && state.items.length
+          );
+        }
+
+        function ensureDropdown() {
+          if (state.dropdown) return state.dropdown;
+          const dropdown = document.createElement("div");
+          dropdown.id = config.dropdownId;
+          dropdown.className = "product-autocomplete hidden";
+          dropdown.setAttribute("role", "listbox");
+          dropdown.addEventListener("mousedown", (event) => {
+            event.preventDefault();
+            const item = event.target.closest("[data-index]");
+            if (!item) return;
+            selectItem(Number(item.dataset.index));
+          });
+          dropdown.addEventListener("mouseover", (event) => {
+            const item = event.target.closest("[data-index]");
+            if (!item) return;
+            setHighlight(Number(item.dataset.index));
+          });
+          dropdown.addEventListener("mouseleave", () => setHighlight(-1));
+          document.body.appendChild(dropdown);
+          state.dropdown = dropdown;
+          return dropdown;
+        }
+
+        function render() {
+          const dropdown = ensureDropdown();
+          dropdown.innerHTML = state.items
+            .map((label, index) => {
+              const active = index === state.activeIndex ? " active" : "";
+              const safe = String(label)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/"/g, "&quot;");
+              return `<div class="product-autocomplete-item${active}" data-index="${index}" role="option">${safe}</div>`;
+            })
+            .join("");
+        }
+
+        function setHighlight(index) {
+          const dropdown = state.dropdown;
+          if (!dropdown) return;
+          const max = state.items.length;
+          const nextIndex = index >= 0 && index < max ? index : -1;
+          if (nextIndex === state.activeIndex) return;
+          state.activeIndex = nextIndex;
+          dropdown.querySelectorAll(".product-autocomplete-item.active").forEach((el) => {
+            el.classList.remove("active");
+          });
+          if (nextIndex < 0) return;
+          const activeEl = dropdown.querySelector(`.product-autocomplete-item[data-index="${nextIndex}"]`);
+          activeEl?.classList.add("active");
+          activeEl?.scrollIntoView({ block: "nearest" });
+        }
+
+        function position(input) {
+          const dropdown = ensureDropdown();
+          const rect = input.getBoundingClientRect();
+          const gap = 4;
+          const pad = 8;
+          const defaultMax = 240;
+          const width = Math.max(rect.width, 280);
+          const left = Math.min(Math.max(pad, rect.left), Math.max(pad, window.innerWidth - width - pad));
+
+          dropdown.style.width = `${width}px`;
+          dropdown.style.left = `${left}px`;
+          dropdown.style.bottom = "auto";
+          dropdown.style.maxHeight = `${defaultMax}px`;
+          dropdown.classList.remove("product-autocomplete--above");
+
+          const naturalHeight = dropdown.scrollHeight || 120;
+          const dropdownHeight = Math.min(defaultMax, naturalHeight);
+          const spaceBelow = window.innerHeight - rect.bottom - gap - pad;
+          const spaceAbove = rect.top - gap - pad;
+          const openAbove = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+
+          let maxHeight;
+          let top;
+          if (openAbove) {
+            maxHeight = Math.max(120, Math.min(defaultMax, spaceAbove));
+            const visibleHeight = Math.min(dropdownHeight, maxHeight);
+            top = Math.max(pad, rect.top - gap - visibleHeight);
+            dropdown.classList.add("product-autocomplete--above");
+          } else {
+            maxHeight = Math.max(120, Math.min(defaultMax, spaceBelow));
+            top = rect.bottom + gap;
+          }
+
+          dropdown.style.maxHeight = `${maxHeight}px`;
+          dropdown.style.top = `${top}px`;
+        }
+
+        function onScroll() {
+          if (state.input && isOpen()) position(state.input);
+        }
+
+        function show(input) {
+          config.onBeforeShow?.();
+          const matches = config.getMatches(input.value || "");
+          if (!matches.length) {
+            hide();
+            return;
+          }
+          state.input = input;
+          state.items = matches;
+          state.activeIndex = -1;
+          const dropdown = ensureDropdown();
+          render();
+          dropdown.classList.remove("hidden");
+          position(input);
+          if (!state.scrollBound) {
+            window.addEventListener("scroll", onScroll, true);
+            state.scrollBound = true;
+          }
+        }
+
+        function moveHighlight(delta) {
+          if (!state.items.length) return;
+          let next;
+          if (state.activeIndex < 0 && delta > 0) next = 0;
+          else {
+            next = state.activeIndex + delta;
+            if (next < 0) next = state.items.length - 1;
+            if (next >= state.items.length) next = 0;
+          }
+          setHighlight(next);
+          if (state.input) position(state.input);
+        }
+
+        function selectItem(index) {
+          const input = state.input;
+          if (!input || index < 0 || index >= state.items.length) return;
+          input.value = state.items[index];
+          hide();
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          config.onSelect?.(input, state.items[index]);
+        }
+
+        function bindInput(input) {
+          if (!input) return;
+          input.setAttribute("autocomplete", "off");
+          input.addEventListener("input", () => show(input));
+          input.addEventListener("focus", () => show(input));
+          input.addEventListener("blur", () => {
+            state.blurTimer = setTimeout(hide, 120);
+          });
+          input.addEventListener("keydown", (event) => {
+            if (!isOpen()) return;
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              moveHighlight(1);
+            } else if (event.key === "ArrowUp") {
+              event.preventDefault();
+              moveHighlight(-1);
+            } else if (event.key === "Enter") {
+              event.preventDefault();
+              const index = state.activeIndex >= 0 ? state.activeIndex : 0;
+              selectItem(index);
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              hide();
+            }
+          });
+        }
+
+        return { bindInput, hide, show, isOpen };
+      }
+
+      const clientFieldAutocomplete = createFieldAutocomplete({
+        dropdownId: "clientAutocomplete",
+        getMatches: getClientMatches,
+        onBeforeShow: () => {
+          transportFieldAutocomplete.hide();
+          hideProductAutocomplete();
+        },
+      });
+
+      const transportFieldAutocomplete = createFieldAutocomplete({
+        dropdownId: "transportAutocomplete",
+        getMatches: getTransportMatches,
+        onBeforeShow: () => {
+          clientFieldAutocomplete.hide();
+          hideProductAutocomplete();
+        },
+      });
 
       function detectDelimiter(sample) {
         const candidates = [",", ";", "\t", "|"];
@@ -2378,10 +2626,12 @@
       });
 
       if (constanciaClienteInput) {
+        clientFieldAutocomplete.bindInput(constanciaClienteInput);
         constanciaClienteInput.addEventListener("change", checkUnknownCliente);
         constanciaClienteInput.addEventListener("blur", checkUnknownCliente);
       }
       if (constanciaTransporteInput) {
+        transportFieldAutocomplete.bindInput(constanciaTransporteInput);
         constanciaTransporteInput.addEventListener("change", checkUnknownTransporte);
         constanciaTransporteInput.addEventListener("blur", checkUnknownTransporte);
       }
