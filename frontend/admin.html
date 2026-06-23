@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home28" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home34" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -282,64 +282,63 @@
 
         <section id="section-ocr" class="hidden">
         <div class="ocr-workspace">
-            <div class="card ocr-header-card" id="ocrHeaderCard">
-              <div class="ocr-header-form" id="ocrHeaderForm">
-                <div class="row">
-                  <div>
-                    <label>Número de Constancia</label>
-                    <input id="constanciaNumero" type="text" placeholder="Ej: CONST-001" />
+            <div class="card ocr-workspace-card">
+              <div class="ocr-header-card" id="ocrHeaderCard">
+                <div class="ocr-command-bar ocr-header-form" id="ocrHeaderForm">
+                  <div class="ocr-command-group">
+                    <span class="ocr-command-label">Número</span>
+                    <input id="constanciaNumero" type="text" placeholder="CONST-001" />
                   </div>
-                  <div>
-                    <label>Fecha de Emisión</label>
+                  <div class="ocr-command-sep" aria-hidden="true"></div>
+                  <div class="ocr-command-group">
+                    <span class="ocr-command-label">Fecha</span>
                     <input id="constanciaFecha" type="date" />
                   </div>
-                  <div>
-                    <label>Cliente *</label>
-                    <input id="constanciaClienteInput" type="text" placeholder="Escribe para buscar..." autocomplete="off" />
+                  <div class="ocr-command-sep" aria-hidden="true"></div>
+                  <div class="ocr-command-group ocr-command-group--client">
+                    <span class="ocr-command-label">Cliente</span>
+                    <input id="constanciaClienteInput" type="text" placeholder="Buscar..." autocomplete="off" />
                     <datalist id="clientesList"></datalist>
                   </div>
-                  <div>
-                    <label>Unidad de Transporte</label>
-                    <input id="constanciaTransporteInput" type="text" placeholder="Escribe para buscar..." autocomplete="off" />
+                  <div class="ocr-command-sep" aria-hidden="true"></div>
+                  <div class="ocr-command-group ocr-command-group--transport">
+                    <span class="ocr-command-label">Placa</span>
+                    <input id="constanciaTransporteInput" type="text" placeholder="Buscar..." autocomplete="off" />
                     <datalist id="transportesList"></datalist>
                   </div>
-                </div>
-                <div class="row ocr-header-types-row">
-                  <div>
-                    <label>Constancias a emitir</label>
-                    <div class="checkbox-inline">
-                      <label><input id="constanciaFumigacion" type="checkbox" checked /> Fumigación</label>
-                      <label><input id="constanciaCalidad" type="checkbox" checked /> Calidad</label>
+                  <div class="ocr-command-sep" aria-hidden="true"></div>
+                  <div class="ocr-command-group ocr-command-group--types">
+                    <span class="ocr-command-label">Emitir</span>
+                    <div class="ocr-command-checks">
+                      <label><input id="constanciaFumigacion" type="checkbox" checked /> Fum.</label>
+                      <label><input id="constanciaCalidad" type="checkbox" checked /> Cal.</label>
                     </div>
                   </div>
-                  <div class="ocr-header-form-actions">
-                    <button type="button" class="ocr-header-collapse-btn hidden" id="ocrHeaderCollapseBtn">
-                      Contraer encabezado
-                    </button>
+                  <div class="ocr-command-group ocr-command-group--collapse">
+                    <button type="button" class="ocr-header-collapse-btn hidden" id="ocrHeaderCollapseBtn">Contraer</button>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  class="ocr-header-summary hidden"
+                  id="ocrHeaderSummary"
+                  aria-expanded="false"
+                  title="Mostrar y editar datos de la constancia"
+                >
+                  <span class="ocr-header-summary-text" id="ocrHeaderSummaryText"></span>
+                  <span class="ocr-header-summary-hint">Editar</span>
+                </button>
               </div>
-              <button
-                type="button"
-                class="ocr-header-summary hidden"
-                id="ocrHeaderSummary"
-                aria-expanded="false"
-                title="Mostrar y editar datos de la constancia"
-              >
-                <span class="ocr-header-summary-text" id="ocrHeaderSummaryText"></span>
-                <span class="ocr-header-summary-hint">Editar</span>
-              </button>
-            </div>
 
-            <div class="card ocr-products-card">
-              <div class="ocr-products-toolbar actions" id="ocrActionsBar" aria-label="Acciones de constancia">
+              <div class="ocr-command-bar ocr-actions-bar actions" id="ocrActionsBar" aria-label="Acciones de constancia">
                 <button class="btn btn-success" id="addRowBtn" type="button">+ Agregar fila</button>
-                <button class="btn btn-secondary hidden" id="restoreConstanciaItemsBtn" type="button">Restaurar productos del historial</button>
-                <button class="btn btn-primary" id="saveBtn" type="button">Guardar Constancia</button>
+                <button class="btn btn-secondary hidden" id="restoreConstanciaItemsBtn" type="button">Restaurar historial</button>
+                <button class="btn btn-primary" id="saveBtn" type="button">Guardar</button>
                 <button class="btn btn-warning" id="reserveBtn" type="button">Reserva</button>
                 <button class="btn btn-outline hidden" id="draftBtn" type="button">Borrador</button>
                 <button class="btn btn-outline" id="cancelBtn" type="button">Cancelar</button>
               </div>
+
               <div class="ocr-products-scroll" id="ocrProductsScroll">
                 <table class="ocr-products-table">
                   <thead>
@@ -516,25 +515,26 @@
         </section>
 
         <section id="section-constancias" class="hidden">
-          <div class="card">
-            <div class="toolbar">
-              <div class="field" style="flex: 1;">
-                <label>Buscar constancia</label>
-                <input id="constanciaSearch" type="text" placeholder="Buscar..." />
+          <div class="card constancias-table-card">
+            <div class="constancias-command-bar" role="toolbar" aria-label="Filtros de constancias">
+              <div class="constancias-command-group constancias-command-group--search">
+                <span class="constancias-command-label">Buscar</span>
+                <input id="constanciaSearch" type="text" placeholder="Nº, cliente..." />
               </div>
-              <div class="field constancia-date-filter">
-                <label>Filtrar por fecha</label>
+              <div class="constancias-command-sep" aria-hidden="true"></div>
+              <div class="constancias-command-group constancias-command-group--date">
+                <span class="constancias-command-label">Fecha</span>
                 <div class="constancia-date-bar">
                   <label class="constancia-date-trigger" title="Elegir fecha">
                     <input id="constanciaDateFilter" type="date" class="constancia-date-input-overlay" aria-label="Elegir fecha de emisión" />
-                    <svg class="constancia-date-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <svg class="constancia-date-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                       <rect x="3" y="4" width="18" height="18" rx="2" />
                       <line x1="16" y1="2" x2="16" y2="6" />
                       <line x1="8" y1="2" x2="8" y2="6" />
                       <line x1="3" y1="10" x2="21" y2="10" />
                     </svg>
                   </label>
-                  <span id="constanciaDateLabel" class="constancia-date-label">Todas las fechas</span>
+                  <span id="constanciaDateLabel" class="constancia-date-label">Todas</span>
                   <button
                     type="button"
                     class="constancia-date-clear hidden"
@@ -546,22 +546,18 @@
                   </button>
                 </div>
               </div>
-              <div class="field">
-                <label>Acción</label>
-                <div class="table-actions">
-                  <select id="constanciaBulkAction">
-                    <option value="">---------</option>
-                    <option value="delete">Eliminar seleccionadas</option>
-                  </select>
-                  <button class="btn btn-outline" id="constanciaApplyBtn" type="button">Aplicar</button>
-                </div>
+              <div class="constancias-command-sep" aria-hidden="true"></div>
+              <div class="constancias-command-group constancias-command-group--bulk">
+                <select id="constanciaBulkAction" aria-label="Acción masiva">
+                  <option value="">Acción...</option>
+                  <option value="delete">Eliminar seleccionadas</option>
+                </select>
+                <button class="btn btn-outline constancias-command-btn" id="constanciaApplyBtn" type="button">Aplicar</button>
               </div>
             </div>
-          </div>
 
-          <div class="constancia-filter-chips hidden" id="constanciaFilterChips" aria-live="polite"></div>
+            <div class="constancia-filter-chips hidden" id="constanciaFilterChips" aria-live="polite"></div>
 
-          <div class="card constancias-table-card">
             <div class="constancias-table-scroll">
               <table class="constancias-table">
                 <thead>
@@ -4356,7 +4352,7 @@
       function updateConstanciaDateLabel(isoValue) {
         if (!constanciaDateLabel) return;
         if (!isoValue) {
-          constanciaDateLabel.textContent = "Todas las fechas";
+          constanciaDateLabel.textContent = "Todas";
           constanciaDateLabel.classList.remove("constancia-date-label--active");
           constanciaDateClearBtn?.classList.add("hidden");
           return;
