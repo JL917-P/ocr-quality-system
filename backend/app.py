@@ -20,7 +20,7 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     easyocr = None
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pytesseract import Output
@@ -40,6 +40,14 @@ from constancia_utils import (
     restore_items_from_history,
 )
 from trasiego_utils import repair_all_trasiegos_in_sqlite, repair_shifted_trasiego, repair_trasiego_in_sqlite
+from traceability_export import (
+    build_traceability_workbook,
+    build_traceability_workbook_batch,
+    filter_trace_rows,
+    load_trace_rows,
+    products_for_lot,
+    unique_lots,
+)
 from import_from_sheets import run_import_from_sheets
 from google_sheets import (
     HEADERS_CLIENTES,
@@ -1715,6 +1723,83 @@ def list_constancias(limit: int = 500) -> JSONResponse:
                 }
             )
     return JSONResponse({"constancias": constancias})
+
+
+@app.get("/api/trazabilidad/lotes")
+def list_trace_lots() -> JSONResponse:
+    with sqlite3.connect(DB_PATH) as conn:
+        lots = unique_lots(load_trace_rows(conn))
+    return JSONResponse({"lotes": lots})
+
+
+@app.get("/api/trazabilidad/productos")
+def list_trace_products_for_lot(lote: str = Query(..., min_length=1)) -> JSONResponse:
+    with sqlite3.connect(DB_PATH) as conn:
+        products = products_for_lot(load_trace_rows(conn), lote)
+    return JSONResponse({"lote": lote.strip(), "productos": products})
+
+
+@app.get("/api/trazabilidad/export")
+def export_traceability_excel(
+    lote: str = Query(..., min_length=1),
+    producto: str = Query(""),
+) -> StreamingResponse:
+    with sqlite3.connect(DB_PATH) as conn:
+        trace_rows = load_trace_rows(conn)
+        producto_value = producto.strip() or None
+        try:
+            content = build_traceability_workbook(trace_rows, lote, producto_value)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        available = products_for_lot(trace_rows, lote)
+        if not producto_value and len(available) > 1:
+            filename = f"trazabilidad_{lote.strip()}_todos.xlsx"
+        elif producto_value:
+            safe_product = re.sub(r"[^\w\-]+", "_", producto_value)[:40]
+            filename = f"trazabilidad_{lote.strip()}_{safe_product}.xlsx"
+        else:
+            filename = f"trazabilidad_{lote.strip()}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.post("/api/trazabilidad/export-batch")
+async def export_traceability_batch(payload: dict) -> StreamingResponse:
+    selections = payload.get("selections") if isinstance(payload, dict) else None
+    if not isinstance(selections, list) or not selections:
+        raise HTTPException(status_code=400, detail="Indique al menos un lote y producto.")
+    cleaned: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in selections:
+        if not isinstance(item, dict):
+            continue
+        lote = str(item.get("lote") or "").strip()
+        producto = str(item.get("producto") or "").strip()
+        if not lote or not producto:
+            continue
+        key = f"{lote.lower()}|{producto.lower()}"
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append({"lote": lote, "producto": producto})
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="Selecciones inválidas.")
+    with sqlite3.connect(DB_PATH) as conn:
+        trace_rows = load_trace_rows(conn)
+        try:
+            content = build_traceability_workbook_batch(trace_rows, cleaned)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+    count = len(cleaned)
+    filename = f"trazabilidad_{count}_lotes.xlsx" if count > 1 else f"trazabilidad_{cleaned[0]['lote']}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.post("/api/constancias/{constancia_id}/restore-items-from-history")

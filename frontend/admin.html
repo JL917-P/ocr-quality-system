@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home34" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home47" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -590,7 +590,7 @@
             <div class="toolbar">
               <div class="field" style="flex: 1;">
                 <label>Buscar</label>
-                <input id="traceSearchInput" type="text" placeholder="Escribe para filtrar..." list="clientesList" />
+                <input id="traceSearchInput" type="text" placeholder="Escribe para filtrar..." />
               </div>
               <div class="field">
                 <label>Buscar por</label>
@@ -604,11 +604,15 @@
                 <label>Resultados</label>
                 <div class="tag-muted" id="traceCount">0</div>
               </div>
+              <div class="field">
+                <label>&nbsp;</label>
+                <button class="btn btn-primary" id="traceOpenReportBtn" type="button">Generar reporte</button>
+              </div>
             </div>
           </div>
 
           <div class="card">
-            <table>
+            <table class="trace-table">
               <thead>
                 <tr>
                   <th style="width:60px;">N°</th>
@@ -625,6 +629,77 @@
             </table>
           </div>
         </section>
+
+        <div class="modal-backdrop hidden" id="traceReportModal">
+          <div class="modal modal-trace-report" id="traceReportModalPanel">
+            <div class="trace-modal-header">
+              <div>
+                <div class="title">Reporte de trazabilidad</div>
+                <div class="sub trace-modal-sub" id="traceModalSub">Busque por lote, agrupe productos y genere un Excel con todos los bloques en una hoja.</div>
+              </div>
+              <button class="btn btn-outline" id="traceModalCloseBtn" type="button">Cerrar</button>
+            </div>
+
+            <div class="trace-modal-body">
+            <div class="trace-modal-search-bar" id="traceModalSearchBar" role="toolbar" aria-label="Buscar por lote">
+              <div class="trace-modal-field trace-modal-field--grow">
+                <span class="trace-command-label">Lote</span>
+                <input id="traceModalLoteInput" type="text" placeholder="Ej: CT-291" list="traceModalLotList" autocomplete="off" />
+                <datalist id="traceModalLotList"></datalist>
+              </div>
+              <button class="btn btn-outline" id="traceModalFilterBtn" type="button">Filtrar</button>
+            </div>
+
+            <div class="trace-modal-pairs hidden" id="traceModalPairsBar" aria-label="Productos con el mismo lote">
+              <div class="trace-modal-pairs-label">Productos con este lote (desmarque los que no correspondan):</div>
+              <div class="trace-modal-pairs-list" id="traceModalPairsList"></div>
+            </div>
+
+            <p class="trace-modal-hint" id="traceModalHint">Ingrese el lote y pulse Filtrar. Luego agrupe la selección y continúe con más lotes.</p>
+
+            <div id="traceModalSearchPanel">
+              <div class="trace-modal-table-wrap">
+                <table class="trace-table trace-table--modal">
+                  <thead>
+                    <tr>
+                      <th>N°</th>
+                      <th>Fecha envío</th>
+                      <th>Cliente</th>
+                      <th>Producto</th>
+                      <th>Lote</th>
+                      <th>F. Producción</th>
+                      <th>F. Vencimiento</th>
+                      <th>Cantidad</th>
+                    </tr>
+                  </thead>
+                  <tbody id="traceModalResults"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="trace-modal-preview hidden" id="traceModalPreviewWrap">
+              <div class="trace-modal-preview-head">Vista previa del reporte</div>
+              <div id="traceModalPreviewBody"></div>
+            </div>
+
+            <div class="trace-modal-queue">
+              <div class="trace-modal-queue-head">
+                <span class="section-title" style="margin:0;">Historial agrupado</span>
+                <span class="tag-muted" id="traceModalQueueCount">0</span>
+              </div>
+              <ul class="trace-modal-queue-list" id="traceModalQueueList">
+                <li class="trace-modal-queue-empty">Aún no ha agrupado lotes.</li>
+              </ul>
+            </div>
+            </div>
+
+            <div class="trace-modal-actions">
+              <button class="btn btn-secondary" id="traceModalGroupBtn" type="button" disabled>Agrupar</button>
+              <button class="btn btn-outline" id="traceModalPreviewBtn" type="button" disabled>Vista previa</button>
+              <button class="btn btn-primary" id="traceModalReportBtn" type="button" disabled>Reporte</button>
+            </div>
+          </div>
+        </div>
 
         <section id="section-trasiegos" class="hidden">
           <div class="card">
@@ -1084,6 +1159,28 @@
       const traceSearchType = document.getElementById("traceSearchType");
       const traceList = document.getElementById("traceList");
       const traceCount = document.getElementById("traceCount");
+      const traceOpenReportBtn = document.getElementById("traceOpenReportBtn");
+      const traceReportModal = document.getElementById("traceReportModal");
+      const traceReportModalPanel = document.getElementById("traceReportModalPanel");
+      const traceModalCloseBtn = document.getElementById("traceModalCloseBtn");
+      const traceModalLoteInput = document.getElementById("traceModalLoteInput");
+      const traceModalLotList = document.getElementById("traceModalLotList");
+      const traceModalFilterBtn = document.getElementById("traceModalFilterBtn");
+      const traceModalPairsBar = document.getElementById("traceModalPairsBar");
+      const traceModalPairsList = document.getElementById("traceModalPairsList");
+      const traceModalHint = document.getElementById("traceModalHint");
+      const traceModalResults = document.getElementById("traceModalResults");
+      const traceModalSearchPanel = document.getElementById("traceModalSearchPanel");
+      const traceModalPreviewWrap = document.getElementById("traceModalPreviewWrap");
+      const traceModalPreviewBody = document.getElementById("traceModalPreviewBody");
+      const traceModalQueueList = document.getElementById("traceModalQueueList");
+      const traceModalQueueCount = document.getElementById("traceModalQueueCount");
+      const traceModalGroupBtn = document.getElementById("traceModalGroupBtn");
+      const traceModalPreviewBtn = document.getElementById("traceModalPreviewBtn");
+      const traceModalReportBtn = document.getElementById("traceModalReportBtn");
+      let traceReportQueue = [];
+      let traceModalFilteredRows = [];
+      let traceModalPairOptions = [];
       let allConstancias = [];
       let filteredConstancias = [];
       let selectedConstancias = new Set();
@@ -2776,6 +2873,34 @@
         });
         updateTraceSearchPlaceholder();
       }
+      if (traceOpenReportBtn) {
+        traceOpenReportBtn.addEventListener("click", openTraceReportModal);
+      }
+      if (traceModalCloseBtn) {
+        traceModalCloseBtn.addEventListener("click", closeTraceReportModal);
+      }
+      if (traceReportModal) {
+        traceReportModal.addEventListener("click", (event) => {
+          if (event.target === traceReportModal) closeTraceReportModal();
+        });
+      }
+      if (traceModalFilterBtn) {
+        traceModalFilterBtn.addEventListener("click", runTraceModalFilter);
+      }
+      if (traceModalLoteInput) {
+        traceModalLoteInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") runTraceModalFilter();
+        });
+      }
+      if (traceModalGroupBtn) {
+        traceModalGroupBtn.addEventListener("click", groupTraceModalSelections);
+      }
+      if (traceModalPreviewBtn) {
+        traceModalPreviewBtn.addEventListener("click", toggleTracePreview);
+      }
+      if (traceModalReportBtn) {
+        traceModalReportBtn.addEventListener("click", generateTraceReportExcel);
+      }
       constanciaApplyBtn.addEventListener("click", async () => {
         if (constanciaBulkAction.value !== "delete") return;
         if (!selectedConstancias.size) return;
@@ -3327,6 +3452,11 @@
         }
         if (targetId === "section-trasiegos") {
           loadTrasiegos();
+        }
+        if (targetId === "section-trazabilidad") {
+          refreshTraceModalLotDatalist();
+          updateTraceSearchPlaceholder();
+          applyTraceFilters();
         }
         suppressOcrReset = false;
       }
@@ -4459,6 +4589,20 @@
         return rows;
       }
 
+      function traceSelectionKey(lote, producto) {
+        return `${normalizeLotKey(lote)}||${normalizeSearchText(producto)}`;
+      }
+
+      function formatTraceFechaDisplay(fecha) {
+        const v = (fecha || "").trim();
+        if (!v) return "";
+        if (/^\d{4}-\d{2}-\d{2}/.test(v)) {
+          const [yyyy, mm, dd] = v.slice(0, 10).split("-");
+          return `${dd} / ${mm} / ${yyyy}`;
+        }
+        return v;
+      }
+
       function renderTraceRows(list) {
         if (!traceList) return;
         traceList.innerHTML = "";
@@ -4472,15 +4616,87 @@
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td>${idx + 1}</td>
-            <td>${row.fecha}</td>
-            <td>${row.cliente}</td>
-            <td>${row.product}</td>
-            <td>${row.lot}</td>
-            <td>${row.production}</td>
-            <td>${row.expiration}</td>
-            <td>${row.quantity}</td>
+            <td>${formatTraceFechaDisplay(row.fecha)}</td>
+            <td>${row.cliente || ""}</td>
+            <td>${row.product || ""}</td>
+            <td>${row.lot || ""}</td>
+            <td>${row.production || ""}</td>
+            <td>${row.expiration || ""}</td>
+            <td>${row.quantity ?? ""}</td>
           `;
           traceList.appendChild(tr);
+        });
+      }
+
+      function traceFieldForMode(row, mode) {
+        if (mode === "lot") return row.lot;
+        if (mode === "tienda") return row.cliente;
+        return row.product;
+      }
+
+      function updateTraceSearchPlaceholder() {
+        if (!traceSearchInput || !traceSearchType) return;
+        const placeholders = {
+          product: "Nombre de producto...",
+          lot: "Número de lote...",
+          tienda: "Nombre de tienda / cliente...",
+        };
+        traceSearchInput.placeholder = placeholders[traceSearchType.value] || "Escribe para filtrar...";
+      }
+
+      function applyTraceFilters() {
+        if (!traceList || !traceSearchInput || !traceSearchType) return;
+        const query = normalizeSearchText(traceSearchInput.value || "");
+        const mode = traceSearchType.value || "product";
+        const allRows = collectTraceRows();
+        let filtered = !query
+          ? []
+          : allRows.filter((row) =>
+              normalizeSearchText(traceFieldForMode(row, mode)).includes(query)
+            );
+        filtered = filtered.sort((a, b) => parseTraceDate(b.fecha) - parseTraceDate(a.fecha));
+        renderTraceRows(filtered);
+      }
+
+      function filterTraceRowsByExactLot(lote) {
+        const lotKey = normalizeLotKey(lote);
+        if (!lotKey) return [];
+        return collectTraceRows()
+          .filter((row) => normalizeLotKey(row.lot) === lotKey)
+          .sort((a, b) => parseTraceDate(b.fecha) - parseTraceDate(a.fecha));
+      }
+
+      function filterTraceRowsByLoteProduct(lote, producto) {
+        const lotKey = normalizeLotKey(lote);
+        if (!lotKey) return [];
+        let rows = collectTraceRows().filter((row) => normalizeLotKey(row.lot) === lotKey);
+        if (producto) {
+          const productKey = normalizeSearchText(producto);
+          rows = rows.filter((row) => normalizeSearchText(row.product) === productKey);
+        }
+        return rows.sort((a, b) => parseTraceDate(b.fecha) - parseTraceDate(a.fecha));
+      }
+
+      function renderTraceModalRows(list) {
+        if (!traceModalResults) return;
+        traceModalResults.innerHTML = "";
+        if (!list.length) {
+          traceModalResults.innerHTML = `<tr><td colspan="8" class="empty">Sin resultados para este filtro.</td></tr>`;
+          return;
+        }
+        list.forEach((row, idx) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${idx + 1}</td>
+            <td>${formatTraceFechaDisplay(row.fecha)}</td>
+            <td>${row.cliente || ""}</td>
+            <td>${row.product || ""}</td>
+            <td>${row.lot || ""}</td>
+            <td>${row.production || ""}</td>
+            <td>${row.expiration || ""}</td>
+            <td>${row.quantity ?? ""}</td>
+          `;
+          traceModalResults.appendChild(tr);
         });
       }
 
@@ -4500,35 +4716,401 @@
         return Number.isNaN(t) ? 0 : t;
       }
 
-      function traceFieldForMode(row, mode) {
-        if (mode === "lot") return row.lot;
-        if (mode === "tienda") return row.cliente;
-        return row.product;
+      function normalizeLotKey(value) {
+        return normalizeSearchText(value).replace(/\s+/g, "").replace(/-/g, "");
       }
 
-      function updateTraceSearchPlaceholder() {
-        if (!traceSearchInput || !traceSearchType) return;
-        const placeholders = {
-          product: "Nombre de producto...",
-          lot: "Número de lote...",
-          tienda: "Nombre de tienda / cliente...",
-        };
-        traceSearchInput.placeholder =
-          placeholders[traceSearchType.value] || "Escribe para filtrar...";
+      function filterTraceRowsBySearch(mode, query) {
+        const q = normalizeSearchText(query);
+        if (!q) return [];
+        const lotQ = normalizeLotKey(query);
+        const rows = collectTraceRows().filter((row) => {
+          if (mode === "lot") {
+            const lotKey = normalizeLotKey(row.lot);
+            return lotKey === lotQ || normalizeSearchText(row.lot).includes(q);
+          }
+          if (mode === "tienda") {
+            return normalizeSearchText(row.cliente).includes(q);
+          }
+          return normalizeSearchText(row.product).includes(q);
+        });
+        return rows.sort((a, b) => parseTraceDate(b.fecha) - parseTraceDate(a.fecha));
       }
 
-      function applyTraceFilters() {
-        if (!traceList || !traceSearchInput || !traceSearchType) return;
-        const query = normalizeSearchText(traceSearchInput.value || "");
-        const mode = traceSearchType.value || "product";
-        const allRows = collectTraceRows();
-        let filtered = !query
-          ? []
-          : allRows.filter((row) =>
-              normalizeSearchText(traceFieldForMode(row, mode)).includes(query)
-            );
-        filtered = filtered.sort((a, b) => parseTraceDate(b.fecha) - parseTraceDate(a.fecha));
-        renderTraceRows(filtered);
+      function uniqueProductsForLotSearch(rows) {
+        const map = new Map();
+        rows.forEach((row) => {
+          if (!row.product) return;
+          const productKey = normalizeSearchText(row.product);
+          if (!productKey || map.has(productKey)) return;
+          const lote = (row.lot || "").trim();
+          map.set(productKey, {
+            lote,
+            producto: row.product.trim(),
+            key: traceSelectionKey(lote, row.product),
+          });
+        });
+        return Array.from(map.values()).sort((a, b) => a.producto.localeCompare(b.producto, "es"));
+      }
+
+      function uniqueLotProductPairs(rows) {
+        const map = new Map();
+        rows.forEach((row) => {
+          if (!row.lot || !row.product) return;
+          const key = traceSelectionKey(row.lot, row.product);
+          if (!map.has(key)) {
+            map.set(key, { lote: row.lot, producto: row.product, key });
+          }
+        });
+        return Array.from(map.values()).sort((a, b) => {
+          const lotCmp = a.lote.localeCompare(b.lote, "es");
+          return lotCmp !== 0 ? lotCmp : a.producto.localeCompare(b.producto, "es");
+        });
+      }
+
+      function renderTraceModalPairsBar(pairs) {
+        traceModalPairOptions = pairs;
+        if (!traceModalPairsBar || !traceModalPairsList) return;
+        traceModalPairsList.innerHTML = "";
+        if (!pairs.length) {
+          traceModalPairsBar.classList.add("hidden");
+          if (traceModalGroupBtn) traceModalGroupBtn.disabled = true;
+          return;
+        }
+        traceModalPairsBar.classList.remove("hidden");
+        pairs.forEach((pair, index) => {
+          const chip = document.createElement("div");
+          chip.className = "trace-modal-pair-chip";
+          const inputId = `trace-modal-pair-${index}`;
+          chip.innerHTML = `
+            <input type="checkbox" class="trace-modal-pair-check" id="${inputId}" data-key="${pair.key}" checked />
+            <label class="trace-modal-pair-product" for="${inputId}">${pair.producto}</label>
+          `;
+          const checkbox = chip.querySelector(".trace-modal-pair-check");
+          checkbox.addEventListener("change", updateTraceModalGroupState);
+          chip.addEventListener("click", (event) => {
+            if (event.target === checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            updateTraceModalGroupState();
+          });
+          traceModalPairsList.appendChild(chip);
+        });
+        updateTraceModalGroupState();
+      }
+
+      function getCheckedTraceModalPairs() {
+        if (!traceModalPairsList) return [];
+        return [...traceModalPairsList.querySelectorAll(".trace-modal-pair-check:checked")].map((el) => {
+          const key = el.dataset.key;
+          return traceModalPairOptions.find((pair) => pair.key === key);
+        }).filter(Boolean);
+      }
+
+      function filterTraceModalRowsByCheckedProducts(rows) {
+        const checkedKeys = new Set(getCheckedTraceModalPairs().map((pair) => pair.key));
+        if (!checkedKeys.size) return [];
+        return rows.filter((row) => checkedKeys.has(traceSelectionKey(row.lot, row.product)));
+      }
+
+      function applyTraceModalTableFilter() {
+        if (!traceModalFilteredRows.length) {
+          renderTraceModalRows([]);
+          return;
+        }
+        const visible = filterTraceModalRowsByCheckedProducts(traceModalFilteredRows);
+        renderTraceModalRows(visible);
+      }
+
+      function updateTraceModalGroupState() {
+        const checked = getCheckedTraceModalPairs();
+        if (traceModalGroupBtn) {
+          traceModalGroupBtn.disabled = !checked.length;
+        }
+        applyTraceModalTableFilter();
+      }
+
+      function refreshTracePreviewIfVisible() {
+        if (!traceModalPreviewWrap || traceModalPreviewWrap.classList.contains("hidden")) return;
+        if (!traceReportQueue.length) {
+          hideTracePreview();
+          return;
+        }
+        renderTracePreview();
+      }
+
+      function renderTraceModalQueue() {
+        if (!traceModalQueueList || !traceModalQueueCount) return;
+        traceModalQueueCount.textContent = String(traceReportQueue.length);
+        traceModalQueueList.innerHTML = "";
+        if (!traceReportQueue.length) {
+          traceModalQueueList.innerHTML = `<li class="trace-modal-queue-empty">Aún no ha agrupado lotes.</li>`;
+        } else {
+          traceReportQueue.forEach((item, index) => {
+            const li = document.createElement("li");
+            li.className = "trace-modal-queue-item";
+            li.innerHTML = `
+              <span><strong>${item.lote}</strong> · ${item.producto}</span>
+              <button type="button" class="btn btn-outline btn-mini trace-modal-queue-remove" data-index="${index}">Quitar</button>
+            `;
+            li.querySelector(".trace-modal-queue-remove").addEventListener("click", () => {
+              traceReportQueue.splice(index, 1);
+              renderTraceModalQueue();
+              updateTraceModalReportState();
+            });
+            traceModalQueueList.appendChild(li);
+          });
+        }
+        updateTraceModalReportState();
+        refreshTracePreviewIfVisible();
+      }
+
+      function updateTraceModalReportState() {
+        const hasQueue = traceReportQueue.length > 0;
+        if (traceModalReportBtn) traceModalReportBtn.disabled = !hasQueue;
+        if (traceModalPreviewBtn) traceModalPreviewBtn.disabled = !hasQueue;
+      }
+
+      function updateTracePreviewBtnLabel(inPreview) {
+        if (!traceModalPreviewBtn) return;
+        traceModalPreviewBtn.textContent = inPreview ? "Volver" : "Vista previa";
+      }
+
+      function isTracePreviewVisible() {
+        return traceModalPreviewWrap && !traceModalPreviewWrap.classList.contains("hidden");
+      }
+
+      function hideTracePreview() {
+        if (traceModalPreviewWrap) traceModalPreviewWrap.classList.add("hidden");
+        if (traceModalSearchPanel) traceModalSearchPanel.classList.remove("hidden");
+        if (traceReportModalPanel) traceReportModalPanel.classList.remove("trace-modal--preview");
+        updateTracePreviewBtnLabel(false);
+      }
+
+      function buildTracePreviewTableHtml(rows) {
+        if (!rows.length) {
+          return `<p class="trace-modal-preview-empty">Sin registros.</p>`;
+        }
+        const head = `
+          <thead>
+            <tr>
+              <th>N°</th>
+              <th>Fecha envío</th>
+              <th>Cliente</th>
+              <th>Producto</th>
+              <th>Lote</th>
+              <th>F. Producción</th>
+              <th>F. Vencimiento</th>
+              <th>Cantidad</th>
+            </tr>
+          </thead>`;
+        const body = rows
+          .map(
+            (row, idx) => `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>${formatTraceFechaDisplay(row.fecha)}</td>
+              <td>${row.cliente || ""}</td>
+              <td>${row.product || ""}</td>
+              <td>${row.lot || ""}</td>
+              <td>${row.production || ""}</td>
+              <td>${row.expiration || ""}</td>
+              <td>${row.quantity ?? ""}</td>
+            </tr>`
+          )
+          .join("");
+        return `<table class="trace-table trace-table--preview">${head}<tbody>${body}</tbody></table>`;
+      }
+
+      function renderTracePreview() {
+        if (!traceModalPreviewBody) return;
+        traceModalPreviewBody.innerHTML = "";
+        traceReportQueue.forEach((item, index) => {
+          if (index > 0) {
+            const gap = document.createElement("div");
+            gap.className = "trace-modal-preview-gap";
+            traceModalPreviewBody.appendChild(gap);
+          }
+          const title = document.createElement("div");
+          title.className = "trace-modal-preview-block-title";
+          title.textContent = `Lote: ${item.lote}  |  Producto: ${item.producto}`;
+          traceModalPreviewBody.appendChild(title);
+          const rows = filterTraceRowsByLoteProduct(item.lote, item.producto);
+          const wrap = document.createElement("div");
+          wrap.className = "trace-modal-preview-block";
+          wrap.innerHTML = buildTracePreviewTableHtml(rows);
+          traceModalPreviewBody.appendChild(wrap);
+        });
+      }
+
+      function showTracePreview() {
+        if (!traceReportQueue.length) {
+          showNoticeModal("Agrupe al menos un lote antes de ver la vista previa.");
+          return;
+        }
+        renderTracePreview();
+        if (traceModalSearchPanel) traceModalSearchPanel.classList.add("hidden");
+        if (traceModalPreviewWrap) traceModalPreviewWrap.classList.remove("hidden");
+        if (traceReportModalPanel) traceReportModalPanel.classList.add("trace-modal--preview");
+        updateTracePreviewBtnLabel(true);
+      }
+
+      function toggleTracePreview() {
+        if (isTracePreviewVisible()) {
+          hideTracePreview();
+          return;
+        }
+        showTracePreview();
+      }
+
+      function updateTraceModalPlaceholder() {
+        /* reservado */
+      }
+
+      function refreshTraceModalLotDatalist() {
+        if (!traceModalLotList) return;
+        const lots = new Set();
+        collectTraceRows().forEach((row) => {
+          if (row.lot) lots.add(row.lot);
+        });
+        traceModalLotList.innerHTML = "";
+        Array.from(lots)
+          .sort((a, b) => a.localeCompare(b, "es"))
+          .forEach((lot) => {
+            const option = document.createElement("option");
+            option.value = lot;
+            traceModalLotList.appendChild(option);
+          });
+      }
+
+      function runTraceModalFilter() {
+        const lote = traceModalLoteInput?.value?.trim() || "";
+        if (!lote) {
+          showNoticeModal("Ingrese un número de lote.");
+          return;
+        }
+        hideTracePreview();
+        traceModalFilteredRows = filterTraceRowsByExactLot(lote);
+        const pairs = uniqueProductsForLotSearch(traceModalFilteredRows).filter(
+          (pair) =>
+            !traceReportQueue.some((item) => traceSelectionKey(item.lote, item.producto) === pair.key)
+        );
+        renderTraceModalPairsBar(pairs);
+        if (!pairs.length) {
+          renderTraceModalRows(traceModalFilteredRows);
+        }
+        if (traceModalHint) {
+          if (!traceModalFilteredRows.length) {
+            traceModalHint.textContent = "No hay envíos para ese lote.";
+          } else if (!pairs.length) {
+            traceModalHint.textContent = "Todos los productos de este lote ya están agrupados en el historial.";
+          } else if (pairs.length > 1) {
+            traceModalHint.textContent =
+              "Varios productos distintos usan este lote. Desmarque los que no correspondan y pulse Agrupar.";
+          } else {
+            traceModalHint.textContent = "Revise los datos y pulse Agrupar para guardar en el historial.";
+          }
+        }
+      }
+
+      function groupTraceModalSelections() {
+        const checked = getCheckedTraceModalPairs();
+        if (!checked.length) {
+          showNoticeModal("Marque al menos un producto para agrupar.");
+          return;
+        }
+        let added = 0;
+        checked.forEach((pair) => {
+          const exists = traceReportQueue.some(
+            (item) => traceSelectionKey(item.lote, item.producto) === pair.key
+          );
+          if (!exists) {
+            traceReportQueue.push({ lote: pair.lote, producto: pair.producto });
+            added += 1;
+          }
+        });
+        renderTraceModalQueue();
+        if (added) {
+          resetTraceModalSearch(false);
+          if (traceModalHint) {
+            traceModalHint.textContent =
+              "Lote agrupado. Ingrese otro lote y pulse Filtrar para continuar.";
+          }
+        } else {
+          showNoticeModal("Esas combinaciones lote/producto ya están agrupadas.");
+        }
+      }
+
+      function resetTraceModalSearch(clearHint = true) {
+        hideTracePreview();
+        if (traceModalLoteInput) traceModalLoteInput.value = "";
+        traceModalFilteredRows = [];
+        traceModalPairOptions = [];
+        renderTraceModalRows([]);
+        if (traceModalPairsBar) traceModalPairsBar.classList.add("hidden");
+        if (traceModalPairsList) traceModalPairsList.innerHTML = "";
+        if (traceModalGroupBtn) traceModalGroupBtn.disabled = true;
+        if (clearHint && traceModalHint) {
+          traceModalHint.textContent =
+            "Ingrese el lote y pulse Filtrar. Luego agrupe la selección y continúe con más lotes.";
+        }
+        if (traceModalLoteInput) traceModalLoteInput.focus();
+      }
+
+      function openTraceReportModal() {
+        if (!traceReportModal) return;
+        refreshTraceModalLotDatalist();
+        renderTraceModalQueue();
+        resetTraceModalSearch();
+        traceReportModal.classList.remove("hidden");
+        traceReportModal.classList.add("show");
+      }
+
+      function closeTraceReportModal() {
+        if (!traceReportModal) return;
+        traceReportModal.classList.remove("show");
+        traceReportModal.classList.add("hidden");
+      }
+
+      async function generateTraceReportExcel() {
+        if (!traceReportQueue.length) {
+          showNoticeModal("Agrupe al menos un lote antes de generar el reporte.");
+          return;
+        }
+        if (traceModalReportBtn) traceModalReportBtn.disabled = true;
+        try {
+          const res = await fetch("/api/trazabilidad/export-batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ selections: traceReportQueue }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            let msg = err.detail || "No se pudo generar el Excel.";
+            if (typeof msg === "string" && res.status === 404 && /^not found$/i.test(msg.trim())) {
+              msg =
+                "El servidor no tiene activo el exportador de reportes. Reinicie el backend local o despliegue la última versión en Render.";
+            }
+            showNoticeModal(msg);
+            return;
+          }
+          const blob = await res.blob();
+          const disposition = res.headers.get("Content-Disposition") || "";
+          const match = disposition.match(/filename=\"?([^\";]+)\"?/i);
+          const filename = match ? match[1] : "trazabilidad.xlsx";
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement("a");
+          anchor.href = url;
+          anchor.download = filename;
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          URL.revokeObjectURL(url);
+          closeTraceReportModal();
+        } catch (error) {
+          showNoticeModal("Error al generar el Excel.");
+        } finally {
+          if (traceModalReportBtn) traceModalReportBtn.disabled = !traceReportQueue.length;
+        }
       }
 
       async function loadConstancias() {
@@ -4537,6 +5119,8 @@
         if (!res.ok) return;
         allConstancias = sortConstanciasByIssueDate(data.constancias || []);
         applyConstanciaFilters();
+        refreshTraceModalLotDatalist();
+        updateTraceSearchPlaceholder();
         applyTraceFilters();
         renderHomeDashboard();
       }
