@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home51" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home52" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -3473,6 +3473,9 @@
           updateTraceSearchPlaceholder();
           applyTraceFilters();
         }
+        if (targetId === "section-constancias") {
+          requestAnimationFrame(() => paginateConstancias());
+        }
         suppressOcrReset = false;
       }
 
@@ -4576,11 +4579,58 @@
         renderConstanciaFilterChips();
       }
 
+      function computeConstanciasPageSize() {
+        const section = document.getElementById("section-constancias");
+        const scroll = section?.querySelector(".constancias-table-scroll");
+        if (!section || section.classList.contains("hidden") || !scroll) {
+          return listPageSize;
+        }
+        const thead = scroll.querySelector(".constancias-table thead");
+        const sampleRow = scroll.querySelector(".constancias-table tbody tr");
+        const rowHeight = sampleRow
+          ? Math.max(26, Math.round(sampleRow.getBoundingClientRect().height))
+          : 28;
+        const theadHeight = thead ? thead.offsetHeight : 32;
+        let available = scroll.clientHeight - theadHeight;
+        if (available < rowHeight * 5) {
+          const header = document.querySelector(".page-header");
+          const commandBar = section.querySelector(".constancias-command-bar");
+          const pager = section.querySelector(".constancias-pager");
+          const chips = section.querySelector(".constancia-filter-chips:not(.hidden)");
+          const chrome =
+            (header?.offsetHeight || 56) +
+            (commandBar?.offsetHeight || 44) +
+            (pager?.offsetHeight || 36) +
+            (chips?.offsetHeight || 0) +
+            48;
+          available = window.innerHeight - chrome - theadHeight;
+        }
+        if (available < rowHeight) return listPageSize;
+        const rows = Math.floor(available / rowHeight);
+        return Math.max(10, Math.min(60, rows));
+      }
+
       function paginateConstancias() {
-        const slice = sliceForPage(filteredConstancias, constanciasPage);
+        const size = computeConstanciasPageSize();
+        const slice = sliceForPage(filteredConstancias, constanciasPage, size);
         constanciasPage = slice.page;
         renderConstancias(slice.items);
         updatePagerUi(constanciasCount, constanciasPrevBtn, constanciasNextBtn, slice.label, slice.page, slice.maxPage);
+        requestAnimationFrame(() => {
+          const refinedSize = computeConstanciasPageSize();
+          if (refinedSize === size) return;
+          const refined = sliceForPage(filteredConstancias, constanciasPage, refinedSize);
+          constanciasPage = refined.page;
+          renderConstancias(refined.items);
+          updatePagerUi(
+            constanciasCount,
+            constanciasPrevBtn,
+            constanciasNextBtn,
+            refined.label,
+            refined.page,
+            refined.maxPage
+          );
+        });
       }
 
       function collectTraceRows() {
@@ -5337,6 +5387,13 @@
           paginateConstancias();
         });
       }
+
+      let constanciasResizeTimer = null;
+      window.addEventListener("resize", () => {
+        if (currentSectionId !== "section-constancias") return;
+        clearTimeout(constanciasResizeTimer);
+        constanciasResizeTimer = setTimeout(() => paginateConstancias(), 150);
+      });
 
       if (trasiegosPrevBtn) {
         trasiegosPrevBtn.addEventListener("click", async () => {

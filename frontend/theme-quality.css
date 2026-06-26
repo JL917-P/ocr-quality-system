@@ -851,8 +851,6 @@ body.page-admin {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  width: 100%;
-  max-width: none;
 }
 
 #section-constancias:not(.hidden),
