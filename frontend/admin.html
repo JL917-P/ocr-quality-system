@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home48" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home50" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -5076,14 +5076,35 @@
         refreshTraceModalLotDatalist();
         renderTraceModalQueue();
         resetTraceModalSearch();
-        traceReportModal.classList.remove("hidden");
+        traceReportModal.classList.remove("hidden", "is-closing");
         traceReportModal.classList.add("show");
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            traceReportModal.classList.add("is-open");
+          });
+        });
       }
 
       function closeTraceReportModal() {
-        if (!traceReportModal) return;
-        traceReportModal.classList.remove("show");
-        traceReportModal.classList.add("hidden");
+        if (!traceReportModal || traceReportModal.classList.contains("hidden")) return;
+        if (traceReportModal.classList.contains("is-closing")) return;
+        traceReportModal.classList.remove("is-open");
+        traceReportModal.classList.add("is-closing");
+        let finished = false;
+        const finishClose = () => {
+          if (finished) return;
+          finished = true;
+          traceReportModal.classList.remove("show", "is-closing");
+          traceReportModal.classList.add("hidden");
+          traceReportModal.removeEventListener("transitionend", onTransitionEnd);
+        };
+        const onTransitionEnd = (event) => {
+          if (event.target === traceReportModal || event.target === traceReportModalPanel) {
+            finishClose();
+          }
+        };
+        traceReportModal.addEventListener("transitionend", onTransitionEnd);
+        window.setTimeout(finishClose, 360);
       }
 
       async function generateTraceReportExcel() {

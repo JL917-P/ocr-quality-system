@@ -2138,10 +2138,12 @@ th {
 }
 
 .trace-modal-search-bar {
-  display: flex;
-  flex-wrap: wrap;
+  display: inline-flex;
+  flex-wrap: nowrap;
   align-items: flex-end;
   gap: 10px;
+  width: fit-content;
+  max-width: min(100%, 340px);
   padding: 10px 12px;
   margin-bottom: 10px;
   background: linear-gradient(180deg, #f0f9ff 0%, #e8f4fc 100%);
@@ -2149,24 +2151,15 @@ th {
   border-radius: 8px;
 }
 
-.trace-modal-field {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+.trace-modal-search-bar .trace-modal-field--grow {
+  flex: 0 0 auto;
+  width: 200px;
+  min-width: 0;
 }
 
-.trace-modal-field--grow {
-  flex: 1 1 220px;
-  min-width: 180px;
-}
-
-.trace-modal-field select,
-.trace-modal-field input {
-  min-height: 28px;
-  font-size: 12px;
-  padding: 4px 8px;
-  border: 1px solid #a8b0bc;
-  border-radius: 2px;
+.trace-modal-search-bar .trace-modal-field input {
+  width: 200px;
+  max-width: 200px;
 }
 
 .trace-modal-pairs {
@@ -2474,7 +2467,29 @@ th {
   box-shadow: 0 4px 14px rgba(14, 116, 144, 0.28);
 }
 
+.trace-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.trace-modal-field--grow {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+.trace-modal-field select,
+.trace-modal-field input {
+  min-height: 28px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid #a8b0bc;
+  border-radius: 2px;
+}
+
 .modal-trace-report #traceModalFilterBtn {
+  flex-shrink: 0;
+  white-space: nowrap;
   background: linear-gradient(180deg, var(--qc-teal) 0%, #0c6378 100%);
   color: #fff;
   border: none;
@@ -3063,12 +3078,49 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
 
 #traceReportModal.modal-backdrop {
   z-index: 250;
+  opacity: 0;
+  transition: opacity 0.28s ease;
 }
 
 #traceReportModal.modal-backdrop.show {
   padding-left: 76px;
   padding-right: 20px;
   box-sizing: border-box;
+}
+
+#traceReportModal.modal-backdrop.is-open {
+  opacity: 1;
+}
+
+#traceReportModal.modal-backdrop.is-closing {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#traceReportModal .modal-trace-report {
+  transform: scale(0.94) translateY(18px);
+  opacity: 0;
+  transition:
+    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.28s ease;
+  will-change: transform, opacity;
+}
+
+#traceReportModal.is-open .modal-trace-report {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+
+#traceReportModal.is-closing .modal-trace-report {
+  transform: scale(0.96) translateY(12px);
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #traceReportModal.modal-backdrop,
+  #traceReportModal .modal-trace-report {
+    transition: none !important;
+  }
 }
 
 .layout.sidebar-open #traceReportModal.modal-backdrop.show {
