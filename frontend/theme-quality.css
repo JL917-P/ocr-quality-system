@@ -2011,6 +2011,63 @@ th {
 }
 
 /* —— Trazabilidad: panel + modal reporte —— */
+#section-trazabilidad > .card:first-child {
+  padding: 10px 12px 12px;
+}
+
+#section-trazabilidad .trace-toolbar {
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  width: fit-content;
+  max-width: 100%;
+  gap: 8px;
+}
+
+#section-trazabilidad .trace-toolbar .field {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+#section-trazabilidad .trace-search-field {
+  flex: 0 0 220px;
+  width: 220px;
+}
+
+#section-trazabilidad .trace-search-field input {
+  width: 100%;
+}
+
+#section-trazabilidad .trace-type-field {
+  flex: 0 0 118px;
+  width: 118px;
+}
+
+#section-trazabilidad .trace-type-field select {
+  width: 100%;
+}
+
+#section-trazabilidad .trace-month-field {
+  flex: 0 0 150px;
+  width: 150px;
+}
+
+#section-trazabilidad .trace-month-field select {
+  width: 100%;
+}
+
+#section-trazabilidad .trace-results-field {
+  flex: 0 0 auto;
+}
+
+#section-trazabilidad .trace-results-field .tag-muted {
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+#section-trazabilidad .trace-report-field .btn {
+  white-space: nowrap;
+}
+
 #section-trazabilidad .trace-report-card {
   padding: 0;
   margin-bottom: 0;

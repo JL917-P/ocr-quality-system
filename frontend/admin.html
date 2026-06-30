@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home52" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home55" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -588,12 +588,12 @@
 
         <section id="section-trazabilidad" class="hidden">
           <div class="card">
-            <div class="toolbar">
-              <div class="field" style="flex: 1;">
+            <div class="toolbar trace-toolbar">
+              <div class="field trace-search-field">
                 <label>Buscar</label>
                 <input id="traceSearchInput" type="text" placeholder="Escribe para filtrar..." />
               </div>
-              <div class="field">
+              <div class="field trace-type-field">
                 <label>Buscar por</label>
                 <select id="traceSearchType">
                   <option value="product">Producto</option>
@@ -601,11 +601,17 @@
                   <option value="tienda">Tienda</option>
                 </select>
               </div>
-              <div class="field">
+              <div class="field trace-month-field">
+                <label>Mes</label>
+                <select id="traceMonthSelect" aria-label="Filtrar por mes">
+                  <option value="">Todos</option>
+                </select>
+              </div>
+              <div class="field trace-results-field">
                 <label>Resultados</label>
                 <div class="tag-muted" id="traceCount">0</div>
               </div>
-              <div class="field">
+              <div class="field trace-report-field">
                 <label>&nbsp;</label>
                 <button class="btn btn-primary" id="traceOpenReportBtn" type="button">Generar reporte</button>
               </div>
@@ -1157,6 +1163,7 @@
       const constanciasPrevBtn = document.getElementById("constanciasPrevBtn");
       const constanciasNextBtn = document.getElementById("constanciasNextBtn");
       const traceSearchInput = document.getElementById("traceSearchInput");
+      const traceMonthSelect = document.getElementById("traceMonthSelect");
       const traceSearchType = document.getElementById("traceSearchType");
       const traceList = document.getElementById("traceList");
       const traceCount = document.getElementById("traceCount");
@@ -2886,6 +2893,9 @@
         });
         updateTraceSearchPlaceholder();
       }
+      if (traceMonthSelect) {
+        traceMonthSelect.addEventListener("change", applyTraceFilters);
+      }
       if (traceOpenReportBtn) {
         traceOpenReportBtn.addEventListener("click", openTraceReportModal);
       }
@@ -2952,7 +2962,7 @@
         "section-transports": { title: "Transporte", subtitle: "Matrículas y unidades de transporte" },
         "section-ocr": { title: "OCR · Nueva constancia", subtitle: "Captura de datos y emisión de constancias" },
         "section-constancias": { title: "Constancias", subtitle: "Lista, filtros y confirmación de emisiones" },
-        "section-trazabilidad": { title: "Trazabilidad", subtitle: "Historial por producto, lote o tienda" },
+        "section-trazabilidad": { title: "Trazabilidad", subtitle: "Historial por producto, lote, tienda o mes" },
         "section-trasiegos": { title: "Trasiegos", subtitle: "Registro y seguimiento de trasiegos" },
         "section-analisis": { title: "Análisis", subtitle: "Importación CSV y aplicación a constancias" },
       };
@@ -3470,6 +3480,7 @@
         }
         if (targetId === "section-trazabilidad") {
           refreshTraceModalLotDatalist();
+          refreshTraceMonthOptions();
           updateTraceSearchPlaceholder();
           applyTraceFilters();
         }
@@ -4693,6 +4704,62 @@
         });
       }
 
+      const TRACE_MONTH_NAMES = [
+        "Enero",
+        "Febrero",
+        "Marzo",
+        "Abril",
+        "Mayo",
+        "Junio",
+        "Julio",
+        "Agosto",
+        "Septiembre",
+        "Octubre",
+        "Noviembre",
+        "Diciembre",
+      ];
+
+      function traceMonthKeyFromFecha(fecha) {
+        const v = (fecha || "").trim();
+        if (!v) return "";
+        if (/^\d{4}-\d{2}-\d{2}/.test(v)) {
+          return v.slice(0, 7);
+        }
+        const match = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (match) {
+          return `${match[3]}-${match[2].padStart(2, "0")}`;
+        }
+        return "";
+      }
+
+      function formatTraceMonthLabel(monthKey) {
+        const [year, month] = String(monthKey || "").split("-");
+        const idx = parseInt(month, 10) - 1;
+        if (!year || idx < 0 || idx > 11) return monthKey || "";
+        return `${TRACE_MONTH_NAMES[idx]} ${year}`;
+      }
+
+      function refreshTraceMonthOptions() {
+        if (!traceMonthSelect) return;
+        const months = new Set();
+        collectTraceRows().forEach((row) => {
+          const key = traceMonthKeyFromFecha(row.fecha);
+          if (key) months.add(key);
+        });
+        const sorted = [...months].sort().reverse();
+        const previous = traceMonthSelect.value;
+        traceMonthSelect.innerHTML = '<option value="">Todos</option>';
+        sorted.forEach((key) => {
+          const option = document.createElement("option");
+          option.value = key;
+          option.textContent = formatTraceMonthLabel(key);
+          traceMonthSelect.appendChild(option);
+        });
+        if (previous && sorted.includes(previous)) {
+          traceMonthSelect.value = previous;
+        }
+      }
+
       function traceFieldForMode(row, mode) {
         if (mode === "lot") return row.lot;
         if (mode === "tienda") return row.cliente;
@@ -4710,15 +4777,24 @@
       }
 
       function applyTraceFilters() {
-        if (!traceList || !traceSearchInput || !traceSearchType) return;
-        const query = normalizeSearchText(traceSearchInput.value || "");
+        if (!traceList || !traceSearchType) return;
         const mode = traceSearchType.value || "product";
+        const monthKey = traceMonthSelect?.value || "";
+        const query = traceSearchInput ? normalizeSearchText(traceSearchInput.value || "") : "";
         const allRows = collectTraceRows();
-        let filtered = !query
-          ? []
-          : allRows.filter((row) =>
-              normalizeSearchText(traceFieldForMode(row, mode)).includes(query)
-            );
+        if (!monthKey && !query) {
+          renderTraceRows([]);
+          return;
+        }
+        let filtered = allRows;
+        if (monthKey) {
+          filtered = filtered.filter((row) => traceMonthKeyFromFecha(row.fecha) === monthKey);
+        }
+        if (query) {
+          filtered = filtered.filter((row) =>
+            normalizeSearchText(traceFieldForMode(row, mode)).includes(query)
+          );
+        }
         filtered = filtered.sort((a, b) => parseTraceDate(b.fecha) - parseTraceDate(a.fecha));
         renderTraceRows(filtered);
       }
@@ -5206,6 +5282,7 @@
         allConstancias = sortConstanciasByIssueDate(data.constancias || []);
         applyConstanciaFilters();
         refreshTraceModalLotDatalist();
+        refreshTraceMonthOptions();
         updateTraceSearchPlaceholder();
         applyTraceFilters();
         renderHomeDashboard();
