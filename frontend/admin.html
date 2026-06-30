@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home55" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home62" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -281,7 +281,6 @@
         </section>
 
         <section id="section-ocr" class="hidden">
-        <button type="button" class="ocr-page-header-reveal hidden" id="ocrRevealPageHeaderBtn" title="Mostrar barra superior (Importar, inicio)">▲ Barra</button>
         <div class="ocr-workspace">
             <div class="card ocr-workspace-card">
               <div class="ocr-header-card" id="ocrHeaderCard">
@@ -331,15 +330,6 @@
                 </button>
               </div>
 
-              <div class="ocr-command-bar ocr-actions-bar actions" id="ocrActionsBar" aria-label="Acciones de constancia">
-                <button class="btn btn-success" id="addRowBtn" type="button">+ Agregar fila</button>
-                <button class="btn btn-secondary hidden" id="restoreConstanciaItemsBtn" type="button">Restaurar historial</button>
-                <button class="btn btn-primary" id="saveBtn" type="button">Guardar</button>
-                <button class="btn btn-warning" id="reserveBtn" type="button">Reserva</button>
-                <button class="btn btn-outline hidden" id="draftBtn" type="button">Borrador</button>
-                <button class="btn btn-outline" id="cancelBtn" type="button">Cancelar</button>
-              </div>
-
               <div class="ocr-products-scroll" id="ocrProductsScroll">
                 <table class="ocr-products-table">
                   <thead>
@@ -357,13 +347,39 @@
                 </table>
               </div>
             </div>
+            <aside class="ocr-side-dock" id="ocrSideDock" aria-label="Acciones de constancia">
+              <button class="ocr-dock-btn ocr-dock-btn--add" id="addRowBtn" type="button" title="Agregar fila de producto">
+                <span class="ocr-dock-btn-icon" aria-hidden="true">+</span>
+                <span class="ocr-dock-btn-label">Agregar</span>
+              </button>
+              <button class="ocr-dock-btn ocr-dock-btn--restore hidden" id="restoreConstanciaItemsBtn" type="button" title="Restaurar historial">
+                <span class="ocr-dock-btn-icon" aria-hidden="true">↺</span>
+                <span class="ocr-dock-btn-label">Restaurar</span>
+              </button>
+              <button class="ocr-dock-btn ocr-dock-btn--save" id="saveBtn" type="button" title="Guardar constancia">
+                <span class="ocr-dock-btn-icon" aria-hidden="true">✓</span>
+                <span class="ocr-dock-btn-label">Guardar</span>
+              </button>
+              <button class="ocr-dock-btn ocr-dock-btn--reserve" id="reserveBtn" type="button" title="Guardar como reserva">
+                <span class="ocr-dock-btn-icon" aria-hidden="true">R</span>
+                <span class="ocr-dock-btn-label">Reserva</span>
+              </button>
+              <button class="ocr-dock-btn ocr-dock-btn--draft hidden" id="draftBtn" type="button" title="Guardar borrador">
+                <span class="ocr-dock-btn-icon" aria-hidden="true">B</span>
+                <span class="ocr-dock-btn-label">Borrador</span>
+              </button>
+              <button class="ocr-dock-btn ocr-dock-btn--cancel" id="cancelBtn" type="button" title="Cancelar edición">
+                <span class="ocr-dock-btn-icon" aria-hidden="true">×</span>
+                <span class="ocr-dock-btn-label">Cancelar</span>
+              </button>
+            </aside>
         </div>
         </section>
 
         <section id="section-clients" class="hidden">
-          <div class="card">
-            <div class="toolbar">
-              <div class="toolbar-right">
+          <div class="card catalog-toolbar-card">
+            <div class="toolbar catalog-toolbar">
+              <div class="field catalog-create-field">
                 <button class="btn btn-primary" id="addClientBtn" type="button">Crear cliente</button>
               </div>
             </div>
@@ -390,9 +406,9 @@
         </section>
 
         <section id="section-transports" class="hidden">
-          <div class="card">
-            <div class="toolbar">
-              <div class="toolbar-right">
+          <div class="card catalog-toolbar-card">
+            <div class="toolbar catalog-toolbar">
+              <div class="field catalog-create-field">
                 <button class="btn btn-primary" id="addTransportBtn" type="button">Crear matrícula</button>
               </div>
             </div>
@@ -466,12 +482,12 @@
 
         <section id="section-products" class="hidden">
           <div class="card">
-            <div class="toolbar">
-              <div class="field" style="flex: 1;">
+            <div class="toolbar products-toolbar">
+              <div class="field products-search-field">
                 <label>Buscar producto</label>
                 <input id="productSearch" type="text" placeholder="Buscar..." />
               </div>
-              <div class="field">
+              <div class="field products-action-field">
                 <label>Acción</label>
                 <div class="table-actions">
                   <select id="productBulkAction">
@@ -481,7 +497,7 @@
                   <button class="btn btn-outline" id="applyBulkBtn" type="button">Aplicar</button>
                 </div>
               </div>
-              <div class="field toolbar-field-btn">
+              <div class="field products-create-field">
                 <label class="toolbar-label-spacer" aria-hidden="true">&#8203;</label>
                 <button class="btn btn-primary" id="addProductBtn" type="button">Crear producto</button>
               </div>
@@ -1271,8 +1287,6 @@
       function setOcrPageHeaderHidden(hidden) {
         if (!adminLayout) return;
         adminLayout.classList.toggle("layout--ocr-header-hidden", Boolean(hidden));
-        const revealBtn = document.getElementById("ocrRevealPageHeaderBtn");
-        if (revealBtn) revealBtn.classList.toggle("hidden", !hidden);
       }
 
       function setOcrHeaderCollapsed(collapsed) {
@@ -1356,11 +1370,6 @@
       }
 
       bindOcrHeaderCollapse();
-
-      const ocrRevealPageHeaderBtn = document.getElementById("ocrRevealPageHeaderBtn");
-      if (ocrRevealPageHeaderBtn) {
-        ocrRevealPageHeaderBtn.addEventListener("click", () => setOcrPageHeaderHidden(false));
-      }
 
       function addRow(productValue = "") {
         const row = document.createElement("tr");
