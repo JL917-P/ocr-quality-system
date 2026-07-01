@@ -4325,8 +4325,23 @@
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
           await loadConstancias();
-          showSuccessModal("Constancia guardada correctamente.", {
-            title: "Constancia guardada",
+          const successCopy =
+            status === "por_confirmar"
+              ? {
+                  message: "Constancia reservada correctamente.",
+                  title: "Constancia reservada",
+                }
+              : status === "borrador"
+                ? {
+                    message: "Constancia guardada como borrador.",
+                    title: "Borrador guardado",
+                  }
+                : {
+                    message: "Constancia guardada correctamente.",
+                    title: "Constancia guardada",
+                  };
+          showSuccessModal(successCopy.message, {
+            title: successCopy.title,
             onClose: () => {
               currentConstanciaId = null;
               currentConstanciaStatus = "confirmada";
