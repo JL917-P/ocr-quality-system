@@ -8,7 +8,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import queue
 import sqlite3
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -608,28 +610,68 @@ def log_sync_sheets_error(entity: str, record_id: Any, reason: str = "") -> None
     logger.warning("[SYNC] SHEETS ERROR | %s | id=%s%s", entity, record_id, msg)
 
 
-def run_sync_after_create(entity: str, record_id: Any, sync_fn: Callable[[], bool]) -> None:
-    log_sync_sqlite_ok(entity, record_id)
+_sync_queue: queue.Queue[tuple[str, Any, Callable[[], bool], bool] | None] = queue.Queue()
+_sync_worker_lock = threading.Lock()
+_sync_worker_started = False
+
+
+def _run_sheets_sync_job(entity: str, record_id: Any, sync_fn: Callable[[], bool], is_delete: bool) -> None:
     try:
         if sync_fn():
-            log_sync_sheets_ok(entity, record_id)
+            if is_delete:
+                logger.info("[SYNC] DELETE SHEETS OK | %s | id=%s", entity, record_id)
+            else:
+                log_sync_sheets_ok(entity, record_id)
         else:
-            log_sync_sheets_error(entity, record_id)
+            log_sync_sheets_error(entity, record_id, "delete failed" if is_delete else "")
     except Exception as exc:
         log_sync_sheets_error(entity, record_id, str(exc))
-        logger.exception("[SYNC] SHEETS ERROR detalle | %s | id=%s", entity, record_id)
+        label = "DELETE SHEETS ERROR" if is_delete else "SHEETS ERROR detalle"
+        logger.exception("[SYNC] %s | %s | id=%s", label, entity, record_id)
+
+
+def _sheets_sync_worker() -> None:
+    while True:
+        job = _sync_queue.get()
+        try:
+            if job is None:
+                return
+            entity, record_id, sync_fn, is_delete = job
+            _run_sheets_sync_job(entity, record_id, sync_fn, is_delete)
+        finally:
+            _sync_queue.task_done()
+
+
+def _enqueue_sheets_sync(
+    entity: str,
+    record_id: Any,
+    sync_fn: Callable[[], bool],
+    *,
+    is_delete: bool,
+) -> None:
+    global _sync_worker_started
+    with _sync_worker_lock:
+        if not _sync_worker_started:
+            thread = threading.Thread(
+                target=_sheets_sync_worker,
+                name="sheets-sync-worker",
+                daemon=True,
+            )
+            thread.start()
+            _sync_worker_started = True
+    _sync_queue.put((entity, record_id, sync_fn, is_delete))
+
+
+def run_sync_after_create(entity: str, record_id: Any, sync_fn: Callable[[], bool]) -> None:
+    """SQLite ya guardado: encola sincronización con Google Sheets sin bloquear la respuesta HTTP."""
+    log_sync_sqlite_ok(entity, record_id)
+    _enqueue_sheets_sync(entity, record_id, sync_fn, is_delete=False)
 
 
 def run_sync_after_delete(entity: str, record_id: Any, sync_fn: Callable[[], bool]) -> None:
+    """SQLite ya eliminado: encola borrado en Google Sheets sin bloquear la respuesta HTTP."""
     logger.info("[SYNC] DELETE SQLITE OK | %s | id=%s", entity, record_id)
-    try:
-        if sync_fn():
-            logger.info("[SYNC] DELETE SHEETS OK | %s | id=%s", entity, record_id)
-        else:
-            log_sync_sheets_error(entity, record_id, "delete failed")
-    except Exception as exc:
-        log_sync_sheets_error(entity, record_id, str(exc))
-        logger.exception("[SYNC] DELETE SHEETS ERROR | %s | id=%s", entity, record_id)
+    _enqueue_sheets_sync(entity, record_id, sync_fn, is_delete=True)
 
 
 def sync_client_created(client_id: int, name: str, ruc: str | None, created_at: str) -> bool:
