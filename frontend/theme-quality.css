@@ -390,6 +390,7 @@ body.page-admin {
 
 .layout.sidebar-open .sidebar {
   width: 248px;
+  box-shadow: 8px 0 32px rgba(12, 35, 64, 0.32);
 }
 
 .sidebar-inner {
@@ -440,6 +441,24 @@ body.page-admin {
 .layout.sidebar-open .main-wrap {
   margin-left: 248px;
   width: calc(100% - 248px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.sidebar-backdrop {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 248px;
+  z-index: 180;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: rgba(241, 245, 249, 0.58);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
 }
 
 .page-header {
@@ -3805,9 +3824,12 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   .sidebar-backdrop {
     position: fixed;
     inset: 0;
+    left: 0;
     z-index: 240;
-    background: rgba(12, 35, 64, 0.55);
-    backdrop-filter: blur(2px);
+    background: rgba(12, 35, 64, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    cursor: pointer;
   }
 
   .layout .sidebar-toggle {
