@@ -3027,14 +3027,14 @@ th {
   align-self: flex-start;
   gap: 0;
   width: fit-content;
-  max-width: min(98%, 720px);
+  max-width: min(98%, 760px);
   min-width: 0;
-  min-height: 30px;
+  min-height: 42px;
   margin: 8px 0 6px 8px;
-  padding: 8px 12px 8px 8px;
+  padding: 10px 14px 10px 10px;
   background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
   border: 1px solid #cbd5e1;
-  border-radius: 14px;
+  border-radius: 18px;
   box-shadow: 0 4px 14px rgba(12, 35, 64, 0.12);
   transition:
     box-shadow 0.18s ease,
@@ -3107,12 +3107,12 @@ th {
   min-width: 0;
   flex: 1 1 auto;
   margin: 0;
-  padding: 2px 6px;
-  min-height: 22px;
-  height: 22px;
-  font-size: 11px;
+  padding: 4px 12px;
+  min-height: 28px;
+  height: 28px;
+  font-size: 12px;
   border: 1px solid #a8b0bc;
-  border-radius: 8px;
+  border-radius: 999px !important;
   background: #fff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
@@ -3126,22 +3126,24 @@ th {
 }
 
 #section-constancias .constancias-command-group--bulk select {
-  flex: 0 0 110px;
-  width: 110px;
-  max-width: 110px;
+  flex: 0 0 120px;
+  width: 120px;
+  max-width: 120px;
+  padding-right: 24px;
 }
 
+#section-constancias .constancias-command-btn.btn,
 #section-constancias .constancias-command-btn {
-  padding: 2px 10px;
-  min-height: 22px;
-  height: 22px;
-  font-size: 11px;
+  padding: 4px 14px !important;
+  min-height: 28px !important;
+  height: 28px !important;
+  font-size: 12px !important;
   line-height: 1;
   font-weight: 700;
-  border-radius: 8px;
-  border: 1px solid #a8b0bc;
-  background: #fff;
-  color: #0c2340;
+  border-radius: 999px !important;
+  border: 1px solid #a8b0bc !important;
+  background: #fff !important;
+  color: #0c2340 !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
   transition:
     border-color 0.18s ease,
@@ -3151,8 +3153,8 @@ th {
 }
 
 #section-constancias .constancias-command-btn:hover {
-  border-color: #94a3b8;
-  background: #f8fafc;
+  border-color: #94a3b8 !important;
+  background: #f8fafc !important;
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(12, 35, 64, 0.1);
 }
@@ -3161,13 +3163,13 @@ th {
   display: flex;
   align-items: center;
   gap: 5px;
-  min-height: 22px;
-  height: 22px;
-  width: 112px;
-  flex: 0 0 112px;
-  padding: 0 6px;
+  min-height: 28px;
+  height: 28px;
+  width: 124px;
+  flex: 0 0 124px;
+  padding: 0 10px;
   border: 1px solid #a8b0bc;
-  border-radius: 8px;
+  border-radius: 999px;
   background: #fff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
@@ -3182,7 +3184,7 @@ th {
   width: 18px;
   height: 18px;
   border: 1px solid #c9a227;
-  border-radius: 6px;
+  border-radius: 999px;
 }
 
 #section-constancias .constancia-date-icon {
