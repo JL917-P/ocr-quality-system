@@ -441,6 +441,9 @@ body.page-admin {
 .layout.sidebar-open .main-wrap {
   margin-left: 248px;
   width: calc(100% - 248px);
+}
+
+.layout.sidebar-open:has(#section-home:not(.hidden)) .main-wrap {
   pointer-events: none;
   user-select: none;
 }
