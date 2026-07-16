@@ -39,7 +39,12 @@ from constancia_utils import (
     record_constancia_history,
     restore_items_from_history,
 )
-from trasiego_utils import repair_all_trasiegos_in_sqlite, repair_shifted_trasiego, repair_trasiego_in_sqlite
+from trasiego_utils import (
+    repair_all_trasiegos_in_sqlite,
+    repair_shifted_trasiego,
+    repair_trasiego_in_sqlite,
+    replace_trasiegos_for_constancia,
+)
 from traceability_export import (
     build_traceability_workbook,
     build_traceability_workbook_batch,
@@ -208,6 +213,8 @@ def init_db() -> None:
         }
         if "p_final" not in trasiego_columns:
             conn.execute("ALTER TABLE trasiegos ADD COLUMN p_final TEXT")
+        if "constancia_id" not in trasiego_columns:
+            conn.execute("ALTER TABLE trasiegos ADD COLUMN constancia_id INTEGER")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS constancias (
@@ -1478,7 +1485,7 @@ def delete_transport(transport_id: int) -> JSONResponse:
 
 
 def _trasiego_row_to_dict(row: tuple) -> dict:
-    return {
+    rec = {
         "id": row[0],
         "fecha": row[1] or "",
         "mp": row[2] or "",
@@ -1492,6 +1499,71 @@ def _trasiego_row_to_dict(row: tuple) -> dict:
         "created_at": row[10],
         "updated_at": row[11],
     }
+    if len(row) > 12:
+        rec["constancia_id"] = row[12]
+    return rec
+
+
+def _apply_constancia_trasiegos(
+    conn: sqlite3.Connection,
+    constancia_id: int,
+    issue_date: str | None,
+    items: list,
+    payload: dict,
+    *,
+    now: str,
+) -> tuple[list[int], list[int]]:
+    if "trasiego_extra" not in payload:
+        return [], []
+    extra = payload.get("trasiego_extra")
+    return replace_trasiegos_for_constancia(
+        conn,
+        constancia_id,
+        issue_date,
+        items,
+        extra if isinstance(extra, dict) else None,
+        now=now,
+    )
+
+
+def _queue_trasiego_sheet_sync(new_ids: list[int], deleted_ids: list[int]) -> None:
+    for trasiego_id in deleted_ids:
+        run_sync_after_delete(
+            TAB_TRASIEGOS,
+            trasiego_id,
+            lambda tid=trasiego_id: delete_row_by_id(TAB_TRASIEGOS, HEADERS_TRASIEGOS, tid),
+        )
+    if not new_ids:
+        return
+    with sqlite3.connect(DB_PATH) as conn:
+        for trasiego_id in new_ids:
+            row = conn.execute(
+                """
+                SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
+                FROM trasiegos WHERE id = ?
+                """,
+                (trasiego_id,),
+            ).fetchone()
+            if not row:
+                continue
+            run_sync_after_create(
+                TAB_TRASIEGOS,
+                trasiego_id,
+                lambda row=row: sync_trasiego_created(
+                    row[0],
+                    row[1],
+                    row[2],
+                    row[3],
+                    row[4],
+                    row[5],
+                    row[6],
+                    row[7],
+                    row[8],
+                    row[9],
+                    row[10],
+                    row[11],
+                ),
+            )
 
 
 @app.get("/api/trasiegos")
@@ -1499,7 +1571,7 @@ def list_trasiegos(limit: int = 500) -> JSONResponse:
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             """
-            SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
+            SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at, constancia_id
             FROM trasiegos
             ORDER BY id ASC
             LIMIT ?
@@ -1512,7 +1584,7 @@ def list_trasiegos(limit: int = 500) -> JSONResponse:
             if repair_trasiego_in_sqlite(conn, row_id):
                 row = conn.execute(
                     """
-                    SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
+                    SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at, constancia_id
                     FROM trasiegos WHERE id = ?
                     """,
                     (row_id,),
@@ -1668,8 +1740,17 @@ async def create_constancia(payload: dict) -> JSONResponse:
             items_snap,
             (payload.get("usuario") or "admin").strip() or "admin",
         )
+        trasiego_new_ids, trasiego_deleted_ids = _apply_constancia_trasiegos(
+            conn,
+            constancia_id,
+            header["issue_date"],
+            items_snap,
+            payload,
+            now=created_at,
+        )
         conn.commit()
     _purge_duplicate_constancias(constancia_id, header["number"], header["client_name"])
+    _queue_trasiego_sheet_sync(trasiego_new_ids, trasiego_deleted_ids)
     run_sync_after_create(
         TAB_CONSTANCIAS,
         constancia_id,
@@ -1686,7 +1767,7 @@ async def create_constancia(payload: dict) -> JSONResponse:
             created_at,
         ),
     )
-    return JSONResponse({"id": constancia_id})
+    return JSONResponse({"id": constancia_id, "trasiegos_created": len(trasiego_new_ids)})
 
 
 @app.get("/api/constancias")
@@ -2076,12 +2157,21 @@ async def update_constancia(constancia_id: int, payload: dict) -> JSONResponse:
             items_snap,
             usuario,
         )
+        trasiego_new_ids, trasiego_deleted_ids = _apply_constancia_trasiegos(
+            conn,
+            constancia_id,
+            header["issue_date"],
+            items_snap,
+            payload,
+            now=datetime.now(timezone.utc).isoformat(),
+        )
         created_at_row = conn.execute(
             "SELECT created_at FROM constancias WHERE id = ?",
             (constancia_id,),
         ).fetchone()
         conn.commit()
     _purge_duplicate_constancias(constancia_id, header["number"], header["client_name"])
+    _queue_trasiego_sheet_sync(trasiego_new_ids, trasiego_deleted_ids)
     items_json = json.dumps(items_snap, ensure_ascii=True)
     created_at = created_at_row[0] if created_at_row else datetime.now(timezone.utc).isoformat()
     run_sync_after_create(
@@ -2100,7 +2190,7 @@ async def update_constancia(constancia_id: int, payload: dict) -> JSONResponse:
             created_at,
         ),
     )
-    return JSONResponse({"ok": True})
+    return JSONResponse({"ok": True, "trasiegos_created": len(trasiego_new_ids)})
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home66" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home70" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -312,6 +312,27 @@
                     <div class="ocr-command-checks">
                       <label><input id="constanciaFumigacion" type="checkbox" checked /> Fum.</label>
                       <label><input id="constanciaCalidad" type="checkbox" checked /> Cal.</label>
+                    </div>
+                  </div>
+                  <div class="ocr-command-sep" aria-hidden="true"></div>
+                  <div class="ocr-command-group ocr-command-group--more">
+                    <div class="ocr-more-menu" id="ocrMoreMenu">
+                      <button
+                        type="button"
+                        class="ocr-more-menu-btn"
+                        id="ocrMoreOptionsBtn"
+                        title="Más opciones"
+                        aria-haspopup="menu"
+                        aria-expanded="false"
+                        aria-controls="ocrMoreOptionsPanel"
+                      >
+                        <span class="ocr-more-menu-dots" aria-hidden="true">⋮</span>
+                        <span class="ocr-more-menu-label">Más opciones</span>
+                        <span class="ocr-more-menu-indicator hidden" id="ocrMoreOptionsIndicator" title="Datos adicionales cargados"></span>
+                      </button>
+                      <div class="ocr-more-menu-panel hidden" id="ocrMoreOptionsPanel" role="menu" aria-label="Más opciones">
+                        <button type="button" class="ocr-more-menu-item" id="ocrMoreTrasiegoBtn" role="menuitem">Trasiego</button>
+                      </div>
                     </div>
                   </div>
                   <div class="ocr-command-group ocr-command-group--collapse">
@@ -933,6 +954,52 @@
           </div>
         </div>
 
+        <div class="modal-backdrop hidden" id="constanciaTrasiegoModal">
+          <div class="modal modal-constancia-trasiego">
+            <div class="trasiego-modal-head">
+              <div class="trasiego-modal-head-text">
+                <h3 class="trasiego-modal-title">Trasiego</h3>
+                <p class="trasiego-modal-hint">Datos opcionales para esta constancia (solo en esta sesión).</p>
+              </div>
+              <button class="btn btn-outline btn-mini" id="closeConstanciaTrasiegoModal" type="button">Cerrar</button>
+            </div>
+            <div class="trasiego-modal-bar" role="group" aria-label="Campos de trasiego">
+              <div class="trasiego-modal-group">
+                <label class="trasiego-modal-label" for="constanciaTrasiegoMp">M.P</label>
+                <input id="constanciaTrasiegoMp" class="trasiego-modal-input" type="text" placeholder="Materia prima" />
+              </div>
+              <div class="trasiego-modal-sep" aria-hidden="true"></div>
+              <div class="trasiego-modal-group">
+                <label class="trasiego-modal-label" for="constanciaTrasiegoFIngresoCd">F.Ingreso CD</label>
+                <input id="constanciaTrasiegoFIngresoCd" class="trasiego-modal-input trasiego-modal-input--date" type="date" />
+              </div>
+              <div class="trasiego-modal-sep" aria-hidden="true"></div>
+              <div class="trasiego-modal-group">
+                <label class="trasiego-modal-label" for="constanciaTrasiegoEstado">Estado</label>
+                <select id="constanciaTrasiegoEstado" class="trasiego-modal-input trasiego-modal-input--select">
+                  <option value="">Seleccionar</option>
+                  <option value="fumigado">Fumigado</option>
+                  <option value="sin fumigar">Sin fumigar</option>
+                </select>
+              </div>
+              <div class="trasiego-modal-sep" aria-hidden="true"></div>
+              <div class="trasiego-modal-group">
+                <label class="trasiego-modal-label" for="constanciaTrasiegoFFumigacion">F.fumigación</label>
+                <input id="constanciaTrasiegoFFumigacion" class="trasiego-modal-input trasiego-modal-input--date" type="date" />
+              </div>
+              <div class="trasiego-modal-sep" aria-hidden="true"></div>
+              <div class="trasiego-modal-group">
+                <label class="trasiego-modal-label" for="constanciaTrasiegoFLiberacion">F.Liberación</label>
+                <input id="constanciaTrasiegoFLiberacion" class="trasiego-modal-input trasiego-modal-input--date" type="date" />
+              </div>
+            </div>
+            <div class="trasiego-modal-actions">
+              <button class="btn btn-outline" id="clearConstanciaTrasiegoBtn" type="button">Limpiar</button>
+              <button class="btn btn-primary" id="saveConstanciaTrasiegoBtn" type="button">Aplicar</button>
+            </div>
+          </div>
+        </div>
+
         </div>
       </main>
       </div>
@@ -1158,6 +1225,22 @@
       const constanciaTransporteInput = document.getElementById("constanciaTransporteInput");
       const constanciaFumigacion = document.getElementById("constanciaFumigacion");
       const constanciaCalidad = document.getElementById("constanciaCalidad");
+      const ocrMoreMenu = document.getElementById("ocrMoreMenu");
+      const ocrMoreOptionsBtn = document.getElementById("ocrMoreOptionsBtn");
+      const ocrMoreOptionsPanel = document.getElementById("ocrMoreOptionsPanel");
+      const ocrMoreTrasiegoBtn = document.getElementById("ocrMoreTrasiegoBtn");
+      const ocrMoreOptionsIndicator = document.getElementById("ocrMoreOptionsIndicator");
+      const constanciaTrasiegoModal = document.getElementById("constanciaTrasiegoModal");
+      const constanciaTrasiegoMp = document.getElementById("constanciaTrasiegoMp");
+      const constanciaTrasiegoFIngresoCd = document.getElementById("constanciaTrasiegoFIngresoCd");
+      const constanciaTrasiegoEstado = document.getElementById("constanciaTrasiegoEstado");
+      const constanciaTrasiegoFFumigacion = document.getElementById("constanciaTrasiegoFFumigacion");
+      const constanciaTrasiegoFLiberacion = document.getElementById("constanciaTrasiegoFLiberacion");
+      const closeConstanciaTrasiegoModalBtn = document.getElementById("closeConstanciaTrasiegoModal");
+      const saveConstanciaTrasiegoBtn = document.getElementById("saveConstanciaTrasiegoBtn");
+      const clearConstanciaTrasiegoBtn = document.getElementById("clearConstanciaTrasiegoBtn");
+      let constanciaTrasiegoExtra = null;
+      let constanciaTrasiegoTouched = false;
       const clientesList = document.getElementById("clientesList");
       const transportesList = document.getElementById("transportesList");
       const constanciaNumero = document.getElementById("constanciaNumero");
@@ -2868,6 +2951,116 @@
         showSection("section-constancias");
       });
 
+      function setOcrMoreOptionsOpen(open) {
+        if (!ocrMoreOptionsPanel || !ocrMoreOptionsBtn) return;
+        ocrMoreOptionsPanel.classList.toggle("hidden", !open);
+        ocrMoreOptionsBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+
+      function hasConstanciaTrasiegoData(data) {
+        if (!data) return false;
+        return Boolean(
+          (data.mp || "").trim() ||
+            (data.f_ingreso_cd || "").trim() ||
+            (data.estado || "").trim() ||
+            (data.f_fumigacion || "").trim() ||
+            (data.f_liberacion || "").trim()
+        );
+      }
+
+      function readConstanciaTrasiegoForm() {
+        return {
+          mp: constanciaTrasiegoMp?.value.trim() || "",
+          f_ingreso_cd: constanciaTrasiegoFIngresoCd?.value.trim() || "",
+          estado: constanciaTrasiegoEstado?.value.trim() || "",
+          f_fumigacion: constanciaTrasiegoFFumigacion?.value.trim() || "",
+          f_liberacion: constanciaTrasiegoFLiberacion?.value.trim() || "",
+        };
+      }
+
+      function fillConstanciaTrasiegoForm(data) {
+        const payload = data || {};
+        if (constanciaTrasiegoMp) constanciaTrasiegoMp.value = payload.mp || "";
+        if (constanciaTrasiegoFIngresoCd) {
+          constanciaTrasiegoFIngresoCd.value = toInputDateValue(payload.f_ingreso_cd) || "";
+        }
+        if (constanciaTrasiegoEstado) constanciaTrasiegoEstado.value = payload.estado || "";
+        if (constanciaTrasiegoFFumigacion) {
+          constanciaTrasiegoFFumigacion.value = toInputDateValue(payload.f_fumigacion) || "";
+        }
+        if (constanciaTrasiegoFLiberacion) {
+          constanciaTrasiegoFLiberacion.value = toInputDateValue(payload.f_liberacion) || "";
+        }
+      }
+
+      function updateOcrMoreOptionsIndicator() {
+        if (!ocrMoreOptionsIndicator) return;
+        ocrMoreOptionsIndicator.classList.toggle("hidden", !hasConstanciaTrasiegoData(constanciaTrasiegoExtra));
+      }
+
+      function openConstanciaTrasiegoModal() {
+        if (!constanciaTrasiegoModal) return;
+        setOcrMoreOptionsOpen(false);
+        fillConstanciaTrasiegoForm(constanciaTrasiegoExtra);
+        constanciaTrasiegoModal.classList.remove("hidden");
+        constanciaTrasiegoModal.classList.add("show");
+        constanciaTrasiegoMp?.focus();
+      }
+
+      function closeConstanciaTrasiegoModal() {
+        if (!constanciaTrasiegoModal) return;
+        constanciaTrasiegoModal.classList.remove("show");
+        constanciaTrasiegoModal.classList.add("hidden");
+      }
+
+      function clearConstanciaTrasiegoExtra() {
+        constanciaTrasiegoExtra = null;
+        constanciaTrasiegoTouched = false;
+        fillConstanciaTrasiegoForm(null);
+        updateOcrMoreOptionsIndicator();
+      }
+
+      if (ocrMoreOptionsBtn && ocrMoreOptionsPanel) {
+        ocrMoreOptionsBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const open = ocrMoreOptionsPanel.classList.contains("hidden");
+          setOcrMoreOptionsOpen(open);
+        });
+      }
+      if (ocrMoreTrasiegoBtn) {
+        ocrMoreTrasiegoBtn.addEventListener("click", () => openConstanciaTrasiegoModal());
+      }
+      if (saveConstanciaTrasiegoBtn) {
+        saveConstanciaTrasiegoBtn.addEventListener("click", () => {
+          const payload = readConstanciaTrasiegoForm();
+          constanciaTrasiegoExtra = hasConstanciaTrasiegoData(payload) ? payload : null;
+          constanciaTrasiegoTouched = true;
+          updateOcrMoreOptionsIndicator();
+          closeConstanciaTrasiegoModal();
+          showSuccessModal("Datos de trasiego aplicados a esta constancia.", {
+            title: "Trasiego guardado",
+          });
+        });
+      }
+      if (clearConstanciaTrasiegoBtn) {
+        clearConstanciaTrasiegoBtn.addEventListener("click", () => {
+          fillConstanciaTrasiegoForm(null);
+        });
+      }
+      if (closeConstanciaTrasiegoModalBtn) {
+        closeConstanciaTrasiegoModalBtn.addEventListener("click", () => closeConstanciaTrasiegoModal());
+      }
+      if (constanciaTrasiegoModal) {
+        constanciaTrasiegoModal.addEventListener("click", (event) => {
+          if (event.target === constanciaTrasiegoModal) closeConstanciaTrasiegoModal();
+        });
+      }
+      document.addEventListener("click", (event) => {
+        if (!ocrMoreMenu || ocrMoreOptionsPanel?.classList.contains("hidden")) return;
+        if (ocrMoreMenu.contains(event.target)) return;
+        setOcrMoreOptionsOpen(false);
+      });
+
       constanciaSearch.addEventListener("input", applyConstanciaFilters);
       if (constanciaDateFilter) {
         constanciaDateFilter.addEventListener("change", applyConstanciaFilters);
@@ -3811,6 +4004,11 @@
       function buildTrasiegoRow(data = {}) {
         const tr = document.createElement("tr");
         if (data.id) tr.dataset.id = String(data.id);
+        if (data.constancia_id) {
+          tr.dataset.constanciaId = String(data.constancia_id);
+          tr.classList.add("trasiego-row--from-constancia");
+          tr.title = "Generado desde constancia";
+        }
         tr.innerHTML = `
           <td><input type="date" class="trasiego-date" data-field="fecha" title="Fecha" /></td>
           <td><input type="text" data-field="mp" placeholder="M.P" /></td>
@@ -4291,6 +4489,7 @@
         addRow();
         currentConstanciaId = null;
         currentConstanciaStatus = "confirmada";
+        clearConstanciaTrasiegoExtra();
         updateRestoreConstanciaButton([]);
         setOcrHeaderCollapsed(false);
         updateOcrHeaderCollapseUi();
@@ -4321,6 +4520,9 @@
           items,
           usuario: "admin",
         };
+        if (constanciaTrasiegoTouched) {
+          payload.trasiego_extra = constanciaTrasiegoExtra;
+        }
         if (!payload.client_name) return;
         const url = currentConstanciaId ? `/api/constancias/${currentConstanciaId}` : "/api/constancias";
         const method = currentConstanciaId ? "PUT" : "POST";
@@ -4331,6 +4533,7 @@
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
+          const trasiegosCreated = Number(data.trasiegos_created || 0);
           const successCopy =
             status === "por_confirmar"
               ? {
@@ -4346,6 +4549,12 @@
                     message: "Constancia guardada correctamente.",
                     title: "Constancia guardada",
                   };
+          if (trasiegosCreated > 0) {
+            successCopy.message += `\n\nSe registraron ${trasiegosCreated} fila(s) en Trasiegos.`;
+          }
+          if (constanciaTrasiegoTouched) {
+            clearConstanciaTrasiegoExtra();
+          }
           showSuccessModal(successCopy.message, {
             title: successCopy.title,
             onClose: () => {
@@ -4356,6 +4565,7 @@
             },
           });
           void loadConstancias();
+          void loadTrasiegos();
         } else {
           showErrorModal(data.detail || data.error || "No se pudo guardar la constancia.", {
             title: "Error al guardar",
@@ -4388,6 +4598,7 @@
         if (!res.ok) return;
         currentConstanciaId = data.id;
         currentConstanciaStatus = data.status || "confirmada";
+        clearConstanciaTrasiegoExtra();
         constanciaNumero.value = data.number || "";
         constanciaFecha.value = toInputDateValue(data.issue_date);
         constanciaClienteInput.value = data.client_name || "";
@@ -5845,6 +6056,7 @@
         { patterns: ["ARROZ EXTRA GRAN CHALAN X 5KG", "GRAN CHALAN X 5KG"], sku: "13010200100586" },
         { patterns: ["DON CHEF ARROZ SUPERIOR BL 4KG", "ARROZ SUPERIOR BL 4KG"], sku: "130102003001" },
         { patterns: ["DON CHEF ARROZ EXTRA BL 650GR", "ARROZ EXTRA BL 650GR", "ARROZ EXTRA BL 650 GR"], sku: "130102003002" },
+        { patterns: ["DON CHEF ARROZ EXTRA BL 2KG", "ARROZ EXTRA BL 2KG", "ARROZ EXTRA BL 2 KG"], sku: "13010200112538" },
         { patterns: ["MI ARROZ SUPERIOR NIR X 25 KG", "ARROZ SUPERIOR NIR X 25 KG"], sku: "130102003003" },
       ];
 

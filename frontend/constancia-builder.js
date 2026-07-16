@@ -100,6 +100,7 @@ function parseConstanciaDate(dateText) {
         { patterns: ["ARROZ EXTRA GRAN CHALAN X 5KG", "GRAN CHALAN X 5KG"], sku: "13010200100586" },
         { patterns: ["DON CHEF ARROZ SUPERIOR BL 4KG", "ARROZ SUPERIOR BL 4KG"], sku: "130102003001" },
         { patterns: ["DON CHEF ARROZ EXTRA BL 650GR", "ARROZ EXTRA BL 650GR", "ARROZ EXTRA BL 650 GR"], sku: "130102003002" },
+        { patterns: ["DON CHEF ARROZ EXTRA BL 2KG", "ARROZ EXTRA BL 2KG", "ARROZ EXTRA BL 2 KG"], sku: "13010200112538" },
         { patterns: ["MI ARROZ SUPERIOR NIR X 25 KG", "ARROZ SUPERIOR NIR X 25 KG"], sku: "130102003003" },
       ];
 
