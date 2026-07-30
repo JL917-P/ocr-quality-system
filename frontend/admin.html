@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home78" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home79" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -218,7 +218,7 @@
       <main class="content" id="mainContent">
         <div class="container">
         <section id="section-home">
-          <div class="home-dashboard" id="homeDashboard">
+            <div class="home-dashboard home-dashboard--ready" id="homeDashboard">
             <header class="home-hero">
               <div>
                 <p class="home-hero-kicker" id="homeGreeting">Bienvenido</p>
@@ -7508,7 +7508,11 @@ async function savePdf(){
             showSection(next, false);
             return;
           }
-          showInfoModal("No tienes permiso para ver Inicio.", { title: "Acceso restringido" });
+          // Evitar pantalla en blanco: mostrar el dashboard aunque falte el permiso
+          originalShowHomeDashboard();
+          showInfoModal("No tienes permiso completo para Inicio; contacta al administrador.", {
+            title: "Acceso restringido",
+          });
           return;
         }
         originalShowHomeDashboard();
@@ -7555,10 +7559,15 @@ async function savePdf(){
         ensureAllowedSection();
         void refreshNotifications();
       });
-      applyAccessControl();
-      ensureAllowedSection();
-
-      // —— Campana de notificaciones / solicitudes ——
+      // No aplicar restricciones hasta tener sesión (evita pantalla vacía al cargar)
+      if (window.QCAuth && window.QCAuth.getUser()) {
+        applyAccessControl();
+        ensureAllowedSection();
+      } else {
+        // Asegura que el dashboard inicial sea visible
+        const dash = document.getElementById("homeDashboard");
+        if (dash) dash.classList.add("home-dashboard--ready");
+      }
       const notifBellBtn = document.getElementById("notifBellBtn");
       const notifBellBadge = document.getElementById("notifBellBadge");
       const notifPanel = document.getElementById("notifPanel");

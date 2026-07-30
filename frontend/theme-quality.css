@@ -1108,8 +1108,15 @@ body.page-admin {
 
 .home-stat-card,
 .home-grid .home-panel {
-  opacity: 0;
-  transform: translateY(8px);
+  opacity: 1;
+  transform: none;
+}
+
+.home-dashboard:not(.home-dashboard--ready) .home-stat-card,
+.home-dashboard:not(.home-dashboard--ready) .home-grid .home-panel {
+  /* Solo anima si el JS marca ready; si falla el JS, el contenido sigue visible */
+  opacity: 1;
+  transform: none;
 }
 
 .home-dashboard--ready .home-stat-card,
