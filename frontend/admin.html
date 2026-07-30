@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home71" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home72" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -7030,8 +7030,21 @@ async function savePdf(){
 
         const importBtn = document.getElementById("importSheetsBtn");
         const syncBtn = document.getElementById("syncSheetsBtn");
-        if (importBtn) importBtn.classList.toggle("hidden", !can("sheets_sync"));
-        if (syncBtn) syncBtn.classList.toggle("hidden", !can("sheets_sync"));
+        const currentUser = window.QCAuth ? window.QCAuth.getUser() : null;
+        // No ocultar Importar hasta saber el usuario; el admin siempre lo ve.
+        if (importBtn) {
+          if (!currentUser) {
+            importBtn.classList.remove("hidden");
+          } else {
+            importBtn.classList.toggle("hidden", !can("sheets_sync"));
+          }
+        }
+        // El botón de sync se mantiene oculto (solo uso interno / admin avanzado).
+        if (syncBtn) {
+          syncBtn.classList.add("hidden");
+          syncBtn.setAttribute("aria-hidden", "true");
+          syncBtn.tabIndex = -1;
+        }
 
         document.querySelectorAll("[data-requires-perm]").forEach((el) => {
           el.classList.toggle("hidden", !can(el.dataset.requiresPerm));
