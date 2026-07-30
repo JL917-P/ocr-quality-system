@@ -1116,6 +1116,24 @@ def on_startup() -> None:
     )
     init_db()
     run_startup_sheets_backup_check(DB_PATH)
+    # Tras redeploy a veces la BD queda vacía: restaurar automáticamente desde Sheets.
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            count = conn.execute("SELECT COUNT(*) FROM constancias").fetchone()[0]
+        if int(count or 0) == 0:
+            logging.getLogger(__name__).warning(
+                "[STARTUP] Sin constancias en SQLite; importando desde Google Sheets…"
+            )
+            result = run_import_from_sheets(DB_PATH)
+            logging.getLogger(__name__).warning(
+                "[STARTUP] Auto-import: ok=%s imported=%s",
+                result.get("ok"),
+                result.get("imported"),
+            )
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "[STARTUP] No se pudo auto-importar desde Google Sheets"
+        )
 
 
 @app.get("/health")
