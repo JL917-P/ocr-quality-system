@@ -19,13 +19,32 @@ try:
     import easyocr
 except Exception:  # pragma: no cover - optional dependency
     easyocr = None
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pytesseract import Output
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app_config import ADMIN_PATH, ADMIN_URL, app_config_payload
+from auth_service import (
+    PERMISSION_KEYS,
+    create_session,
+    create_user,
+    delete_session,
+    delete_user,
+    ensure_auth_tables,
+    extract_bearer_token,
+    get_user_by_username,
+    list_audit,
+    list_users,
+    public_user,
+    resolve_session,
+    update_user,
+    user_has_permission,
+    verify_password,
+    write_audit,
+)
 from constancia_utils import (
     VALID_STATUSES,
     consolidate_constancia_duplicates,
@@ -259,9 +278,102 @@ def init_db() -> None:
             )
             """
         )
+        ensure_auth_tables(conn)
         conn.commit()
         repair_all_trasiegos_in_sqlite(conn)
         conn.commit()
+
+
+def _actor_label(user: dict | None) -> str:
+    if not user:
+        return "admin"
+    return (user.get("display_name") or user.get("username") or "admin").strip() or "admin"
+
+
+def _audit(
+    user: dict | None,
+    action: str,
+    entity: str | None = None,
+    entity_id: object = None,
+    detail: str | None = None,
+) -> None:
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            write_audit(
+                conn,
+                user=user,
+                action=action,
+                entity=entity,
+                entity_id=entity_id,
+                detail=detail,
+            )
+            conn.commit()
+    except Exception:
+        logging.getLogger(__name__).exception("No se pudo escribir auditoría")
+
+
+def _token_from_request(request: Request) -> str | None:
+    return extract_bearer_token(
+        request.headers.get("authorization"),
+        request.cookies.get("qc_session"),
+    )
+
+
+def get_current_user(request: Request) -> dict:
+    token = _token_from_request(request)
+    with sqlite3.connect(DB_PATH) as conn:
+        user = resolve_session(conn, token)
+        conn.commit()
+    if not user:
+        raise HTTPException(status_code=401, detail="Sesión no válida. Inicia sesión.")
+    return user
+
+
+def require_permission(permission: str):
+    def _dep(user: dict = Depends(get_current_user)) -> dict:
+        if not user_has_permission(user, permission):
+            raise HTTPException(status_code=403, detail="No tienes permiso para esta acción.")
+        return user
+
+    return _dep
+
+
+class ApiAuthMiddleware(BaseHTTPMiddleware):
+    """Exige sesión en /api/* salvo login y rutas públicas."""
+
+    PUBLIC_PREFIXES = (
+        "/static",
+        "/health",
+        "/api/auth/login",
+        "/api/app-config",
+    )
+    PUBLIC_EXACT = {"/", ADMIN_PATH, "/capture", "/favicon.ico"}
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if (
+            path in self.PUBLIC_EXACT
+            or any(path.startswith(p) for p in self.PUBLIC_PREFIXES)
+            or path.endswith(".html")
+            or path.endswith(".js")
+            or path.endswith(".css")
+            or path.endswith(".png")
+            or path.endswith(".svg")
+            or path.endswith(".ico")
+        ):
+            return await call_next(request)
+        if path.startswith("/api/"):
+            token = _token_from_request(request)
+            with sqlite3.connect(DB_PATH) as conn:
+                user = resolve_session(conn, token)
+                conn.commit()
+            if not user:
+                return JSONResponse({"detail": "Sesión no válida. Inicia sesión."}, status_code=401)
+            request.state.user = user
+        return await call_next(request)
+
+
+app.add_middleware(ApiAuthMiddleware)
 
 
 def _record_sync_deletions(conn: sqlite3.Connection, entity_table: str, record_ids: list[int]) -> None:
@@ -1011,6 +1123,167 @@ def health() -> JSONResponse:
     return JSONResponse({"ok": True, "tesseract": bool(resolved_cmd)})
 
 
+@app.post("/api/auth/login")
+async def auth_login(payload: dict) -> JSONResponse:
+    username = (payload.get("username") or "").strip()
+    password = payload.get("password") or ""
+    remember = bool(payload.get("remember"))
+    with sqlite3.connect(DB_PATH) as conn:
+        ensure_auth_tables(conn)
+        user = get_user_by_username(conn, username)
+        if not user or not user.get("active") or not verify_password(
+            password, user.get("password_hash", ""), user.get("salt", "")
+        ):
+            conn.commit()
+            raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos.")
+        token = create_session(conn, int(user["id"]))
+        write_audit(
+            conn,
+            user=user,
+            action="login",
+            entity="session",
+            detail="Inicio de sesión",
+        )
+        conn.commit()
+    response = JSONResponse(
+        {
+            "ok": True,
+            "token": token,
+            "user": public_user(user),
+            "permission_keys": list(PERMISSION_KEYS),
+        }
+    )
+    max_age = 60 * 60 * 24 * 14 if remember else None
+    response.set_cookie(
+        key="qc_session",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=max_age,
+        path="/",
+    )
+    return response
+
+
+@app.post("/api/auth/logout")
+def auth_logout(request: Request, user: dict = Depends(get_current_user)) -> JSONResponse:
+    token = _token_from_request(request)
+    with sqlite3.connect(DB_PATH) as conn:
+        if token:
+            delete_session(conn, token)
+        write_audit(conn, user=user, action="logout", entity="session", detail="Cierre de sesión")
+        conn.commit()
+    response = JSONResponse({"ok": True})
+    response.delete_cookie("qc_session", path="/")
+    return response
+
+
+@app.get("/api/auth/me")
+def auth_me(user: dict = Depends(get_current_user)) -> JSONResponse:
+    return JSONResponse({"user": public_user(user), "permission_keys": list(PERMISSION_KEYS)})
+
+
+@app.get("/api/users")
+def api_list_users(_user: dict = Depends(require_permission("users_manage"))) -> JSONResponse:
+    with sqlite3.connect(DB_PATH) as conn:
+        users = list_users(conn)
+    return JSONResponse({"users": users, "permission_keys": list(PERMISSION_KEYS)})
+
+
+@app.post("/api/users")
+async def api_create_user(
+    payload: dict,
+    user: dict = Depends(require_permission("users_manage")),
+) -> JSONResponse:
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            created = create_user(
+                conn,
+                username=(payload.get("username") or "").strip(),
+                display_name=(payload.get("display_name") or "").strip(),
+                password=payload.get("password") or "",
+                is_admin=bool(payload.get("is_admin")),
+                permissions=payload.get("permissions") if isinstance(payload.get("permissions"), dict) else None,
+                active=payload.get("active", True) is not False,
+            )
+            write_audit(
+                conn,
+                user=user,
+                action="user_create",
+                entity="user",
+                entity_id=created["id"],
+                detail=f"Alta de usuario {created['username']}",
+            )
+            conn.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return JSONResponse({"user": created})
+
+
+@app.put("/api/users/{user_id}")
+async def api_update_user(
+    user_id: int,
+    payload: dict,
+    user: dict = Depends(require_permission("users_manage")),
+) -> JSONResponse:
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            updated = update_user(
+                conn,
+                user_id,
+                display_name=payload.get("display_name"),
+                password=(payload.get("password") or None) or None,
+                active=payload.get("active") if "active" in payload else None,
+                is_admin=payload.get("is_admin") if "is_admin" in payload else None,
+                permissions=payload.get("permissions") if isinstance(payload.get("permissions"), dict) else None,
+            )
+            write_audit(
+                conn,
+                user=user,
+                action="user_update",
+                entity="user",
+                entity_id=user_id,
+                detail=f"Actualización de usuario {updated['username']}",
+            )
+            conn.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return JSONResponse({"user": updated})
+
+
+@app.delete("/api/users/{user_id}")
+def api_delete_user(
+    user_id: int,
+    user: dict = Depends(require_permission("users_manage")),
+) -> JSONResponse:
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            delete_user(conn, user_id, actor_id=int(user["id"]))
+            write_audit(
+                conn,
+                user=user,
+                action="user_delete",
+                entity="user",
+                entity_id=user_id,
+                detail="Eliminación de usuario",
+            )
+            conn.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/audit")
+def api_list_audit(
+    limit: int = 300,
+    username: str | None = None,
+    _user: dict = Depends(require_permission("audit_view")),
+) -> JSONResponse:
+    with sqlite3.connect(DB_PATH) as conn:
+        events = list_audit(conn, limit=limit, username=username)
+    return JSONResponse({"events": events})
+
+
 @app.get("/api/app-config")
 def get_app_config() -> JSONResponse:
     """URL base y panel admin (producción: ocr-quality-system.onrender.com/admin)."""
@@ -1018,9 +1291,10 @@ def get_app_config() -> JSONResponse:
 
 
 @app.post("/api/sync/sheets")
-def sync_sheets_manual() -> JSONResponse:
+def sync_sheets_manual(user: dict = Depends(require_permission("sheets_sync"))) -> JSONResponse:
     """Respaldo manual: SQLite → Google Sheets (solo registros faltantes por id)."""
     result = run_manual_resync(DB_PATH)
+    _audit(user, "sheets_sync", "sheets", detail="Respaldo SQLite → Google Sheets")
     return JSONResponse(
         {
             "ok": bool(result.get("ok")),
@@ -1033,10 +1307,16 @@ def sync_sheets_manual() -> JSONResponse:
 
 
 @app.post("/api/admin/import-from-sheets")
-def import_from_sheets_admin() -> JSONResponse:
+def import_from_sheets_admin(user: dict = Depends(require_permission("sheets_sync"))) -> JSONResponse:
     """Importación manual: Google Sheets → SQLite (solo registros faltantes por id)."""
     init_db()
     result = run_import_from_sheets(DB_PATH)
+    _audit(
+        user,
+        "sheets_import",
+        "sheets",
+        detail=f"Importados {result.get('imported', 0)} registros",
+    )
     return JSONResponse(
         {
             "ok": bool(result.get("ok")),
@@ -1224,7 +1504,10 @@ def list_products(limit: int = 200) -> JSONResponse:
 
 
 @app.post("/api/products")
-async def create_product(payload: dict) -> JSONResponse:
+async def create_product(
+    payload: dict,
+    user: dict = Depends(require_permission("products_write")),
+) -> JSONResponse:
     name = (payload.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Nombre es obligatorio.")
@@ -1283,7 +1566,11 @@ async def create_product(payload: dict) -> JSONResponse:
 
 
 @app.put("/api/products/{product_id}")
-async def update_product(product_id: int, payload: dict) -> JSONResponse:
+async def update_product(
+    product_id: int,
+    payload: dict,
+    user: dict = Depends(require_permission("products_write")),
+) -> JSONResponse:
     name = (payload.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Nombre es obligatorio.")
@@ -1346,7 +1633,11 @@ async def update_product(product_id: int, payload: dict) -> JSONResponse:
 
 
 @app.delete("/api/products/{product_id}")
-def delete_product(product_id: int) -> JSONResponse:
+def delete_product(
+    product_id: int,
+    user: dict = Depends(require_permission("products_write")),
+) -> JSONResponse:
+    _audit(user, "product_delete", "product", product_id)
     _delete_with_sheets_sync("products", TAB_PRODUCTOS, HEADERS_PRODUCTOS, product_id)
     return JSONResponse({"ok": True})
 
@@ -1366,7 +1657,10 @@ def list_clients(limit: int = 200) -> JSONResponse:
 
 
 @app.post("/api/clients")
-async def create_client(payload: dict) -> JSONResponse:
+async def create_client(
+    payload: dict,
+    user: dict = Depends(require_permission("clients_write")),
+) -> JSONResponse:
     name = (payload.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Nombre es obligatorio.")
@@ -1388,7 +1682,11 @@ async def create_client(payload: dict) -> JSONResponse:
 
 
 @app.put("/api/clients/{client_id}")
-async def update_client(client_id: int, payload: dict) -> JSONResponse:
+async def update_client(
+    client_id: int,
+    payload: dict,
+    user: dict = Depends(require_permission("clients_write")),
+) -> JSONResponse:
     name = (payload.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Nombre es obligatorio.")
@@ -1415,7 +1713,11 @@ async def update_client(client_id: int, payload: dict) -> JSONResponse:
 
 
 @app.delete("/api/clients/{client_id}")
-def delete_client(client_id: int) -> JSONResponse:
+def delete_client(
+    client_id: int,
+    user: dict = Depends(require_permission("clients_write")),
+) -> JSONResponse:
+    _audit(user, "client_delete", "client", client_id)
     _delete_with_sheets_sync("clients", TAB_CLIENTES, HEADERS_CLIENTES, client_id)
     return JSONResponse({"ok": True})
 
@@ -1432,7 +1734,10 @@ def list_transports(limit: int = 200) -> JSONResponse:
 
 
 @app.post("/api/transports")
-async def create_transport(payload: dict) -> JSONResponse:
+async def create_transport(
+    payload: dict,
+    user: dict = Depends(require_permission("transports_write")),
+) -> JSONResponse:
     plate = (payload.get("plate") or "").strip()
     if not plate:
         raise HTTPException(status_code=400, detail="Matrícula es obligatoria.")
@@ -1453,7 +1758,11 @@ async def create_transport(payload: dict) -> JSONResponse:
 
 
 @app.put("/api/transports/{transport_id}")
-async def update_transport(transport_id: int, payload: dict) -> JSONResponse:
+async def update_transport(
+    transport_id: int,
+    payload: dict,
+    user: dict = Depends(require_permission("transports_write")),
+) -> JSONResponse:
     plate = (payload.get("plate") or "").strip()
     if not plate:
         raise HTTPException(status_code=400, detail="Matrícula es obligatoria.")
@@ -1479,7 +1788,11 @@ async def update_transport(transport_id: int, payload: dict) -> JSONResponse:
 
 
 @app.delete("/api/transports/{transport_id}")
-def delete_transport(transport_id: int) -> JSONResponse:
+def delete_transport(
+    transport_id: int,
+    user: dict = Depends(require_permission("transports_write")),
+) -> JSONResponse:
+    _audit(user, "transport_delete", "transport", transport_id)
     _delete_with_sheets_sync("transports", TAB_TRANSPORTES, HEADERS_TRANSPORTES, transport_id)
     return JSONResponse({"ok": True})
 
@@ -1595,7 +1908,10 @@ def list_trasiegos(limit: int = 500) -> JSONResponse:
 
 
 @app.post("/api/trasiegos")
-async def create_trasiego(payload: dict) -> JSONResponse:
+async def create_trasiego(
+    payload: dict,
+    user: dict = Depends(require_permission("trasiegos_write")),
+) -> JSONResponse:
     now = datetime.now(timezone.utc).isoformat()
     fecha = (payload.get("fecha") or "").strip() or None
     mp = (payload.get("mp") or "").strip() or None
@@ -1628,7 +1944,11 @@ async def create_trasiego(payload: dict) -> JSONResponse:
 
 
 @app.put("/api/trasiegos/{trasiego_id}")
-async def update_trasiego(trasiego_id: int, payload: dict) -> JSONResponse:
+async def update_trasiego(
+    trasiego_id: int,
+    payload: dict,
+    user: dict = Depends(require_permission("trasiegos_write")),
+) -> JSONResponse:
     now = datetime.now(timezone.utc).isoformat()
     fecha = (payload.get("fecha") or "").strip() or None
     mp = (payload.get("mp") or "").strip() or None
@@ -1690,13 +2010,20 @@ async def update_trasiego(trasiego_id: int, payload: dict) -> JSONResponse:
 
 
 @app.delete("/api/trasiegos/{trasiego_id}")
-def delete_trasiego(trasiego_id: int) -> JSONResponse:
+def delete_trasiego(
+    trasiego_id: int,
+    user: dict = Depends(require_permission("trasiegos_write")),
+) -> JSONResponse:
+    _audit(user, "trasiego_delete", "trasiego", trasiego_id)
     _delete_with_sheets_sync("trasiegos", TAB_TRASIEGOS, HEADERS_TRASIEGOS, trasiego_id)
     return JSONResponse({"ok": True})
 
 
 @app.post("/api/constancias")
-async def create_constancia(payload: dict) -> JSONResponse:
+async def create_constancia(
+    payload: dict,
+    user: dict = Depends(require_permission("constancia_create")),
+) -> JSONResponse:
     items = payload.get("items") or []
     if not isinstance(items, list):
         raise HTTPException(status_code=400, detail="Items invalidos.")
@@ -1708,6 +2035,7 @@ async def create_constancia(payload: dict) -> JSONResponse:
     if fumigacion == 0 and calidad == 0:
         raise HTTPException(status_code=400, detail="Selecciona al menos una constancia.")
     header = constancia_header_snapshot(payload)
+    actor = _actor_label(user)
     created_at = datetime.now(timezone.utc).isoformat()
     with sqlite3.connect(DB_PATH) as conn:
         items_snap = normalize_items_for_save(conn, items)
@@ -1738,7 +2066,7 @@ async def create_constancia(payload: dict) -> JSONResponse:
             header,
             [],
             items_snap,
-            (payload.get("usuario") or "admin").strip() or "admin",
+            actor,
         )
         trasiego_new_ids, trasiego_deleted_ids = _apply_constancia_trasiegos(
             conn,
@@ -1747,6 +2075,14 @@ async def create_constancia(payload: dict) -> JSONResponse:
             items_snap,
             payload,
             now=created_at,
+        )
+        write_audit(
+            conn,
+            user=user,
+            action="constancia_create",
+            entity="constancia",
+            entity_id=constancia_id,
+            detail=f"Nueva constancia {header.get('number') or constancia_id} ({header.get('client_name') or ''})",
         )
         conn.commit()
     _purge_duplicate_constancias(constancia_id, header["number"], header["client_name"])
@@ -1835,6 +2171,7 @@ def list_trace_products_for_lot(lote: str = Query(..., min_length=1)) -> JSONRes
 def export_traceability_excel(
     lote: str = Query(..., min_length=1),
     producto: str = Query(""),
+    _user: dict = Depends(require_permission("trace_export")),
 ) -> StreamingResponse:
     with sqlite3.connect(DB_PATH) as conn:
         trace_rows = load_trace_rows(conn)
@@ -1859,7 +2196,10 @@ def export_traceability_excel(
 
 
 @app.post("/api/trazabilidad/export-batch")
-async def export_traceability_batch(payload: dict) -> StreamingResponse:
+async def export_traceability_batch(
+    payload: dict,
+    _user: dict = Depends(require_permission("trace_export")),
+) -> StreamingResponse:
     selections = payload.get("selections") if isinstance(payload, dict) else None
     if not isinstance(selections, list) or not selections:
         raise HTTPException(status_code=400, detail="Indique al menos un lote y producto.")
@@ -1963,7 +2303,10 @@ def restore_constancia_items_from_history(constancia_id: int) -> JSONResponse:
 
 
 @app.post("/api/constancias/{constancia_id}/confirm")
-def confirm_constancia(constancia_id: int) -> JSONResponse:
+def confirm_constancia(
+    constancia_id: int,
+    user: dict = Depends(require_permission("constancia_confirm")),
+) -> JSONResponse:
     with sqlite3.connect(DB_PATH) as conn:
         row = conn.execute(
             """
@@ -1977,6 +2320,14 @@ def confirm_constancia(constancia_id: int) -> JSONResponse:
         conn.execute(
             "UPDATE constancias SET status = 'confirmada' WHERE id = ?",
             (constancia_id,),
+        )
+        write_audit(
+            conn,
+            user=user,
+            action="constancia_confirm",
+            entity="constancia",
+            entity_id=constancia_id,
+            detail=f"Confirmó constancia {row[0] or constancia_id}",
         )
         conn.commit()
     items_json = row[6] or "[]"
@@ -2001,7 +2352,11 @@ def confirm_constancia(constancia_id: int) -> JSONResponse:
 
 
 @app.delete("/api/constancias/{constancia_id}")
-def delete_constancia(constancia_id: int) -> JSONResponse:
+def delete_constancia(
+    constancia_id: int,
+    user: dict = Depends(require_permission("constancia_delete")),
+) -> JSONResponse:
+    _audit(user, "constancia_delete", "constancia", constancia_id, "Eliminó constancia")
     _delete_with_sheets_sync(
         "constancias",
         TAB_CONSTANCIAS,
@@ -2106,7 +2461,11 @@ def get_constancia(constancia_id: int) -> JSONResponse:
 
 
 @app.put("/api/constancias/{constancia_id}")
-async def update_constancia(constancia_id: int, payload: dict) -> JSONResponse:
+async def update_constancia(
+    constancia_id: int,
+    payload: dict,
+    user: dict = Depends(require_permission("constancia_edit")),
+) -> JSONResponse:
     items = payload.get("items") or []
     if not isinstance(items, list):
         raise HTTPException(status_code=400, detail="Items invalidos.")
@@ -2118,7 +2477,7 @@ async def update_constancia(constancia_id: int, payload: dict) -> JSONResponse:
     if fumigacion == 0 and calidad == 0:
         raise HTTPException(status_code=400, detail="Selecciona al menos una constancia.")
     header = constancia_header_snapshot(payload)
-    usuario = (payload.get("usuario") or "admin").strip() or "admin"
+    usuario = _actor_label(user)
     with sqlite3.connect(DB_PATH) as conn:
         row = conn.execute(
             """
@@ -2180,6 +2539,14 @@ async def update_constancia(constancia_id: int, payload: dict) -> JSONResponse:
             "SELECT created_at FROM constancias WHERE id = ?",
             (constancia_id,),
         ).fetchone()
+        write_audit(
+            conn,
+            user=user,
+            action="constancia_update",
+            entity="constancia",
+            entity_id=constancia_id,
+            detail=f"Editó constancia {header.get('number') or constancia_id}",
+        )
         conn.commit()
     _purge_duplicate_constancias(constancia_id, header["number"], header["client_name"])
     _queue_trasiego_sheet_sync(trasiego_new_ids, trasiego_deleted_ids)

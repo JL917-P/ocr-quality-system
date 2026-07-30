@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home70" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home71" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -137,9 +137,18 @@
             <a href="#" data-target="section-trasiegos">
               <span class="sidebar-nav-label">Trasiegos</span>
             </a>
+            <a href="#" data-target="section-users" data-perm="users_manage" class="nav-perm-item hidden">
+              <span class="sidebar-nav-label">Usuarios</span>
+            </a>
+            <a href="#" data-target="section-audit" data-perm="audit_view" class="nav-perm-item hidden">
+              <span class="sidebar-nav-label">Bitácora</span>
+            </a>
           </nav>
         </div>
         <div class="sidebar-footer">
+          <div class="sidebar-user-chip hidden" id="sidebarUserChip" title="">
+            <span class="sidebar-user-name" id="sidebarUserName">—</span>
+          </div>
           <button type="button" id="sidebarLogoutBtn" class="sidebar-logout-btn" title="Cerrar sesión">
             <span class="sidebar-logout-icon" aria-hidden="true">⎋</span>
             <span class="sidebar-logout-label">Cerrar sesión</span>
@@ -795,6 +804,95 @@
           </div>
         </section>
 
+        <section id="section-users" class="hidden">
+          <div class="card">
+            <div class="title">Usuarios y permisos</div>
+            <div class="sub" style="margin-top:6px;">Todos ven los mismos datos. Tú defines qué acciones puede hacer cada persona.</div>
+            <div class="actions" style="margin-top:12px;">
+              <button class="btn btn-success" id="addUserBtn" type="button">+ Nuevo usuario</button>
+              <button class="btn btn-outline" id="refreshUsersBtn" type="button">Actualizar</button>
+            </div>
+          </div>
+          <div class="card">
+            <table class="users-table">
+              <thead>
+                <tr>
+                  <th>Usuario</th>
+                  <th>Nombre</th>
+                  <th>Rol</th>
+                  <th>Estado</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="usersListBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="section-audit" class="hidden">
+          <div class="card">
+            <div class="title">Bitácora de eventos</div>
+            <div class="sub" style="margin-top:6px;">Quién hizo qué y cuándo (inicios de sesión, altas, ediciones, eliminaciones).</div>
+            <div class="actions" style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:end;">
+              <div class="field" style="margin:0; min-width:180px;">
+                <label>Filtrar por usuario</label>
+                <input id="auditUserFilter" type="text" placeholder="Nombre o usuario" />
+              </div>
+              <button class="btn btn-outline" id="refreshAuditBtn" type="button">Actualizar</button>
+            </div>
+          </div>
+          <div class="card">
+            <table class="audit-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Usuario</th>
+                  <th>Acción</th>
+                  <th>Entidad</th>
+                  <th>Detalle</th>
+                </tr>
+              </thead>
+              <tbody id="auditListBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <div class="modal-backdrop hidden" id="userModal">
+          <div class="modal user-perm-modal">
+            <div class="toolbar">
+              <div class="tag-muted" id="userFormTitle">Nuevo usuario</div>
+              <div class="toolbar-right">
+                <button class="btn btn-outline" id="closeUserModal" type="button">Cerrar</button>
+              </div>
+            </div>
+            <div class="row-2">
+              <div class="field">
+                <label>Usuario (login)</label>
+                <input id="userUsername" type="text" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label>Nombre visible</label>
+                <input id="userDisplayName" type="text" autocomplete="off" />
+              </div>
+            </div>
+            <div class="row-2">
+              <div class="field">
+                <label>Contraseña</label>
+                <input id="userPassword" type="password" autocomplete="new-password" placeholder="Mín. 4 caracteres" />
+              </div>
+              <div class="field" style="display:flex; flex-direction:column; gap:8px; justify-content:center;">
+                <label><input id="userActive" type="checkbox" checked /> Activo</label>
+                <label><input id="userIsAdmin" type="checkbox" /> Administrador (todos los permisos)</label>
+              </div>
+            </div>
+            <div class="section-title" style="margin-top:10px;">Permisos</div>
+            <div id="userPermissionsGrid" class="user-permissions-grid"></div>
+            <div class="actions" style="margin-top:14px;">
+              <button class="btn btn-primary" id="saveUserBtn" type="button">Guardar usuario</button>
+            </div>
+          </div>
+        </div>
+
         <div class="modal-backdrop hidden" id="productModal">
           <div class="modal">
             <div class="toolbar">
@@ -1010,6 +1108,7 @@
       <div id="ocrBandejaPanel" class="dropdown-panel hidden"></div>
     </div>
 
+    <script src="/static/auth-api.js"></script>
     <script>
       const productsBody = document.getElementById("productsBody");
       const addRowBtn = document.getElementById("addRowBtn");
@@ -3172,6 +3271,8 @@
         "section-trazabilidad": { title: "Trazabilidad", subtitle: "Historial por producto, lote, tienda o mes" },
         "section-trasiegos": { title: "Trasiegos", subtitle: "Registro y seguimiento de trasiegos" },
         "section-analisis": { title: "Análisis", subtitle: "Importación CSV y aplicación a constancias" },
+        "section-users": { title: "Usuarios", subtitle: "Cuentas, roles y permisos de acceso" },
+        "section-audit": { title: "Bitácora", subtitle: "Registro de acciones por usuario" },
       };
 
       function updateSectionHeader(targetId) {
@@ -4518,7 +4619,9 @@
           calidad: constanciaCalidad.checked,
           status,
           items,
-          usuario: "admin",
+          usuario: (window.QCAuth && window.QCAuth.getUser()
+            ? (window.QCAuth.getUser().display_name || window.QCAuth.getUser().username)
+            : "admin"),
         };
         if (constanciaTrasiegoTouched) {
           payload.trasiego_extra = constanciaTrasiegoExtra;
@@ -6881,6 +6984,268 @@ async function savePdf(){
 
       globalThis.buildConstanciaHtml = buildConstanciaHtml;
       globalThis.isCencosudCdLimaClient = isCencosudCdLimaClient;
+
+      // —— Usuarios, permisos y bitácora ——
+      const SECTION_PERM_MAP = {
+        "section-home": "section_home",
+        "section-clients": "section_clients",
+        "section-products": "section_products",
+        "section-transports": "section_transports",
+        "section-ocr": "section_ocr",
+        "section-constancias": "section_constancias",
+        "section-trazabilidad": "section_trazabilidad",
+        "section-trasiegos": "section_trasiegos",
+        "section-users": "users_manage",
+        "section-audit": "audit_view",
+      };
+
+      let currentEditUserId = null;
+      let permissionKeysCache = Object.keys((window.QCAuth && window.QCAuth.PERMISSION_LABELS) || {});
+
+      function can(perm) {
+        return !!(window.QCAuth && window.QCAuth.hasPermission(perm));
+      }
+
+      function applyAccessControl() {
+        const user = window.QCAuth ? window.QCAuth.getUser() : null;
+        const chip = document.getElementById("sidebarUserChip");
+        const nameEl = document.getElementById("sidebarUserName");
+        if (chip && nameEl) {
+          if (user) {
+            chip.classList.remove("hidden");
+            nameEl.textContent = user.display_name || user.username;
+            chip.title = user.is_admin ? "Administrador" : "Usuario";
+          } else {
+            chip.classList.add("hidden");
+          }
+        }
+
+        document.querySelectorAll("#navWrap a[data-target]").forEach((link) => {
+          const target = link.dataset.target;
+          const perm = SECTION_PERM_MAP[target] || link.dataset.perm;
+          if (!perm) return;
+          const allowed = can(perm);
+          link.classList.toggle("hidden", !allowed);
+        });
+
+        const importBtn = document.getElementById("importSheetsBtn");
+        const syncBtn = document.getElementById("syncSheetsBtn");
+        if (importBtn) importBtn.classList.toggle("hidden", !can("sheets_sync"));
+        if (syncBtn) syncBtn.classList.toggle("hidden", !can("sheets_sync"));
+
+        document.querySelectorAll("[data-requires-perm]").forEach((el) => {
+          el.classList.toggle("hidden", !can(el.dataset.requiresPerm));
+        });
+
+        // Botones de acción frecuentes
+        const toggle = (id, perm) => {
+          const el = document.getElementById(id);
+          if (el) el.classList.toggle("hidden", !can(perm));
+        };
+        toggle("addTrasiegoRowBtn", "trasiegos_write");
+        toggle("saveTrasiegosBtn", "trasiegos_write");
+        toggle("deleteSelectedConstanciasBtn", "constancia_delete");
+      }
+
+      function openUserModal(user = null) {
+        currentEditUserId = user ? user.id : null;
+        const modal = document.getElementById("userModal");
+        const title = document.getElementById("userFormTitle");
+        const username = document.getElementById("userUsername");
+        const displayName = document.getElementById("userDisplayName");
+        const password = document.getElementById("userPassword");
+        const active = document.getElementById("userActive");
+        const isAdmin = document.getElementById("userIsAdmin");
+        if (!modal) return;
+        title.textContent = user ? "Editar usuario" : "Nuevo usuario";
+        username.value = user ? user.username : "";
+        username.disabled = !!user;
+        displayName.value = user ? user.display_name : "";
+        password.value = "";
+        password.placeholder = user ? "Dejar vacío para no cambiar" : "Mín. 4 caracteres";
+        active.checked = user ? !!user.active : true;
+        isAdmin.checked = user ? !!user.is_admin : false;
+        renderPermissionChecks(user ? user.permissions : null, isAdmin.checked);
+        modal.classList.remove("hidden");
+        modal.classList.add("show");
+      }
+
+      function closeUserModal() {
+        const modal = document.getElementById("userModal");
+        if (!modal) return;
+        modal.classList.add("hidden");
+        modal.classList.remove("show");
+        currentEditUserId = null;
+      }
+
+      function renderPermissionChecks(selected, isAdminChecked) {
+        const grid = document.getElementById("userPermissionsGrid");
+        if (!grid || !window.QCAuth) return;
+        const labels = window.QCAuth.PERMISSION_LABELS;
+        const keys = permissionKeysCache.length ? permissionKeysCache : Object.keys(labels);
+        grid.innerHTML = keys
+          .map((key) => {
+            const checked = isAdminChecked || (selected ? !!selected[key] : !!labels[key] && (
+              key.startsWith("section_") ||
+              ["constancia_create", "constancia_edit", "constancia_confirm", "clients_write", "products_write", "transports_write", "trasiegos_write", "trace_export"].includes(key)
+            ));
+            return `<label class="user-perm-item"><input type="checkbox" data-perm-key="${key}" ${checked ? "checked" : ""} ${isAdminChecked ? "disabled" : ""}/> ${labels[key] || key}</label>`;
+          })
+          .join("");
+      }
+
+      function readPermissionChecks() {
+        const out = {};
+        document.querySelectorAll("#userPermissionsGrid [data-perm-key]").forEach((input) => {
+          out[input.dataset.permKey] = input.checked;
+        });
+        return out;
+      }
+
+      async function loadUsersAdmin() {
+        if (!can("users_manage")) return;
+        const body = document.getElementById("usersListBody");
+        if (!body) return;
+        const res = await fetch("/api/users");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          body.innerHTML = `<tr><td colspan="5">${data.detail || "No se pudieron cargar usuarios."}</td></tr>`;
+          return;
+        }
+        if (Array.isArray(data.permission_keys) && data.permission_keys.length) {
+          permissionKeysCache = data.permission_keys;
+        }
+        const users = data.users || [];
+        body.innerHTML = "";
+        users.forEach((u) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${u.username}</td>
+            <td>${u.display_name || ""}</td>
+            <td>${u.is_admin ? "Administrador" : "Operador"}</td>
+            <td>${u.active ? "Activo" : "Inactivo"}</td>
+            <td>
+              <button type="button" class="btn btn-outline btn-mini user-edit-btn">Editar</button>
+              ${u.username === "admin" ? "" : '<button type="button" class="btn btn-danger btn-mini user-del-btn">Eliminar</button>'}
+            </td>
+          `;
+          tr.querySelector(".user-edit-btn")?.addEventListener("click", () => openUserModal(u));
+          tr.querySelector(".user-del-btn")?.addEventListener("click", () => {
+            showConfirmModal(
+              `¿Eliminar al usuario ${u.username}?`,
+              async () => {
+                const del = await fetch(`/api/users/${u.id}`, { method: "DELETE" });
+                if (!del.ok) {
+                  const err = await del.json().catch(() => ({}));
+                  showErrorModal(err.detail || "No se pudo eliminar.", { title: "Error" });
+                  return;
+                }
+                void loadUsersAdmin();
+              },
+              null,
+              { title: "Eliminar usuario" }
+            );
+          });
+          body.appendChild(tr);
+        });
+      }
+
+      async function loadAuditLog() {
+        if (!can("audit_view")) return;
+        const body = document.getElementById("auditListBody");
+        if (!body) return;
+        const filter = (document.getElementById("auditUserFilter")?.value || "").trim();
+        const qs = new URLSearchParams({ limit: "400" });
+        if (filter) qs.set("username", filter);
+        const res = await fetch(`/api/audit?${qs.toString()}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          body.innerHTML = `<tr><td colspan="5">${data.detail || "No se pudo cargar la bitácora."}</td></tr>`;
+          return;
+        }
+        const events = data.events || [];
+        if (!events.length) {
+          body.innerHTML = `<tr><td colspan="5">Sin eventos todavía.</td></tr>`;
+          return;
+        }
+        body.innerHTML = events
+          .map((ev) => {
+            const when = ev.created_at ? String(ev.created_at).replace("T", " ").slice(0, 19) : "";
+            const entity = [ev.entity, ev.entity_id].filter(Boolean).join(" #");
+            return `<tr>
+              <td>${when}</td>
+              <td>${ev.username || ""}</td>
+              <td>${ev.action || ""}</td>
+              <td>${entity}</td>
+              <td>${ev.detail || ""}</td>
+            </tr>`;
+          })
+          .join("");
+      }
+
+      document.getElementById("addUserBtn")?.addEventListener("click", () => openUserModal(null));
+      document.getElementById("refreshUsersBtn")?.addEventListener("click", () => void loadUsersAdmin());
+      document.getElementById("closeUserModal")?.addEventListener("click", closeUserModal);
+      document.getElementById("userModal")?.addEventListener("click", (e) => {
+        if (e.target === document.getElementById("userModal")) closeUserModal();
+      });
+      document.getElementById("userIsAdmin")?.addEventListener("change", (e) => {
+        renderPermissionChecks(readPermissionChecks(), e.target.checked);
+      });
+      document.getElementById("saveUserBtn")?.addEventListener("click", async () => {
+        const username = document.getElementById("userUsername")?.value.trim() || "";
+        const display_name = document.getElementById("userDisplayName")?.value.trim() || "";
+        const password = document.getElementById("userPassword")?.value || "";
+        const active = !!document.getElementById("userActive")?.checked;
+        const is_admin = !!document.getElementById("userIsAdmin")?.checked;
+        const permissions = readPermissionChecks();
+        const payload = { display_name, active, is_admin, permissions };
+        if (!currentEditUserId) {
+          payload.username = username;
+          payload.password = password;
+        } else if (password) {
+          payload.password = password;
+        }
+        const url = currentEditUserId ? `/api/users/${currentEditUserId}` : "/api/users";
+        const method = currentEditUserId ? "PUT" : "POST";
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showErrorModal(data.detail || "No se pudo guardar el usuario.", { title: "Error" });
+          return;
+        }
+        closeUserModal();
+        showSuccessModal("Usuario guardado correctamente.", { title: "Usuarios" });
+        void loadUsersAdmin();
+      });
+      document.getElementById("refreshAuditBtn")?.addEventListener("click", () => void loadAuditLog());
+      document.getElementById("auditUserFilter")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") void loadAuditLog();
+      });
+
+      const originalShowSection = showSection;
+      showSection = function (targetId, toggle = false) {
+        const perm = SECTION_PERM_MAP[targetId];
+        if (perm && !can(perm)) {
+          showInfoModal("No tienes permiso para entrar a esta sección.", { title: "Acceso restringido" });
+          return;
+        }
+        originalShowSection(targetId, toggle);
+        if (targetId === "section-users") void loadUsersAdmin();
+        if (targetId === "section-audit") void loadAuditLog();
+      };
+
+      window.addEventListener("qc-auth-changed", () => {
+        applyAccessControl();
+      });
+      window.addEventListener("qc-panel-ready", () => {
+        applyAccessControl();
+      });
+      applyAccessControl();
 
     </script>
     <script src="/static/auth-gate.js"></script>
