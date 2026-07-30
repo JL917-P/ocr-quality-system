@@ -4548,6 +4548,51 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   background: #ef4444;
 }
 
+@keyframes notif-bell-pulse {
+  0% { transform: scale(1); }
+  20% { transform: scale(1.12); }
+  40% { transform: scale(1); }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+.notif-bell-wrap.notif-pulse .notif-bell-btn {
+  animation: notif-bell-pulse 0.7s ease;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.35);
+}
+
+.notif-bell-wrap.notif-pulse .notif-bell-badge.has-items {
+  animation: notif-bell-pulse 0.7s ease;
+}
+
+/* Permisos: ocultar acciones dinámicas según lo que ordenó el admin */
+body.perm-no-confirm .confirm-btn,
+body.perm-no-confirm .home-confirm-btn {
+  display: none !important;
+}
+
+body.perm-no-edit-constancia .edit-btn,
+body.perm-no-edit-constancia .home-edit-btn {
+  display: none !important;
+}
+
+body.perm-no-clients-write #clientsList .btn-danger,
+body.perm-no-products-write #productsList .btn-danger,
+body.perm-no-transports-write #transportsList .btn-danger,
+body.perm-no-trasiegos-write .trasiego-delete {
+  display: none !important;
+}
+
+body.perm-no-trasiegos-write #trasiegosBody input,
+body.perm-no-trasiegos-write #trasiegosBody select {
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+body.perm-no-trace-export #traceModalReportBtn {
+  display: none !important;
+}
+
 .notif-panel {
   position: absolute;
   top: calc(100% + 8px);

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home77" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home78" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -3783,6 +3783,10 @@
             </div>
           `;
           el.querySelector(".home-confirm-btn").addEventListener("click", () => {
+            if (!can("constancia_confirm")) {
+              showErrorModal("No tienes permiso para confirmar constancias.", { title: "Sin permiso" });
+              return;
+            }
             showConfirmModal(
               "¿Desea confirmar la constancia?",
               async () => {
@@ -3794,7 +3798,13 @@
               { title: "Confirmar constancia" }
             );
           });
-          el.querySelector(".home-edit-btn").addEventListener("click", () => openConstanciaInOcr(item.id));
+          el.querySelector(".home-edit-btn").addEventListener("click", () => {
+            if (!can("constancia_edit")) {
+              showErrorModal("No tienes permiso para editar constancias.", { title: "Sin permiso" });
+              return;
+            }
+            openConstanciaInOcr(item.id);
+          });
           el.querySelector(".home-view-btn").addEventListener("click", () => {
             window.open(`/constancia-view?id=${item.id}`, "_blank");
           });
@@ -4263,6 +4273,10 @@
 
       if (addTrasiegoRowBtn) {
         addTrasiegoRowBtn.addEventListener("click", async () => {
+          if (!can("trasiegos_write")) {
+            showErrorModal("No tienes permiso para modificar trasiegos.", { title: "Sin permiso" });
+            return;
+          }
           await flushVisibleTrasiegosSaves();
           allTrasiegosCache.push({ fecha: formatToday() });
           trasiegosPage = Math.max(1, Math.ceil(allTrasiegosCache.length / listPageSize));
@@ -4275,6 +4289,10 @@
 
       if (saveTrasiegosBtn) {
         saveTrasiegosBtn.addEventListener("click", async () => {
+          if (!can("trasiegos_write")) {
+            showErrorModal("No tienes permiso para modificar trasiegos.", { title: "Sin permiso" });
+            return;
+          }
           saveTrasiegosBtn.disabled = true;
           const prevText = saveTrasiegosBtn.textContent;
           saveTrasiegosBtn.textContent = "Guardando…";
@@ -4368,6 +4386,10 @@
       closeAllModals();
 
       async function saveProduct(clearAfter) {
+        if (!can("products_write")) {
+          showErrorModal("No tienes permiso para crear o editar productos.", { title: "Sin permiso" });
+          return;
+        }
         const payload = getProductPayload();
         if (!payload.name) {
           showInfoModal("El nombre del producto es obligatorio.", { title: "Campo requerido" });
@@ -4679,9 +4701,24 @@
         updateRestoreConstanciaButton([]);
         setOcrHeaderCollapsed(false);
         updateOcrHeaderCollapseUi();
+        if (typeof updateOcrDockPermissions === "function") updateOcrDockPermissions();
       }
-
-      async function saveConstancia(status) {
+        const editing = !!currentConstanciaId;
+        if (editing && !can("constancia_edit")) {
+          showErrorModal("No tienes permiso para editar constancias.", { title: "Sin permiso" });
+          return;
+        }
+        if (!editing && !can("constancia_create")) {
+          showErrorModal("No tienes permiso para crear constancias.", { title: "Sin permiso" });
+          return;
+        }
+        if (status === "confirmada" && !can("constancia_confirm")) {
+          showErrorModal(
+            "No tienes permiso para confirmar constancias. Usa Reserva o pide el permiso al administrador.",
+            { title: "Sin permiso" }
+          );
+          return;
+        }
         if (!constanciaFumigacion.checked && !constanciaCalidad.checked) {
           showInfoModal("Selecciona al menos una constancia (Fumigación o Calidad).", {
             title: "Campo requerido",
@@ -4804,6 +4841,7 @@
         showSection("section-ocr");
         setOcrHeaderCollapsed(true);
         updateOcrHeaderCollapseUi();
+        if (typeof updateOcrDockPermissions === "function") updateOcrDockPermissions();
       }
 
       function renderConstancias(list) {
@@ -4838,10 +4876,20 @@
             else selectedConstancias.delete(item.id);
           });
           const editBtn = row.querySelector(".edit-btn");
-          editBtn.addEventListener("click", () => openConstanciaInOcr(item.id));
+          editBtn.addEventListener("click", () => {
+            if (!can("constancia_edit")) {
+              showErrorModal("No tienes permiso para editar constancias.", { title: "Sin permiso" });
+              return;
+            }
+            openConstanciaInOcr(item.id);
+          });
           const confirmBtn = row.querySelector(".confirm-btn");
           if (confirmBtn) {
             confirmBtn.addEventListener("click", async () => {
+              if (!can("constancia_confirm")) {
+                showErrorModal("No tienes permiso para confirmar constancias.", { title: "Sin permiso" });
+                return;
+              }
               showConfirmModal(
                 "¿Desea confirmar la constancia?",
                 async () => {
@@ -5664,6 +5712,10 @@
       }
 
       async function generateTraceReportExcel() {
+        if (!can("trace_export")) {
+          showErrorModal("No tienes permiso para exportar trazabilidad.", { title: "Sin permiso" });
+          return;
+        }
         if (!traceReportQueue.length) {
           showNoticeModal("Agrupe al menos un lote antes de generar el reporte.");
           return;
@@ -5804,6 +5856,10 @@
       });
 
       saveClientBtn.addEventListener("click", async () => {
+        if (!can("clients_write")) {
+          showErrorModal("No tienes permiso para crear o editar clientes.", { title: "Sin permiso" });
+          return;
+        }
         const payload = { name: clientName.value.trim(), ruc: clientRuc.value.trim() };
         if (!payload.name) return;
         const url = currentClientId ? `/api/clients/${currentClientId}` : "/api/clients";
@@ -5981,6 +6037,10 @@
       });
 
       saveTransportBtn.addEventListener("click", async () => {
+        if (!can("transports_write")) {
+          showErrorModal("No tienes permiso para crear o editar transportes.", { title: "Sin permiso" });
+          return;
+        }
         const payload = { plate: transportPlate.value.trim() };
         if (!payload.plate) return;
         const url = currentTransportId ? `/api/transports/${currentTransportId}` : "/api/transports";
@@ -7155,6 +7215,54 @@ async function savePdf(){
         };
         toggleAction("addTrasiegoRowBtn", "trasiegos_write");
         toggleAction("saveTrasiegosBtn", "trasiegos_write");
+        toggleAction("addClientBtn", "clients_write");
+        toggleAction("addProductBtn", "products_write");
+        toggleAction("addTransportBtn", "transports_write");
+        toggleAction("saveClientBtn", "clients_write");
+        toggleAction("deleteClientBtn", "clients_write");
+        toggleAction("saveProductBtn", "products_write");
+        toggleAction("deleteProductBtn", "products_write");
+        toggleAction("saveTransportBtn", "transports_write");
+        toggleAction("deleteTransportBtn", "transports_write");
+        toggleAction("traceModalReportBtn", "trace_export");
+
+        // Clases en body para botones dinámicos (tablas / inicio)
+        const body = document.body;
+        const setBodyPerm = (perm, className) => {
+          body.classList.toggle(className, !can(perm));
+        };
+        setBodyPerm("constancia_confirm", "perm-no-confirm");
+        setBodyPerm("constancia_edit", "perm-no-edit-constancia");
+        setBodyPerm("constancia_create", "perm-no-create-constancia");
+        setBodyPerm("clients_write", "perm-no-clients-write");
+        setBodyPerm("products_write", "perm-no-products-write");
+        setBodyPerm("transports_write", "perm-no-transports-write");
+        setBodyPerm("trasiegos_write", "perm-no-trasiegos-write");
+        setBodyPerm("trace_export", "perm-no-trace-export");
+
+        if (typeof updateOcrDockPermissions === "function") {
+          updateOcrDockPermissions();
+        }
+      }
+
+      function updateOcrDockPermissions() {
+        const editing = !!currentConstanciaId;
+        const canCreate = can("constancia_create");
+        const canEdit = can("constancia_edit");
+        const canConfirm = can("constancia_confirm");
+        const saveEl = document.getElementById("saveBtn");
+        const reserveEl = document.getElementById("reserveBtn");
+        if (saveEl) {
+          if (editing) {
+            saveEl.classList.toggle("hidden", !canEdit);
+          } else {
+            // Guardar nueva como confirmada requiere crear + confirmar
+            saveEl.classList.toggle("hidden", !(canCreate && canConfirm));
+          }
+        }
+        if (reserveEl) {
+          reserveEl.classList.toggle("hidden", editing ? !canEdit : !canCreate);
+        }
       }
 
       function ensureAllowedSection() {
@@ -7624,9 +7732,76 @@ async function savePdf(){
         setNotifPanelOpen(false);
       });
 
+      let notifEventSource = null;
+      let lastNotifPending = -1;
+      let notifRefreshInFlight = false;
+
+      function pulseNotifBell() {
+        const wrap = document.getElementById("notifBellWrap");
+        if (!wrap) return;
+        wrap.classList.remove("notif-pulse");
+        void wrap.offsetWidth;
+        wrap.classList.add("notif-pulse");
+        window.setTimeout(() => wrap.classList.remove("notif-pulse"), 900);
+      }
+
+      function stopNotifRealtime() {
+        if (notifEventSource) {
+          try {
+            notifEventSource.close();
+          } catch (e) {}
+          notifEventSource = null;
+        }
+      }
+
+      function startNotifRealtime() {
+        stopNotifRealtime();
+        const token = window.QCAuth && window.QCAuth.getToken();
+        if (!token || typeof EventSource === "undefined") return;
+        try {
+          notifEventSource = new EventSource(
+            `/api/notifications/stream?token=${encodeURIComponent(token)}`
+          );
+          notifEventSource.addEventListener("notifications", (ev) => {
+            let data = {};
+            try {
+              data = JSON.parse(ev.data || "{}");
+            } catch (e) {
+              data = {};
+            }
+            const pending = Math.max(0, Number(data.pending) || 0);
+            if (lastNotifPending >= 0 && pending > lastNotifPending) {
+              pulseNotifBell();
+            }
+            lastNotifPending = pending;
+            setNotifBadge(pending);
+            // Refrescar lista al instante (panel abierto o no) para que el admin vea la solicitud
+            if (!notifRefreshInFlight) {
+              notifRefreshInFlight = true;
+              void refreshNotifications().finally(() => {
+                notifRefreshInFlight = false;
+              });
+            }
+          });
+          notifEventSource.onerror = () => {
+            // EventSource reconecta solo; si falla de forma sostenida el poll de respaldo cubre
+          };
+        } catch (e) {}
+      }
+
+      window.addEventListener("qc-auth-changed", () => {
+        lastNotifPending = -1;
+        startNotifRealtime();
+      });
+      window.addEventListener("qc-panel-ready", () => {
+        startNotifRealtime();
+      });
+
+      // Respaldo cada 12s por si SSE se corta (proxies / Render)
       setInterval(() => {
         if (window.QCAuth && window.QCAuth.getToken()) void refreshNotifications();
-      }, 30000);
+      }, 12000);
+      startNotifRealtime();
       void refreshNotifications();
 
     </script>
