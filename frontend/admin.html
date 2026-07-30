@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
     <link rel="stylesheet" href="/static/theme-quality.css?v=home81" />
-    <link rel="stylesheet" href="/static/auth-gate.css?v=auth7" />
+    <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
       #adminLayout .sidebar {
@@ -7162,6 +7162,15 @@ async function savePdf(){
         return !!(window.QCAuth && window.QCAuth.hasPermission(perm));
       }
 
+      function isLoggedIn() {
+        return !!(
+          window.QCAuth &&
+          window.QCAuth.getToken() &&
+          window.QCAuth.getUser() &&
+          !document.body.classList.contains("auth-locked")
+        );
+      }
+
       function firstAllowedSection() {
         const order = [
           "section-home",
@@ -7277,6 +7286,7 @@ async function savePdf(){
       }
 
       function ensureAllowedSection() {
+        if (!isLoggedIn()) return;
         const curPerm = SECTION_PERM_MAP[currentSectionId];
         if (curPerm && !can(curPerm)) {
           const next = firstAllowedSection();
@@ -7513,6 +7523,7 @@ async function savePdf(){
       const originalShowSection = showSection;
       const originalShowHomeDashboard = showHomeDashboard;
       showHomeDashboard = function () {
+        if (!isLoggedIn()) return;
         if (!can("section_home")) {
           const next = firstAllowedSection();
           if (next && next !== "section-home") {
@@ -7529,6 +7540,7 @@ async function savePdf(){
         originalShowHomeDashboard();
       };
       showSection = function (targetId, toggle = false) {
+        if (!isLoggedIn()) return;
         if (toggle && currentSectionId === targetId) {
           if (!can("section_home")) {
             showInfoModal("No tienes permiso para ver Inicio.", { title: "Acceso restringido" });
@@ -7561,6 +7573,10 @@ async function savePdf(){
       };
 
       window.addEventListener("qc-auth-changed", () => {
+        if (!isLoggedIn()) {
+          // Cierre de sesión: no validar permisos ni mostrar modales
+          return;
+        }
         applyAccessControl();
         ensureAllowedSection();
         void refreshNotifications();
@@ -7825,6 +7841,6 @@ async function savePdf(){
       void refreshNotifications();
 
     </script>
-    <script src="/static/auth-gate.js?v=auth6"></script>
+    <script src="/static/auth-gate.js?v=auth8"></script>
   </body>
 </html>

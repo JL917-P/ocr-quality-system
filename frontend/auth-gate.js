@@ -81,6 +81,12 @@
     if (loginError) loginError.textContent = "";
     const adminLayout = document.getElementById("adminLayout");
     if (adminLayout) adminLayout.classList.remove("sidebar-open");
+    // Cerrar modales de permisos u otros avisos abiertos al salir
+    document.querySelectorAll("body > .modal-backdrop.show").forEach((el) => {
+      try {
+        el.remove();
+      } catch (e) {}
+    });
     try {
       window.dispatchEvent(new CustomEvent("qc-auth-changed"));
     } catch (e) {}
