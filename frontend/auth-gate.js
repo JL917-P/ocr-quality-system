@@ -23,6 +23,8 @@
 
   function unlockApp() {
     document.body.classList.remove("auth-locked");
+    hideScreen(loginScreen);
+    hideScreen(loadingScreen);
     hideScreen(welcomeScreen);
     try {
       window.dispatchEvent(new CustomEvent("qc-panel-ready"));

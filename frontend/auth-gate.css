@@ -5,6 +5,13 @@ body.auth-locked #adminLayout {
   pointer-events: none;
 }
 
+/* Tras desbloquear, las pantallas de auth NUNCA deben interceptar clics */
+body:not(.auth-locked) .auth-screen {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 .auth-screen {
   position: fixed;
   inset: 0;

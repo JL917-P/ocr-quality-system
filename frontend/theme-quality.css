@@ -444,8 +444,14 @@ body.page-admin {
 }
 
 .layout.sidebar-open:has(#section-home:not(.hidden)) .main-wrap {
-  pointer-events: none;
+  /* Antes: pointer-events:none bloqueaba Importar/campana con el menú abierto */
   user-select: none;
+}
+
+.layout.sidebar-open:has(#section-home:not(.hidden)) .page-header,
+.layout.sidebar-open:has(#section-home:not(.hidden)) .page-header-actions,
+.layout.sidebar-open:has(#section-home:not(.hidden)) .page-header-actions * {
+  user-select: auto;
 }
 
 .sidebar-backdrop {
@@ -745,7 +751,7 @@ body.page-admin {
   top: 50%;
   right: 0;
   left: auto;
-  z-index: 30;
+  z-index: 400;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3735,7 +3741,7 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   display: none;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 12000;
 }
 
 .modal-backdrop.show { display: flex; }

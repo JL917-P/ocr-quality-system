@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home79" />
-    <link rel="stylesheet" href="/static/auth-gate.css" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home80" />
+    <link rel="stylesheet" href="/static/auth-gate.css?v=auth6" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
       #adminLayout .sidebar {
@@ -38,7 +38,7 @@
         max-width: 40px;
         padding: 0;
         margin: 0;
-        z-index: 30;
+        z-index: 400;
       }
       #adminLayout.sidebar-open .sidebar { width: 248px; }
       #adminLayout .sidebar-inner {
@@ -1126,7 +1126,7 @@
       <div id="ocrBandejaPanel" class="dropdown-panel hidden"></div>
     </div>
 
-    <script src="/static/auth-api.js?v=auth5"></script>
+    <script src="/static/auth-api.js?v=auth6"></script>
     <script>
       const productsBody = document.getElementById("productsBody");
       const addRowBtn = document.getElementById("addRowBtn");
@@ -3923,7 +3923,16 @@
       }
 
       window.addEventListener("qc-panel-ready", () => {
+        document.body.classList.remove("auth-locked");
+        ["authLogin", "authLoading", "authWelcome"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.classList.add("hidden");
+        });
         showHomeDashboard();
+        // Abrir menú en escritorio para que no quede “atrapado” cerrado
+        if (window.matchMedia && window.matchMedia("(min-width: 769px)").matches) {
+          setSidebarOpen(true);
+        }
       });
 
       if (adminLayout && sidebarToggle) {
@@ -7814,6 +7823,6 @@ async function savePdf(){
       void refreshNotifications();
 
     </script>
-    <script src="/static/auth-gate.js?v=auth5"></script>
+    <script src="/static/auth-gate.js?v=auth6"></script>
   </body>
 </html>
