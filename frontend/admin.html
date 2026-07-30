@@ -7732,9 +7732,9 @@ async function savePdf(){
         setNotifPanelOpen(false);
       });
 
-      let notifEventSource = null;
       let lastNotifPending = -1;
       let notifRefreshInFlight = false;
+      let notifPollTimer = null;
 
       function pulseNotifBell() {
         const wrap = document.getElementById("notifBellWrap");
@@ -7745,62 +7745,62 @@ async function savePdf(){
         window.setTimeout(() => wrap.classList.remove("notif-pulse"), 900);
       }
 
-      function stopNotifRealtime() {
-        if (notifEventSource) {
-          try {
-            notifEventSource.close();
-          } catch (e) {}
-          notifEventSource = null;
-        }
-      }
-
-      function startNotifRealtime() {
-        stopNotifRealtime();
-        const token = window.QCAuth && window.QCAuth.getToken();
-        if (!token || typeof EventSource === "undefined") return;
+      async function pollNotifCount() {
+        if (!window.QCAuth || !window.QCAuth.getToken()) return;
+        if (notifRefreshInFlight) return;
         try {
-          notifEventSource = new EventSource(
-            `/api/notifications/stream?token=${encodeURIComponent(token)}`
-          );
-          notifEventSource.addEventListener("notifications", (ev) => {
-            let data = {};
+          const res = await fetch("/api/notifications/count", { cache: "no-store" });
+          if (!res.ok) return;
+          const data = await res.json().catch(() => ({}));
+          const pending = Math.max(0, Number(data.pending) || 0);
+          if (lastNotifPending >= 0 && pending > lastNotifPending) {
+            pulseNotifBell();
+            notifRefreshInFlight = true;
             try {
-              data = JSON.parse(ev.data || "{}");
-            } catch (e) {
-              data = {};
+              await refreshNotifications();
+            } finally {
+              notifRefreshInFlight = false;
             }
-            const pending = Math.max(0, Number(data.pending) || 0);
-            if (lastNotifPending >= 0 && pending > lastNotifPending) {
-              pulseNotifBell();
-            }
-            lastNotifPending = pending;
+          } else {
             setNotifBadge(pending);
-            // Refrescar lista al instante (panel abierto o no) para que el admin vea la solicitud
-            if (!notifRefreshInFlight) {
+            if (notifPanelOpen && pending !== lastNotifPending) {
               notifRefreshInFlight = true;
-              void refreshNotifications().finally(() => {
+              try {
+                await refreshNotifications();
+              } finally {
                 notifRefreshInFlight = false;
-              });
+              }
             }
-          });
-          notifEventSource.onerror = () => {
-            // EventSource reconecta solo; si falla de forma sostenida el poll de respaldo cubre
-          };
+          }
+          lastNotifPending = pending;
         } catch (e) {}
       }
 
-      window.addEventListener("qc-auth-changed", () => {
+      function startNotifRealtime() {
+        if (notifPollTimer) {
+          window.clearInterval(notifPollTimer);
+          notifPollTimer = null;
+        }
         lastNotifPending = -1;
+        if (!(window.QCAuth && window.QCAuth.getToken())) return;
+        void pollNotifCount();
+        // Polling corto (sin SSE) para no bloquear el worker único de Render
+        notifPollTimer = window.setInterval(() => {
+          void pollNotifCount();
+        }, 2000);
+      }
+
+      window.addEventListener("qc-auth-changed", () => {
         startNotifRealtime();
       });
       window.addEventListener("qc-panel-ready", () => {
         startNotifRealtime();
       });
 
-      // Respaldo cada 12s por si SSE se corta (proxies / Render)
+      // Refresco completo periódico de la lista
       setInterval(() => {
         if (window.QCAuth && window.QCAuth.getToken()) void refreshNotifications();
-      }, 12000);
+      }, 20000);
       startNotifRealtime();
       void refreshNotifications();
 

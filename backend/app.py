@@ -380,7 +380,6 @@ class ApiAuthMiddleware(BaseHTTPMiddleware):
         "/health",
         "/api/auth/login",
         "/api/app-config",
-        "/api/notifications/stream",
     )
     PUBLIC_EXACT = {"/", ADMIN_PATH, "/capture", "/favicon.ico"}
 
@@ -1362,71 +1361,6 @@ def api_notifications_count(user: dict = Depends(get_current_user)) -> JSONRespo
         )
         conn.commit()
     return JSONResponse({"pending": count})
-
-
-@app.get("/api/notifications/stream")
-async def api_notifications_stream(request: Request, token: str | None = None):
-    """SSE en tiempo real para el contador de notificaciones (usa ?token= o cookie)."""
-    import asyncio
-
-    candidates: list[str] = []
-    if token:
-        candidates.append(token.strip())
-    candidates.extend(_token_candidates(request))
-    seen: set[str] = set()
-    unique = []
-    for c in candidates:
-        if c and c not in seen:
-            seen.add(c)
-            unique.append(c)
-
-    user = None
-    with sqlite3.connect(DB_PATH) as conn:
-        ensure_auth_tables(conn)
-        for candidate in unique:
-            user = resolve_session(conn, candidate)
-            if user:
-                break
-        conn.commit()
-    if not user:
-        raise HTTPException(status_code=401, detail="Sesión no válida.")
-
-    user_id = user.get("id")
-    is_admin = bool(user.get("is_admin"))
-
-    async def event_gen():
-        last = None
-        try:
-            while True:
-                if await request.is_disconnected():
-                    break
-                with sqlite3.connect(DB_PATH) as conn:
-                    ensure_auth_tables(conn)
-                    count = count_pending_notifications(
-                        conn,
-                        user={"id": user_id, "is_admin": is_admin},
-                        for_admin=is_admin,
-                    )
-                    conn.commit()
-                if count != last:
-                    last = count
-                    payload = json.dumps({"pending": count}, ensure_ascii=True)
-                    yield f"event: notifications\ndata: {payload}\n\n"
-                else:
-                    yield ": keepalive\n\n"
-                await asyncio.sleep(1.5)
-        except asyncio.CancelledError:
-            return
-
-    return StreamingResponse(
-        event_gen(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
 
 
 @app.get("/api/notifications")
