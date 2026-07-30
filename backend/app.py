@@ -312,18 +312,42 @@ def _audit(
         logging.getLogger(__name__).exception("No se pudo escribir auditoría")
 
 
+def _token_candidates(request: Request) -> list[str]:
+    """Bearer y cookie; si el Bearer está viejo, aún se puede validar la cookie."""
+    tokens: list[str] = []
+    auth = extract_bearer_token(request.headers.get("authorization"), None)
+    cookie = (request.cookies.get("qc_session") or "").strip()
+    for token in (auth, cookie):
+        if token and token not in tokens:
+            tokens.append(token)
+    return tokens
+
+
 def _token_from_request(request: Request) -> str | None:
-    return extract_bearer_token(
-        request.headers.get("authorization"),
-        request.cookies.get("qc_session"),
-    )
+    candidates = _token_candidates(request)
+    return candidates[0] if candidates else None
+
+
+def _resolve_user_from_request(request: Request) -> dict | None:
+    cached = getattr(request.state, "user", None)
+    if isinstance(cached, dict) and cached.get("id"):
+        return cached
+    tokens = _token_candidates(request)
+    if not tokens:
+        return None
+    with sqlite3.connect(DB_PATH) as conn:
+        for token in tokens:
+            user = resolve_session(conn, token)
+            if user:
+                conn.commit()
+                request.state.user = user
+                return user
+        conn.commit()
+    return None
 
 
 def get_current_user(request: Request) -> dict:
-    token = _token_from_request(request)
-    with sqlite3.connect(DB_PATH) as conn:
-        user = resolve_session(conn, token)
-        conn.commit()
+    user = _resolve_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail="Sesión no válida. Inicia sesión.")
     return user
@@ -363,10 +387,7 @@ class ApiAuthMiddleware(BaseHTTPMiddleware):
         ):
             return await call_next(request)
         if path.startswith("/api/"):
-            token = _token_from_request(request)
-            with sqlite3.connect(DB_PATH) as conn:
-                user = resolve_session(conn, token)
-                conn.commit()
+            user = _resolve_user_from_request(request)
             if not user:
                 return JSONResponse({"detail": "Sesión no válida. Inicia sesión."}, status_code=401)
             request.state.user = user
@@ -1171,7 +1192,7 @@ async def auth_login(payload: dict) -> JSONResponse:
             "permission_keys": list(PERMISSION_KEYS),
         }
     )
-    max_age = 60 * 60 * 24 * 14 if remember else None
+    max_age = 60 * 60 * 24 * 14
     response.set_cookie(
         key="qc_session",
         value=token,
@@ -1185,9 +1206,9 @@ async def auth_login(payload: dict) -> JSONResponse:
 
 @app.post("/api/auth/logout")
 def auth_logout(request: Request, user: dict = Depends(get_current_user)) -> JSONResponse:
-    token = _token_from_request(request)
+    tokens = _token_candidates(request)
     with sqlite3.connect(DB_PATH) as conn:
-        if token:
+        for token in tokens:
             delete_session(conn, token)
         write_audit(conn, user=user, action="logout", entity="session", detail="Cierre de sesión")
         conn.commit()

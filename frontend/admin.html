@@ -1108,7 +1108,7 @@
       <div id="ocrBandejaPanel" class="dropdown-panel hidden"></div>
     </div>
 
-    <script src="/static/auth-api.js"></script>
+    <script src="/static/auth-api.js?v=auth3"></script>
     <script>
       const productsBody = document.getElementById("productsBody");
       const addRowBtn = document.getElementById("addRowBtn");
@@ -1195,19 +1195,23 @@
       if (importSheetsBtn) {
         importSheetsBtn.addEventListener("click", () => {
           showConfirmModal(
-            "¿Importar registros desde Google Sheets a SQLite?\n\nSolo se insertarán los que falten (por ID).\nNo se sobrescriben trasiegos ni productos de constancias ya guardados.\nLos registros eliminados no volverán.\n\nSe guardarán primero los trasiegos pendientes.",
+            "¿Importar registros desde Google Sheets a SQLite?\n\nSolo se insertarán los que falten (por ID).\nNo se sobrescriben trasiegos ni productos de constancias ya guardados.\nLos registros eliminados no volverán.",
             async () => {
           importSheetsBtn.disabled = true;
           const prevText = importSheetsBtn.textContent;
           importSheetsBtn.textContent = "Importando…";
           try {
-            await saveAllTrasiegos({ silent: true });
-            const res = await fetch("/api/admin/import-from-sheets", { method: "POST" });
+            const token = window.QCAuth ? window.QCAuth.getToken() : "";
+            const res = await fetch("/api/admin/import-from-sheets", {
+              method: "POST",
+              credentials: "include",
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
             const data = await res.json().catch(() => ({}));
             if (res.status === 401) {
               showErrorModal(
-                "Tu sesión expiró. Cierra sesión, vuelve a entrar e intenta Importar de nuevo.",
-                { title: "Sesión expirada" }
+                "No se pudo validar tu sesión para importar.\nCierra sesión, vuelve a entrar y pulsa Importar otra vez.",
+                { title: "Sesión no válida" }
               );
               return;
             }
@@ -7272,6 +7276,6 @@ async function savePdf(){
       applyAccessControl();
 
     </script>
-    <script src="/static/auth-gate.js"></script>
+    <script src="/static/auth-gate.js?v=auth3"></script>
   </body>
 </html>
