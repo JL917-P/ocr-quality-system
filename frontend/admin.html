@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home72" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home73" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -7020,26 +7020,23 @@ async function savePdf(){
           }
         }
 
+        // Por ahora todos ven las mismas secciones y datos.
+        // Solo Usuarios y Bitácora quedan para administrador.
         document.querySelectorAll("#navWrap a[data-target]").forEach((link) => {
           const target = link.dataset.target;
-          const perm = SECTION_PERM_MAP[target] || link.dataset.perm;
-          if (!perm) return;
-          const allowed = can(perm);
-          link.classList.toggle("hidden", !allowed);
+          if (target === "section-users" || target === "section-audit") {
+            link.classList.toggle("hidden", !can("users_manage") && !can("audit_view")
+              ? true
+              : (target === "section-users" ? !can("users_manage") : !can("audit_view")));
+            return;
+          }
+          link.classList.remove("hidden");
         });
 
+        // Importar: disponible para cualquier usuario logueado (varias PCs a la vez).
         const importBtn = document.getElementById("importSheetsBtn");
         const syncBtn = document.getElementById("syncSheetsBtn");
-        const currentUser = window.QCAuth ? window.QCAuth.getUser() : null;
-        // No ocultar Importar hasta saber el usuario; el admin siempre lo ve.
-        if (importBtn) {
-          if (!currentUser) {
-            importBtn.classList.remove("hidden");
-          } else {
-            importBtn.classList.toggle("hidden", !can("sheets_sync"));
-          }
-        }
-        // El botón de sync se mantiene oculto (solo uso interno / admin avanzado).
+        if (importBtn) importBtn.classList.remove("hidden");
         if (syncBtn) {
           syncBtn.classList.add("hidden");
           syncBtn.setAttribute("aria-hidden", "true");
@@ -7047,17 +7044,16 @@ async function savePdf(){
         }
 
         document.querySelectorAll("[data-requires-perm]").forEach((el) => {
-          el.classList.toggle("hidden", !can(el.dataset.requiresPerm));
+          el.classList.remove("hidden");
         });
 
-        // Botones de acción frecuentes
-        const toggle = (id, perm) => {
+        const showAction = (id) => {
           const el = document.getElementById(id);
-          if (el) el.classList.toggle("hidden", !can(perm));
+          if (el) el.classList.remove("hidden");
         };
-        toggle("addTrasiegoRowBtn", "trasiegos_write");
-        toggle("saveTrasiegosBtn", "trasiegos_write");
-        toggle("deleteSelectedConstanciasBtn", "constancia_delete");
+        showAction("addTrasiegoRowBtn");
+        showAction("saveTrasiegosBtn");
+        showAction("deleteSelectedConstanciasBtn");
       }
 
       function openUserModal(user = null) {
@@ -7242,9 +7238,13 @@ async function savePdf(){
 
       const originalShowSection = showSection;
       showSection = function (targetId, toggle = false) {
-        const perm = SECTION_PERM_MAP[targetId];
-        if (perm && !can(perm)) {
-          showInfoModal("No tienes permiso para entrar a esta sección.", { title: "Acceso restringido" });
+        // Por ahora solo se restringen Usuarios y Bitácora (admin).
+        if (targetId === "section-users" && !can("users_manage")) {
+          showInfoModal("Solo el administrador puede gestionar usuarios.", { title: "Acceso restringido" });
+          return;
+        }
+        if (targetId === "section-audit" && !can("audit_view")) {
+          showInfoModal("Solo el administrador puede ver la bitácora.", { title: "Acceso restringido" });
           return;
         }
         originalShowSection(targetId, toggle);

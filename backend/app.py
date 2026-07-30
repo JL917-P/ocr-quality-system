@@ -1291,7 +1291,7 @@ def get_app_config() -> JSONResponse:
 
 
 @app.post("/api/sync/sheets")
-def sync_sheets_manual(user: dict = Depends(require_permission("sheets_sync"))) -> JSONResponse:
+def sync_sheets_manual(user: dict = Depends(get_current_user)) -> JSONResponse:
     """Respaldo manual: SQLite → Google Sheets (solo registros faltantes por id)."""
     result = run_manual_resync(DB_PATH)
     _audit(user, "sheets_sync", "sheets", detail="Respaldo SQLite → Google Sheets")
@@ -1307,7 +1307,7 @@ def sync_sheets_manual(user: dict = Depends(require_permission("sheets_sync"))) 
 
 
 @app.post("/api/admin/import-from-sheets")
-def import_from_sheets_admin(user: dict = Depends(require_permission("sheets_sync"))) -> JSONResponse:
+def import_from_sheets_admin(user: dict = Depends(get_current_user)) -> JSONResponse:
     """Importación manual: Google Sheets → SQLite (solo registros faltantes por id)."""
     init_db()
     result = run_import_from_sheets(DB_PATH)

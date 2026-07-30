@@ -45,7 +45,7 @@ DEFAULT_OPERATOR_PERMISSIONS: dict[str, bool] = {
     "section_trasiegos": True,
     "constancia_create": True,
     "constancia_edit": True,
-    "constancia_delete": False,
+    "constancia_delete": True,
     "constancia_confirm": True,
     "clients_write": True,
     "products_write": True,
@@ -54,7 +54,7 @@ DEFAULT_OPERATOR_PERMISSIONS: dict[str, bool] = {
     "trace_export": True,
     "users_manage": False,
     "audit_view": False,
-    "sheets_sync": False,
+    "sheets_sync": True,
 }
 
 ADMIN_PERMISSIONS: dict[str, bool] = {key: True for key in PERMISSION_KEYS}
