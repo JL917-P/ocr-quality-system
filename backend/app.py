@@ -26,6 +26,11 @@ from PIL import Image
 from pytesseract import Output
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from users_persist import (
+    persist_user_deleted,
+    persist_user_row,
+    restore_users_on_startup,
+)
 from app_config import ADMIN_PATH, ADMIN_URL, app_config_payload
 from auth_service import (
     PERMISSION_KEYS,
@@ -1141,6 +1146,20 @@ def on_startup() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
     init_db()
+    # Restaurar usuarios desde backup local / Google Sheets (no se pierden al redeploy).
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            ensure_auth_tables(conn)
+            restored = restore_users_on_startup(conn, DATA_DIR)
+            conn.commit()
+        logging.getLogger(__name__).warning(
+            "[STARTUP] Usuarios: file=%s sheets=%s total=%s",
+            restored.get("from_file"),
+            restored.get("from_sheets"),
+            restored.get("total"),
+        )
+    except Exception:
+        logging.getLogger(__name__).exception("[STARTUP] No se pudieron restaurar usuarios")
     run_startup_sheets_backup_check(DB_PATH)
     # Tras redeploy a veces la BD queda vacía: restaurar automáticamente desde Sheets.
     try:
@@ -1259,6 +1278,7 @@ async def api_create_user(
                 detail=f"Alta de usuario {created['username']}",
             )
             conn.commit()
+            persist_user_row(conn, DATA_DIR, int(created["id"]))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return JSONResponse({"user": created})
@@ -1290,6 +1310,7 @@ async def api_update_user(
                 detail=f"Actualización de usuario {updated['username']}",
             )
             conn.commit()
+            persist_user_row(conn, DATA_DIR, int(user_id))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return JSONResponse({"user": updated})
@@ -1312,6 +1333,7 @@ def api_delete_user(
                 detail="Eliminación de usuario",
             )
             conn.commit()
+            persist_user_deleted(DATA_DIR, conn, int(user_id))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return JSONResponse({"ok": True})
@@ -1619,6 +1641,14 @@ def import_from_sheets_admin(user: dict = Depends(get_current_user)) -> JSONResp
             },
             status_code=200,
         )
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            ensure_auth_tables(conn)
+            restored_users = restore_users_on_startup(conn, DATA_DIR)
+            conn.commit()
+        result["users_restored"] = restored_users
+    except Exception:
+        logging.getLogger(__name__).exception("No se pudieron restaurar usuarios en import")
     if result.get("ok"):
         _audit(
             user,
@@ -1634,6 +1664,7 @@ def import_from_sheets_admin(user: dict = Depends(get_current_user)) -> JSONResp
             "total": result.get("total", 0),
             "by_tab": result.get("by_tab", {}),
             "error": result.get("error"),
+            "users_restored": result.get("users_restored"),
         }
     )
 
