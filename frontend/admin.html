@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home76" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home77" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -3824,6 +3824,11 @@
 
       function updateSidebarHomeBtn() {
         if (!sidebarHomeBtn) return;
+        // Sin permiso de Inicio, no mostrar el botón de volver al dashboard
+        if (!can("section_home")) {
+          sidebarHomeBtn.classList.add("hidden");
+          return;
+        }
         sidebarHomeBtn.classList.toggle("hidden", currentSectionId === "section-home");
       }
 
@@ -7086,6 +7091,26 @@ async function savePdf(){
         return !!(window.QCAuth && window.QCAuth.hasPermission(perm));
       }
 
+      function firstAllowedSection() {
+        const order = [
+          "section-home",
+          "section-constancias",
+          "section-ocr",
+          "section-clients",
+          "section-products",
+          "section-transports",
+          "section-trazabilidad",
+          "section-trasiegos",
+          "section-users",
+          "section-audit",
+        ];
+        for (const id of order) {
+          const perm = SECTION_PERM_MAP[id];
+          if (!perm || can(perm)) return id;
+        }
+        return "section-constancias";
+      }
+
       function applyAccessControl() {
         const user = window.QCAuth ? window.QCAuth.getUser() : null;
         const chip = document.getElementById("sidebarUserChip");
@@ -7100,23 +7125,20 @@ async function savePdf(){
           }
         }
 
-        // Por ahora todos ven las mismas secciones y datos.
-        // Solo Usuarios y Bitácora quedan para administrador.
+        // Respetar permisos de sección (Ver Inicio, Ver Trasiegos, etc.)
         document.querySelectorAll("#navWrap a[data-target]").forEach((link) => {
           const target = link.dataset.target;
-          if (target === "section-users" || target === "section-audit") {
-            link.classList.toggle("hidden", !can("users_manage") && !can("audit_view")
-              ? true
-              : (target === "section-users" ? !can("users_manage") : !can("audit_view")));
+          const perm = SECTION_PERM_MAP[target] || link.dataset.perm;
+          if (!perm) {
+            link.classList.remove("hidden");
             return;
           }
-          link.classList.remove("hidden");
+          link.classList.toggle("hidden", !can(perm));
         });
 
-        // Importar: disponible para cualquier usuario logueado (varias PCs a la vez).
         const importBtn = document.getElementById("importSheetsBtn");
         const syncBtn = document.getElementById("syncSheetsBtn");
-        if (importBtn) importBtn.classList.remove("hidden");
+        if (importBtn) importBtn.classList.toggle("hidden", !can("sheets_sync"));
         if (syncBtn) {
           syncBtn.classList.add("hidden");
           syncBtn.setAttribute("aria-hidden", "true");
@@ -7124,16 +7146,23 @@ async function savePdf(){
         }
 
         document.querySelectorAll("[data-requires-perm]").forEach((el) => {
-          el.classList.remove("hidden");
+          el.classList.toggle("hidden", !can(el.dataset.requiresPerm));
         });
 
-        const showAction = (id) => {
+        const toggleAction = (id, perm) => {
           const el = document.getElementById(id);
-          if (el) el.classList.remove("hidden");
+          if (el) el.classList.toggle("hidden", !can(perm));
         };
-        showAction("addTrasiegoRowBtn");
-        showAction("saveTrasiegosBtn");
-        showAction("deleteSelectedConstanciasBtn");
+        toggleAction("addTrasiegoRowBtn", "trasiegos_write");
+        toggleAction("saveTrasiegosBtn", "trasiegos_write");
+      }
+
+      function ensureAllowedSection() {
+        const curPerm = SECTION_PERM_MAP[currentSectionId];
+        if (curPerm && !can(curPerm)) {
+          const next = firstAllowedSection();
+          if (typeof showSection === "function") showSection(next, false);
+        }
       }
 
       function openUserModal(user = null) {
@@ -7363,14 +7392,44 @@ async function savePdf(){
       });
 
       const originalShowSection = showSection;
-      showSection = function (targetId, toggle = false) {
-        // Por ahora solo se restringen Usuarios y Bitácora (admin).
-        if (targetId === "section-users" && !can("users_manage")) {
-          showInfoModal("Solo el administrador puede gestionar usuarios.", { title: "Acceso restringido" });
+      const originalShowHomeDashboard = showHomeDashboard;
+      showHomeDashboard = function () {
+        if (!can("section_home")) {
+          const next = firstAllowedSection();
+          if (next && next !== "section-home") {
+            showSection(next, false);
+            return;
+          }
+          showInfoModal("No tienes permiso para ver Inicio.", { title: "Acceso restringido" });
           return;
         }
-        if (targetId === "section-audit" && !can("audit_view")) {
-          showInfoModal("Solo el administrador puede ver la bitácora.", { title: "Acceso restringido" });
+        originalShowHomeDashboard();
+      };
+      showSection = function (targetId, toggle = false) {
+        if (toggle && currentSectionId === targetId) {
+          if (!can("section_home")) {
+            showInfoModal("No tienes permiso para ver Inicio.", { title: "Acceso restringido" });
+            return;
+          }
+        }
+        const perm = SECTION_PERM_MAP[targetId];
+        if (perm && !can(perm)) {
+          const labels = {
+            section_home: "Inicio",
+            section_trasiegos: "Trasiegos",
+            section_clients: "Clientes",
+            section_products: "Productos",
+            section_transports: "Transporte",
+            section_ocr: "Nueva constancia",
+            section_constancias: "Constancias",
+            section_trazabilidad: "Trazabilidad",
+            users_manage: "Usuarios",
+            audit_view: "Bitácora",
+          };
+          showInfoModal(
+            `No tienes permiso para ver ${labels[perm] || "esta sección"}.`,
+            { title: "Acceso restringido" }
+          );
           return;
         }
         originalShowSection(targetId, toggle);
@@ -7380,13 +7439,16 @@ async function savePdf(){
 
       window.addEventListener("qc-auth-changed", () => {
         applyAccessControl();
+        ensureAllowedSection();
         void refreshNotifications();
       });
       window.addEventListener("qc-panel-ready", () => {
         applyAccessControl();
+        ensureAllowedSection();
         void refreshNotifications();
       });
       applyAccessControl();
+      ensureAllowedSection();
 
       // —— Campana de notificaciones / solicitudes ——
       const notifBellBtn = document.getElementById("notifBellBtn");
