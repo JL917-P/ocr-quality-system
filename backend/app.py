@@ -1310,13 +1310,34 @@ def sync_sheets_manual(user: dict = Depends(get_current_user)) -> JSONResponse:
 def import_from_sheets_admin(user: dict = Depends(get_current_user)) -> JSONResponse:
     """Importación manual: Google Sheets → SQLite (solo registros faltantes por id)."""
     init_db()
-    result = run_import_from_sheets(DB_PATH)
-    _audit(
-        user,
-        "sheets_import",
-        "sheets",
-        detail=f"Importados {result.get('imported', 0)} registros",
-    )
+    try:
+        result = run_import_from_sheets(DB_PATH)
+    except Exception as exc:
+        logging.getLogger(__name__).exception("Error al importar desde Google Sheets")
+        msg = str(exc)
+        if "429" in msg or "Quota" in msg or "quota" in msg:
+            msg = (
+                "Google Sheets está limitando peticiones (cuota temporal). "
+                "Espera 1–2 minutos e intenta de nuevo."
+            )
+        return JSONResponse(
+            {
+                "ok": False,
+                "message": "No se pudo importar",
+                "imported": 0,
+                "total": 0,
+                "by_tab": {},
+                "error": msg,
+            },
+            status_code=200,
+        )
+    if result.get("ok"):
+        _audit(
+            user,
+            "sheets_import",
+            "sheets",
+            detail=f"Importados {result.get('imported', 0)} registros",
+        )
     return JSONResponse(
         {
             "ok": bool(result.get("ok")),

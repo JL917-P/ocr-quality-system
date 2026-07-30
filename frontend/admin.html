@@ -1203,7 +1203,14 @@
           try {
             await saveAllTrasiegos({ silent: true });
             const res = await fetch("/api/admin/import-from-sheets", { method: "POST" });
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
+            if (res.status === 401) {
+              showErrorModal(
+                "Tu sesión expiró. Cierra sesión, vuelve a entrar e intenta Importar de nuevo.",
+                { title: "Sesión expirada" }
+              );
+              return;
+            }
             if (data.ok) {
               const lines = Object.entries(data.by_tab || {}).map(
                 ([tab, n]) => `${tab}: ${n} importados`
@@ -1220,9 +1227,13 @@
                 { title: "Importación completada" }
               );
             } else {
+              const detail =
+                data.error ||
+                data.detail ||
+                data.message ||
+                (res.ok ? "Revisa los logs del servidor." : `Error HTTP ${res.status}`);
               showErrorModal(
-                "No se pudo importar desde Google Sheets.\n" +
-                  (data.error || "Revisa los logs del servidor."),
+                "No se pudo importar desde Google Sheets.\n" + detail,
                 { title: "Error al importar" }
               );
             }
