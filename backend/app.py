@@ -1771,7 +1771,8 @@ async def create_constancia(payload: dict) -> JSONResponse:
 
 
 @app.get("/api/constancias")
-def list_constancias(limit: int = 500) -> JSONResponse:
+def list_constancias(limit: int | None = None) -> JSONResponse:
+    """Lista todas las constancias. El parámetro limit es opcional (sin tope por defecto)."""
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             """
@@ -1779,7 +1780,11 @@ def list_constancias(limit: int = 500) -> JSONResponse:
             FROM constancias
             """,
         ).fetchall()
-        rows = sort_constancia_rows_by_issue_date(dedupe_constancia_rows(list(rows)))[:limit]
+        total_in_db = len(rows)
+        rows = sort_constancia_rows_by_issue_date(dedupe_constancia_rows(list(rows)))
+        total = len(rows)
+        if limit is not None and limit > 0:
+            rows = rows[:limit]
         constancias = []
         for row in rows:
             items = parse_items_json(row[8])
@@ -1803,7 +1808,13 @@ def list_constancias(limit: int = 500) -> JSONResponse:
                     "created_at": row[9],
                 }
             )
-    return JSONResponse({"constancias": constancias})
+    return JSONResponse(
+        {
+            "constancias": constancias,
+            "total": total,
+            "total_in_db": total_in_db,
+        }
+    )
 
 
 @app.get("/api/trazabilidad/lotes")
