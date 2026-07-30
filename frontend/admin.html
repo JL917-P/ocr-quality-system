@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home74" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home75" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -188,6 +188,24 @@
           <p class="page-header-section-subtitle" id="sectionPageSubtitle">Resumen y accesos rápidos</p>
         </div>
         <div class="page-header-actions">
+          <div class="notif-bell-wrap" id="notifBellWrap">
+            <button type="button" id="notifBellBtn" class="notif-bell-btn" title="Notificaciones" aria-label="Notificaciones">
+              <svg class="notif-bell-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5" />
+                <path d="M9.5 17a2.5 2.5 0 0 0 5 0" />
+              </svg>
+              <span class="notif-bell-badge" id="notifBellBadge">0</span>
+            </button>
+            <div class="notif-panel hidden" id="notifPanel" role="dialog" aria-label="Panel de notificaciones">
+              <div class="notif-panel-head">
+                <strong>Notificaciones</strong>
+                <button type="button" class="btn btn-outline btn-mini" id="notifRefreshBtn">Actualizar</button>
+              </div>
+              <div class="notif-panel-list" id="notifPanelList">
+                <div class="notif-empty">Sin notificaciones</div>
+              </div>
+            </div>
+          </div>
           <button type="button" id="importSheetsBtn" class="btn btn-secondary btn-import-sheets" title="Restaurar SQLite desde Google Sheets">
             Importar
           </button>
@@ -1108,7 +1126,7 @@
       <div id="ocrBandejaPanel" class="dropdown-panel hidden"></div>
     </div>
 
-    <script src="/static/auth-api.js?v=auth4"></script>
+    <script src="/static/auth-api.js?v=auth5"></script>
     <script>
       const productsBody = document.getElementById("productsBody");
       const addRowBtn = document.getElementById("addRowBtn");
@@ -3248,12 +3266,59 @@
       constanciaApplyBtn.addEventListener("click", async () => {
         if (constanciaBulkAction.value !== "delete") return;
         if (!selectedConstancias.size) return;
+
+        const canDelete =
+          window.QCAuth &&
+          (window.QCAuth.hasPermission("constancia_delete") ||
+            (window.QCAuth.getUser() && window.QCAuth.getUser().is_admin));
+
+        if (!canDelete) {
+          const ids = [...selectedConstancias];
+          showConfirmModal(
+            "Solo el administrador puede eliminar constancias emitidas.\n\n¿Desea enviar una solicitud al administrador?",
+            async () => {
+              try {
+                const res = await fetch("/api/notifications/request-delete-constancias", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ ids }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                  showErrorModal(data.detail || "No se pudo enviar la solicitud.", {
+                    title: "Error",
+                  });
+                  return;
+                }
+                showSuccessModal(
+                  "Solicitud enviada. El administrador la verá en la campana de notificaciones.",
+                  { title: "Solicitud enviada" }
+                );
+                if (typeof window.refreshNotifications === "function") {
+                  void window.refreshNotifications();
+                }
+              } catch (err) {
+                showErrorModal("Error de red al enviar la solicitud.", { title: "Error" });
+              }
+            },
+            null,
+            { title: "Permiso requerido" }
+          );
+          return;
+        }
+
         showConfirmModal(
           `¿Está seguro de eliminar ${selectedConstancias.size} constancia(s) seleccionada(s)?\nSe borrarán de SQLite y Google Sheets.`,
           async () => {
             const idsToDelete = new Set(selectedConstancias);
             for (const id of idsToDelete) {
-              await fetch(`/api/constancias/${id}`, { method: "DELETE" });
+              const del = await fetch(`/api/constancias/${id}`, { method: "DELETE" });
+              if (del.status === 403) {
+                showErrorModal("Solo el administrador puede eliminar constancias emitidas.", {
+                  title: "Sin permiso",
+                });
+                return;
+              }
             }
             allConstancias = allConstancias.filter((c) => !idsToDelete.has(c.id));
             filteredConstancias = filteredConstancias.filter((c) => !idsToDelete.has(c.id));
@@ -7315,13 +7380,151 @@ async function savePdf(){
 
       window.addEventListener("qc-auth-changed", () => {
         applyAccessControl();
+        void refreshNotifications();
       });
       window.addEventListener("qc-panel-ready", () => {
         applyAccessControl();
+        void refreshNotifications();
       });
       applyAccessControl();
 
+      // —— Campana de notificaciones / solicitudes ——
+      const notifBellBtn = document.getElementById("notifBellBtn");
+      const notifBellBadge = document.getElementById("notifBellBadge");
+      const notifPanel = document.getElementById("notifPanel");
+      const notifPanelList = document.getElementById("notifPanelList");
+      const notifRefreshBtn = document.getElementById("notifRefreshBtn");
+      let notifPanelOpen = false;
+
+      function setNotifBadge(count) {
+        if (!notifBellBadge) return;
+        const n = Math.max(0, Number(count) || 0);
+        notifBellBadge.textContent = String(n);
+        notifBellBadge.classList.toggle("is-zero", n === 0);
+        notifBellBadge.classList.toggle("has-items", n > 0);
+      }
+
+      function formatNotifWhen(iso) {
+        if (!iso) return "";
+        return String(iso).replace("T", " ").slice(0, 19);
+      }
+
+      async function refreshNotifications() {
+        if (!window.QCAuth || !window.QCAuth.getToken()) {
+          setNotifBadge(0);
+          if (notifPanelList) {
+            notifPanelList.innerHTML = `<div class="notif-empty">Inicia sesión para ver notificaciones</div>`;
+          }
+          return;
+        }
+        try {
+          const res = await fetch("/api/notifications?status=pending&limit=50");
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            setNotifBadge(0);
+            return;
+          }
+          const pending = Number(data.pending || 0);
+          setNotifBadge(pending);
+          const notes = data.notifications || [];
+          if (!notifPanelList) return;
+          if (!notes.length) {
+            notifPanelList.innerHTML = `<div class="notif-empty">Sin notificaciones (0)</div>`;
+            return;
+          }
+          const isAdmin = !!(window.QCAuth.getUser() && window.QCAuth.getUser().is_admin);
+          notifPanelList.innerHTML = notes
+            .map((note) => {
+              const actions = isAdmin
+                ? `<div class="notif-item-actions">
+                    <button type="button" class="btn btn-success btn-mini" data-note-approve="${note.id}">Aprobar</button>
+                    <button type="button" class="btn btn-outline btn-mini" data-note-reject="${note.id}">Rechazar</button>
+                  </div>`
+                : `<div class="notif-item-meta">Pendiente de revisión del administrador</div>`;
+              return `<article class="notif-item" data-note-id="${note.id}">
+                <div class="notif-item-title">Solicitud de eliminación</div>
+                <div class="notif-item-detail">${note.detail || ""}</div>
+                <div class="notif-item-meta">${note.requester_name || ""} · ${formatNotifWhen(note.created_at)}</div>
+                ${actions}
+              </article>`;
+            })
+            .join("");
+        } catch (err) {
+          setNotifBadge(0);
+        }
+      }
+      window.refreshNotifications = refreshNotifications;
+
+      async function resolveNote(id, action) {
+        const res = await fetch(`/api/notifications/${id}/resolve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showErrorModal(data.detail || "No se pudo atender la solicitud.", { title: "Error" });
+          return;
+        }
+        if (action === "approve" && Array.isArray(data.deleted_ids) && data.deleted_ids.length) {
+          const deleted = new Set(data.deleted_ids.map(Number));
+          allConstancias = allConstancias.filter((c) => !deleted.has(c.id));
+          filteredConstancias = filteredConstancias.filter((c) => !deleted.has(c.id));
+          selectedConstancias.clear();
+          if (typeof paginateConstancias === "function") paginateConstancias();
+          showSuccessModal(
+            `Se eliminaron ${data.deleted_ids.length} constancia(s).`,
+            { title: "Solicitud aprobada" }
+          );
+        } else if (action === "reject") {
+          showInfoModal("Solicitud rechazada.", { title: "Listo" });
+        }
+        void refreshNotifications();
+      }
+
+      function setNotifPanelOpen(open) {
+        notifPanelOpen = !!open;
+        if (!notifPanel) return;
+        notifPanel.classList.toggle("hidden", !notifPanelOpen);
+      }
+
+      if (notifBellBtn) {
+        notifBellBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          setNotifPanelOpen(!notifPanelOpen);
+          if (notifPanelOpen) void refreshNotifications();
+        });
+      }
+      if (notifRefreshBtn) {
+        notifRefreshBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          void refreshNotifications();
+        });
+      }
+      if (notifPanelList) {
+        notifPanelList.addEventListener("click", (event) => {
+          const approveBtn = event.target.closest("[data-note-approve]");
+          const rejectBtn = event.target.closest("[data-note-reject]");
+          if (approveBtn) {
+            void resolveNote(approveBtn.getAttribute("data-note-approve"), "approve");
+          } else if (rejectBtn) {
+            void resolveNote(rejectBtn.getAttribute("data-note-reject"), "reject");
+          }
+        });
+      }
+      document.addEventListener("click", (event) => {
+        const wrap = document.getElementById("notifBellWrap");
+        if (!wrap || !notifPanelOpen) return;
+        if (wrap.contains(event.target)) return;
+        setNotifPanelOpen(false);
+      });
+
+      setInterval(() => {
+        if (window.QCAuth && window.QCAuth.getToken()) void refreshNotifications();
+      }, 30000);
+      void refreshNotifications();
+
     </script>
-    <script src="/static/auth-gate.js?v=auth3"></script>
+    <script src="/static/auth-gate.js?v=auth4"></script>
   </body>
 </html>

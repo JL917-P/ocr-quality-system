@@ -29,16 +29,21 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app_config import ADMIN_PATH, ADMIN_URL, app_config_payload
 from auth_service import (
     PERMISSION_KEYS,
+    count_pending_notifications,
+    create_notification,
     create_session,
     create_user,
     delete_session,
     delete_user,
     ensure_auth_tables,
     extract_bearer_token,
+    get_notification,
     get_user_by_username,
     list_audit,
+    list_notifications,
     list_users,
     public_user,
+    resolve_notification,
     resolve_session,
     update_user,
     user_has_permission,
@@ -1321,6 +1326,190 @@ def api_list_audit(
     with sqlite3.connect(DB_PATH) as conn:
         events = list_audit(conn, limit=limit, username=username)
     return JSONResponse({"events": events})
+
+
+@app.get("/api/notifications/count")
+def api_notifications_count(user: dict = Depends(get_current_user)) -> JSONResponse:
+    with sqlite3.connect(DB_PATH) as conn:
+        ensure_auth_tables(conn)
+        count = count_pending_notifications(
+            conn,
+            user=user,
+            for_admin=bool(user.get("is_admin")),
+        )
+        conn.commit()
+    return JSONResponse({"pending": count})
+
+
+@app.get("/api/notifications")
+def api_list_notifications(
+    status: str | None = "pending",
+    limit: int = 100,
+    user: dict = Depends(get_current_user),
+) -> JSONResponse:
+    with sqlite3.connect(DB_PATH) as conn:
+        ensure_auth_tables(conn)
+        notes = list_notifications(conn, user=user, limit=limit, status=status or None)
+        pending = count_pending_notifications(
+            conn,
+            user=user,
+            for_admin=bool(user.get("is_admin")),
+        )
+        conn.commit()
+    return JSONResponse({"notifications": notes, "pending": pending})
+
+
+@app.post("/api/notifications/request-delete-constancias")
+async def api_request_delete_constancias(
+    payload: dict,
+    user: dict = Depends(get_current_user),
+) -> JSONResponse:
+    """Operadores sin permiso de borrar solicitan eliminación al administrador."""
+    if user_has_permission(user, "constancia_delete"):
+        raise HTTPException(
+            status_code=400,
+            detail="Ya tienes permiso para eliminar. Usa la acción Eliminar directamente.",
+        )
+    raw_ids = payload.get("ids") if isinstance(payload, dict) else None
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=400, detail="Selecciona al menos una constancia.")
+    ids: list[int] = []
+    for item in raw_ids:
+        try:
+            ids.append(int(item))
+        except (TypeError, ValueError):
+            continue
+    ids = sorted(set(ids))
+    if not ids:
+        raise HTTPException(status_code=400, detail="IDs de constancia inválidos.")
+
+    labels: list[str] = []
+    with sqlite3.connect(DB_PATH) as conn:
+        ensure_auth_tables(conn)
+        for cid in ids:
+            row = conn.execute(
+                "SELECT number, client_name FROM constancias WHERE id = ?",
+                (cid,),
+            ).fetchone()
+            if row:
+                labels.append(f"#{row[0] or cid} ({row[1] or 'sin cliente'})")
+            else:
+                labels.append(f"#{cid}")
+        detail = (
+            f"{user.get('display_name') or user.get('username')} solicita eliminar "
+            f"{len(ids)} constancia(s): " + ", ".join(labels[:12])
+        )
+        if len(labels) > 12:
+            detail += "…"
+        note = create_notification(
+            conn,
+            user=user,
+            type_="delete_constancia_request",
+            entity="constancia",
+            entity_ids=ids,
+            detail=detail,
+        )
+        write_audit(
+            conn,
+            user=user,
+            action="request_delete_constancias",
+            entity="notification",
+            entity_id=note["id"],
+            detail=detail,
+        )
+        pending = count_pending_notifications(conn, user=user, for_admin=True)
+        conn.commit()
+    return JSONResponse(
+        {
+            "ok": True,
+            "notification": note,
+            "pending": pending,
+            "message": "Solo el administrador puede eliminar constancias emitidas. Se envió la solicitud.",
+        }
+    )
+
+
+@app.post("/api/notifications/{notification_id}/resolve")
+async def api_resolve_notification(
+    notification_id: int,
+    payload: dict,
+    user: dict = Depends(get_current_user),
+) -> JSONResponse:
+    if not user.get("is_admin") and not user_has_permission(user, "users_manage"):
+        raise HTTPException(status_code=403, detail="Solo el administrador puede atender solicitudes.")
+    action = (payload.get("action") or "").strip().lower()
+    status_map = {
+        "approve": "approved",
+        "approved": "approved",
+        "reject": "rejected",
+        "rejected": "rejected",
+        "dismiss": "dismissed",
+        "dismissed": "dismissed",
+    }
+    if action not in status_map:
+        raise HTTPException(status_code=400, detail="Acción inválida (approve/reject/dismiss).")
+    resolved_status = status_map[action]
+    deleted_ids: list[int] = []
+    with sqlite3.connect(DB_PATH) as conn:
+        ensure_auth_tables(conn)
+        note = get_notification(conn, notification_id)
+        if not note:
+            raise HTTPException(status_code=404, detail="Notificación no encontrada.")
+        try:
+            updated = resolve_notification(
+                conn,
+                notification_id,
+                resolver=user,
+                status=resolved_status,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        write_audit(
+            conn,
+            user=user,
+            action=f"notification_{resolved_status}",
+            entity="notification",
+            entity_id=notification_id,
+            detail=updated.get("detail"),
+        )
+        conn.commit()
+        entity_ids = list(updated.get("entity_ids") or [])
+
+    if resolved_status == "approved" and updated.get("type") == "delete_constancia_request":
+        for cid in entity_ids:
+            try:
+                _delete_with_sheets_sync(
+                    "constancias",
+                    TAB_CONSTANCIAS,
+                    HEADERS_CONSTANCIAS,
+                    int(cid),
+                    extra_sql=[
+                        ("DELETE FROM constancia_history WHERE constancia_id = ?", (int(cid),)),
+                        ("DELETE FROM trasiegos WHERE constancia_id = ?", (int(cid),)),
+                    ],
+                )
+                deleted_ids.append(int(cid))
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "No se pudo eliminar constancia %s al aprobar solicitud", cid
+                )
+        _audit(
+            user,
+            "constancia_delete_approved",
+            "constancia",
+            detail=f"Eliminó {len(deleted_ids)} constancia(s) por solicitud #{notification_id}",
+        )
+
+    with sqlite3.connect(DB_PATH) as conn:
+        pending = count_pending_notifications(conn, user=user, for_admin=True)
+    return JSONResponse(
+        {
+            "ok": True,
+            "notification": updated,
+            "deleted_ids": deleted_ids,
+            "pending": pending,
+        }
+    )
 
 
 @app.get("/api/app-config")

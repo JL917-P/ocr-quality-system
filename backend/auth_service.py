@@ -169,6 +169,23 @@ def ensure_auth_tables(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS app_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            type TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            requester_user_id INTEGER,
+            requester_name TEXT NOT NULL,
+            entity TEXT,
+            entity_ids_json TEXT NOT NULL DEFAULT '[]',
+            detail TEXT,
+            resolved_at TEXT,
+            resolved_by TEXT
+        )
+        """
+    )
     seed_default_admin(conn)
 
 
@@ -521,3 +538,177 @@ def extract_bearer_token(authorization: str | None, cookie_token: str | None = N
     if cookie_token and cookie_token.strip():
         return cookie_token.strip()
     return None
+
+
+def _parse_entity_ids(raw: Any) -> list[int]:
+    if isinstance(raw, list):
+        out: list[int] = []
+        for item in raw:
+            try:
+                out.append(int(item))
+            except (TypeError, ValueError):
+                continue
+        return out
+    if isinstance(raw, str) and raw.strip():
+        try:
+            parsed = json.loads(raw)
+            return _parse_entity_ids(parsed)
+        except json.JSONDecodeError:
+            return []
+    return []
+
+
+def notification_row_to_dict(row: tuple) -> dict[str, Any]:
+    return {
+        "id": row[0],
+        "created_at": row[1],
+        "type": row[2],
+        "status": row[3],
+        "requester_user_id": row[4],
+        "requester_name": row[5] or "",
+        "entity": row[6] or "",
+        "entity_ids": _parse_entity_ids(row[7]),
+        "detail": row[8] or "",
+        "resolved_at": row[9],
+        "resolved_by": row[10] or "",
+    }
+
+
+def create_notification(
+    conn: sqlite3.Connection,
+    *,
+    user: dict[str, Any] | None,
+    type_: str,
+    entity: str | None,
+    entity_ids: list[int],
+    detail: str | None = None,
+) -> dict[str, Any]:
+    now = utc_now_iso()
+    requester_name = "usuario"
+    requester_id = None
+    if user:
+        requester_id = user.get("id")
+        requester_name = (user.get("display_name") or user.get("username") or "usuario").strip()
+    cursor = conn.execute(
+        """
+        INSERT INTO app_notifications (
+            created_at, type, status, requester_user_id, requester_name,
+            entity, entity_ids_json, detail
+        ) VALUES (?, ?, 'pending', ?, ?, ?, ?, ?)
+        """,
+        (
+            now,
+            type_,
+            requester_id,
+            requester_name,
+            entity,
+            json.dumps(entity_ids, ensure_ascii=True),
+            detail,
+        ),
+    )
+    row = conn.execute(
+        """
+        SELECT id, created_at, type, status, requester_user_id, requester_name,
+               entity, entity_ids_json, detail, resolved_at, resolved_by
+        FROM app_notifications WHERE id = ?
+        """,
+        (cursor.lastrowid,),
+    ).fetchone()
+    assert row is not None
+    return notification_row_to_dict(row)
+
+
+def count_pending_notifications(
+    conn: sqlite3.Connection,
+    *,
+    user: dict[str, Any] | None = None,
+    for_admin: bool = False,
+) -> int:
+    if for_admin or (user and user.get("is_admin")):
+        row = conn.execute(
+            "SELECT COUNT(*) FROM app_notifications WHERE status = 'pending'"
+        ).fetchone()
+        return int(row[0] if row else 0)
+    if not user:
+        return 0
+    row = conn.execute(
+        """
+        SELECT COUNT(*) FROM app_notifications
+        WHERE status = 'pending' AND requester_user_id = ?
+        """,
+        (user.get("id"),),
+    ).fetchone()
+    return int(row[0] if row else 0)
+
+
+def list_notifications(
+    conn: sqlite3.Connection,
+    *,
+    user: dict[str, Any] | None,
+    limit: int = 100,
+    status: str | None = "pending",
+) -> list[dict[str, Any]]:
+    limit = max(1, min(int(limit or 100), 500))
+    is_admin = bool(user and user.get("is_admin"))
+    params: list[Any] = []
+    where = []
+    if status:
+        where.append("status = ?")
+        params.append(status)
+    if not is_admin:
+        where.append("requester_user_id = ?")
+        params.append(user.get("id") if user else -1)
+    sql = """
+        SELECT id, created_at, type, status, requester_user_id, requester_name,
+               entity, entity_ids_json, detail, resolved_at, resolved_by
+        FROM app_notifications
+    """
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(sql, tuple(params)).fetchall()
+    return [notification_row_to_dict(row) for row in rows]
+
+
+def get_notification(conn: sqlite3.Connection, notification_id: int) -> dict[str, Any] | None:
+    row = conn.execute(
+        """
+        SELECT id, created_at, type, status, requester_user_id, requester_name,
+               entity, entity_ids_json, detail, resolved_at, resolved_by
+        FROM app_notifications WHERE id = ?
+        """,
+        (notification_id,),
+    ).fetchone()
+    if not row:
+        return None
+    return notification_row_to_dict(row)
+
+
+def resolve_notification(
+    conn: sqlite3.Connection,
+    notification_id: int,
+    *,
+    resolver: dict[str, Any],
+    status: str,
+) -> dict[str, Any]:
+    if status not in ("approved", "rejected", "dismissed"):
+        raise ValueError("Estado de resolución inválido.")
+    note = get_notification(conn, notification_id)
+    if not note:
+        raise ValueError("Notificación no encontrada.")
+    if note["status"] != "pending":
+        raise ValueError("Esta solicitud ya fue atendida.")
+    now = utc_now_iso()
+    resolver_name = (resolver.get("display_name") or resolver.get("username") or "admin").strip()
+    conn.execute(
+        """
+        UPDATE app_notifications
+        SET status = ?, resolved_at = ?, resolved_by = ?
+        WHERE id = ?
+        """,
+        (status, now, resolver_name, notification_id),
+    )
+    updated = get_notification(conn, notification_id)
+    assert updated is not None
+    return updated
