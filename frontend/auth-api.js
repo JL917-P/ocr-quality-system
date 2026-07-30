@@ -26,6 +26,49 @@
     sheets_sync: "Sincronizar Google Sheets",
   };
 
+  const PERMISSION_GROUPS = [
+    {
+      title: "Secciones visibles",
+      keys: [
+        "section_home",
+        "section_clients",
+        "section_products",
+        "section_transports",
+        "section_ocr",
+        "section_constancias",
+        "section_trazabilidad",
+        "section_trasiegos",
+      ],
+    },
+    {
+      title: "Constancias",
+      keys: [
+        "constancia_create",
+        "constancia_edit",
+        "constancia_delete",
+        "constancia_confirm",
+      ],
+    },
+    {
+      title: "Catálogos y trasiegos",
+      keys: [
+        "clients_write",
+        "products_write",
+        "transports_write",
+        "trasiegos_write",
+      ],
+    },
+    {
+      title: "Administración",
+      keys: [
+        "trace_export",
+        "sheets_sync",
+        "audit_view",
+        "users_manage",
+      ],
+    },
+  ];
+
   function getToken() {
     try {
       return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || "";
@@ -104,6 +147,7 @@
     USER_KEY,
     REMEMBER_KEY,
     PERMISSION_LABELS,
+    PERMISSION_GROUPS,
     getToken,
     getUser,
     setSession,
