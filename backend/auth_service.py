@@ -582,13 +582,17 @@ def create_notification(
     entity: str | None,
     entity_ids: list[int],
     detail: str | None = None,
+    target_user_id: int | None = None,
+    target_name: str | None = None,
 ) -> dict[str, Any]:
     now = utc_now_iso()
-    requester_name = "usuario"
-    requester_id = None
-    if user:
+    requester_name = (target_name or "").strip() or "usuario"
+    requester_id = target_user_id
+    if requester_id is None and user:
         requester_id = user.get("id")
         requester_name = (user.get("display_name") or user.get("username") or "usuario").strip()
+    elif user and not (target_name or "").strip():
+        requester_name = (user.get("display_name") or user.get("username") or requester_name).strip()
     cursor = conn.execute(
         """
         INSERT INTO app_notifications (
@@ -625,12 +629,17 @@ def count_pending_notifications(
     for_admin: bool = False,
 ) -> int:
     if for_admin or (user and user.get("is_admin")):
+        # Admin: solo solicitudes de borrado pendientes de atender
         row = conn.execute(
-            "SELECT COUNT(*) FROM app_notifications WHERE status = 'pending'"
+            """
+            SELECT COUNT(*) FROM app_notifications
+            WHERE status = 'pending' AND type = 'delete_constancia_request'
+            """
         ).fetchone()
         return int(row[0] if row else 0)
     if not user:
         return 0
+    # Usuario: confirmaciones / sus solicitudes pendientes dirigidas a él
     row = conn.execute(
         """
         SELECT COUNT(*) FROM app_notifications
@@ -655,7 +664,10 @@ def list_notifications(
     if status:
         where.append("status = ?")
         params.append(status)
-    if not is_admin:
+    if is_admin:
+        # Admin ve solicitudes de borrado (no las confirmaciones al operador)
+        where.append("type = 'delete_constancia_request'")
+    else:
         where.append("requester_user_id = ?")
         params.append(user.get("id") if user else -1)
     sql = """

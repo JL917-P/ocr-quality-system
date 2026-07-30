@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home75" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home76" />
     <link rel="stylesheet" href="/static/auth-gate.css" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -7427,22 +7427,53 @@ async function savePdf(){
           const pending = Number(data.pending || 0);
           setNotifBadge(pending);
           const notes = data.notifications || [];
+          const isAdmin = !!(window.QCAuth.getUser() && window.QCAuth.getUser().is_admin);
+
+          // Si llegaron aceptaciones, quitar constancias del historial visible.
+          let removedAny = false;
+          notes.forEach((note) => {
+            if (note.type === "delete_constancia_approved" && Array.isArray(note.entity_ids)) {
+              const deleted = new Set(note.entity_ids.map(Number));
+              const before = allConstancias.length;
+              allConstancias = allConstancias.filter((c) => !deleted.has(c.id));
+              filteredConstancias = filteredConstancias.filter((c) => !deleted.has(c.id));
+              deleted.forEach((id) => selectedConstancias.delete(id));
+              if (allConstancias.length !== before) removedAny = true;
+            }
+          });
+          if (removedAny && typeof paginateConstancias === "function") {
+            paginateConstancias();
+          }
+
           if (!notifPanelList) return;
           if (!notes.length) {
             notifPanelList.innerHTML = `<div class="notif-empty">Sin notificaciones (0)</div>`;
             return;
           }
-          const isAdmin = !!(window.QCAuth.getUser() && window.QCAuth.getUser().is_admin);
           notifPanelList.innerHTML = notes
             .map((note) => {
-              const actions = isAdmin
-                ? `<div class="notif-item-actions">
+              let title = "Solicitud de eliminación";
+              let actions = "";
+              if (note.type === "delete_constancia_approved") {
+                title = "Eliminación aceptada";
+                actions = `<div class="notif-item-actions">
+                  <button type="button" class="btn btn-primary btn-mini" data-note-dismiss="${note.id}">Entendido</button>
+                </div>`;
+              } else if (note.type === "delete_constancia_rejected") {
+                title = "Eliminación rechazada";
+                actions = `<div class="notif-item-actions">
+                  <button type="button" class="btn btn-outline btn-mini" data-note-dismiss="${note.id}">Entendido</button>
+                </div>`;
+              } else if (isAdmin) {
+                actions = `<div class="notif-item-actions">
                     <button type="button" class="btn btn-success btn-mini" data-note-approve="${note.id}">Aprobar</button>
                     <button type="button" class="btn btn-outline btn-mini" data-note-reject="${note.id}">Rechazar</button>
-                  </div>`
-                : `<div class="notif-item-meta">Pendiente de revisión del administrador</div>`;
+                  </div>`;
+              } else {
+                actions = `<div class="notif-item-meta">Pendiente de revisión del administrador</div>`;
+              }
               return `<article class="notif-item" data-note-id="${note.id}">
-                <div class="notif-item-title">Solicitud de eliminación</div>
+                <div class="notif-item-title">${title}</div>
                 <div class="notif-item-detail">${note.detail || ""}</div>
                 <div class="notif-item-meta">${note.requester_name || ""} · ${formatNotifWhen(note.created_at)}</div>
                 ${actions}
@@ -7455,6 +7486,16 @@ async function savePdf(){
       }
       window.refreshNotifications = refreshNotifications;
 
+      function removeConstanciasFromUi(ids) {
+        const deleted = new Set((ids || []).map(Number));
+        if (!deleted.size) return;
+        allConstancias = allConstancias.filter((c) => !deleted.has(c.id));
+        filteredConstancias = filteredConstancias.filter((c) => !deleted.has(c.id));
+        deleted.forEach((id) => selectedConstancias.delete(id));
+        if (typeof paginateConstancias === "function") paginateConstancias();
+        if (typeof loadConstancias === "function") void loadConstancias();
+      }
+
       async function resolveNote(id, action) {
         const res = await fetch(`/api/notifications/${id}/resolve`, {
           method: "POST",
@@ -7466,18 +7507,17 @@ async function savePdf(){
           showErrorModal(data.detail || "No se pudo atender la solicitud.", { title: "Error" });
           return;
         }
-        if (action === "approve" && Array.isArray(data.deleted_ids) && data.deleted_ids.length) {
-          const deleted = new Set(data.deleted_ids.map(Number));
-          allConstancias = allConstancias.filter((c) => !deleted.has(c.id));
-          filteredConstancias = filteredConstancias.filter((c) => !deleted.has(c.id));
-          selectedConstancias.clear();
-          if (typeof paginateConstancias === "function") paginateConstancias();
+        if (action === "approve") {
+          removeConstanciasFromUi(data.deleted_ids || []);
           showSuccessModal(
-            `Se eliminaron ${data.deleted_ids.length} constancia(s).`,
+            `Se eliminaron ${(data.deleted_ids || []).length} constancia(s). El solicitante recibirá la confirmación.`,
             { title: "Solicitud aprobada" }
           );
         } else if (action === "reject") {
-          showInfoModal("Solicitud rechazada.", { title: "Listo" });
+          showInfoModal("Solicitud rechazada. El solicitante será notificado.", { title: "Listo" });
+        } else if (action === "dismiss") {
+          // Confirmación leída por el operador: refrescar historial por si faltó quitar filas
+          if (typeof loadConstancias === "function") void loadConstancias();
         }
         void refreshNotifications();
       }
@@ -7505,10 +7545,13 @@ async function savePdf(){
         notifPanelList.addEventListener("click", (event) => {
           const approveBtn = event.target.closest("[data-note-approve]");
           const rejectBtn = event.target.closest("[data-note-reject]");
+          const dismissBtn = event.target.closest("[data-note-dismiss]");
           if (approveBtn) {
             void resolveNote(approveBtn.getAttribute("data-note-approve"), "approve");
           } else if (rejectBtn) {
             void resolveNote(rejectBtn.getAttribute("data-note-reject"), "reject");
+          } else if (dismissBtn) {
+            void resolveNote(dismissBtn.getAttribute("data-note-dismiss"), "dismiss");
           }
         });
       }
@@ -7525,6 +7568,6 @@ async function savePdf(){
       void refreshNotifications();
 
     </script>
-    <script src="/static/auth-gate.js?v=auth4"></script>
+    <script src="/static/auth-gate.js?v=auth5"></script>
   </body>
 </html>

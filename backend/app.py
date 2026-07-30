@@ -1435,8 +1435,6 @@ async def api_resolve_notification(
     payload: dict,
     user: dict = Depends(get_current_user),
 ) -> JSONResponse:
-    if not user.get("is_admin") and not user_has_permission(user, "users_manage"):
-        raise HTTPException(status_code=403, detail="Solo el administrador puede atender solicitudes.")
     action = (payload.get("action") or "").strip().lower()
     status_map = {
         "approve": "approved",
@@ -1450,11 +1448,29 @@ async def api_resolve_notification(
         raise HTTPException(status_code=400, detail="Acción inválida (approve/reject/dismiss).")
     resolved_status = status_map[action]
     deleted_ids: list[int] = []
+
     with sqlite3.connect(DB_PATH) as conn:
         ensure_auth_tables(conn)
         note = get_notification(conn, notification_id)
         if not note:
             raise HTTPException(status_code=404, detail="Notificación no encontrada.")
+
+        is_admin = bool(user.get("is_admin") or user_has_permission(user, "users_manage"))
+        is_own = note.get("requester_user_id") == user.get("id")
+        note_type = note.get("type") or ""
+
+        # Admin atiende solicitudes de borrado; el operador solo puede marcar como leídas sus confirmaciones.
+        if note_type == "delete_constancia_request":
+            if not is_admin:
+                raise HTTPException(status_code=403, detail="Solo el administrador puede atender solicitudes.")
+        elif note_type in ("delete_constancia_approved", "delete_constancia_rejected"):
+            if not is_own and not is_admin:
+                raise HTTPException(status_code=403, detail="No puedes modificar esta notificación.")
+            if resolved_status != "dismissed":
+                raise HTTPException(status_code=400, detail="Usa 'dismiss' para marcar como leída.")
+        elif not is_admin:
+            raise HTTPException(status_code=403, detail="No tienes permiso para esta acción.")
+
         try:
             updated = resolve_notification(
                 conn,
@@ -1500,8 +1516,52 @@ async def api_resolve_notification(
             detail=f"Eliminó {len(deleted_ids)} constancia(s) por solicitud #{notification_id}",
         )
 
+    # Aviso al usuario que pidió la eliminación (aprobada o rechazada).
+    if updated.get("type") == "delete_constancia_request" and updated.get("requester_user_id"):
+        ids_for_msg = deleted_ids or entity_ids
+        if resolved_status == "approved":
+            result_type = "delete_constancia_approved"
+            result_detail = (
+                f"Tu solicitud fue ACEPTADA. Se eliminaron {len(deleted_ids)} constancia(s) "
+                f"del historial (solicitud #{notification_id})."
+            )
+        elif resolved_status == "rejected":
+            result_type = "delete_constancia_rejected"
+            result_detail = (
+                f"Tu solicitud de eliminación fue RECHAZADA por el administrador "
+                f"(solicitud #{notification_id})."
+            )
+        else:
+            result_type = ""
+            result_detail = ""
+        if result_type:
+            with sqlite3.connect(DB_PATH) as conn:
+                create_notification(
+                    conn,
+                    user=user,
+                    type_=result_type,
+                    entity="constancia",
+                    entity_ids=[int(x) for x in ids_for_msg],
+                    detail=result_detail,
+                    target_user_id=int(updated["requester_user_id"]),
+                    target_name=updated.get("requester_name") or "usuario",
+                )
+                write_audit(
+                    conn,
+                    user=user,
+                    action="notify_requester",
+                    entity="notification",
+                    entity_id=notification_id,
+                    detail=result_detail,
+                )
+                conn.commit()
+
     with sqlite3.connect(DB_PATH) as conn:
-        pending = count_pending_notifications(conn, user=user, for_admin=True)
+        pending = count_pending_notifications(
+            conn,
+            user=user,
+            for_admin=bool(user.get("is_admin")),
+        )
     return JSONResponse(
         {
             "ok": True,
