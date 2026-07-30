@@ -1341,13 +1341,21 @@ def api_delete_user(
 
 @app.get("/api/audit")
 def api_list_audit(
-    limit: int = 300,
+    limit: int = 5000,
     username: str | None = None,
     _user: dict = Depends(require_permission("audit_view")),
 ) -> JSONResponse:
     with sqlite3.connect(DB_PATH) as conn:
+        ensure_auth_tables(conn)
         events = list_audit(conn, limit=limit, username=username)
-    return JSONResponse({"events": events})
+        conn.commit()
+    return JSONResponse(
+        {
+            "events": events,
+            "retention_days": 30,
+            "total": len(events),
+        }
+    )
 
 
 @app.get("/api/notifications/count")

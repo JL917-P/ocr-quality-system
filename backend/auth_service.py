@@ -60,11 +60,17 @@ DEFAULT_OPERATOR_PERMISSIONS: dict[str, bool] = {
 ADMIN_PERMISSIONS: dict[str, bool] = {key: True for key in PERMISSION_KEYS}
 
 SESSION_DAYS = 14
+# Bitácora: conservar al menos 1 mes; descartar solo lo más antiguo
+AUDIT_RETENTION_DAYS = 30
 PBKDF2_ITERATIONS = 120_000
 
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def audit_retention_cutoff_iso(days: int = AUDIT_RETENTION_DAYS) -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=max(1, int(days)))).isoformat()
 
 
 def _hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
@@ -170,6 +176,9 @@ def ensure_auth_tables(conn: sqlite3.Connection) -> None:
         """
     )
     conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at)"
+    )
+    conn.execute(
         """
         CREATE TABLE IF NOT EXISTS app_notifications (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -187,6 +196,7 @@ def ensure_auth_tables(conn: sqlite3.Connection) -> None:
         """
     )
     seed_default_admin(conn)
+    purge_old_audit_logs(conn)
 
 
 def seed_default_admin(conn: sqlite3.Connection) -> None:
@@ -485,36 +495,48 @@ def write_audit(
             detail,
         ),
     )
+    # Descartar solo eventos con más de 1 mes de antigüedad
+    purge_old_audit_logs(conn)
+
+
+def purge_old_audit_logs(
+    conn: sqlite3.Connection,
+    *,
+    days: int = AUDIT_RETENTION_DAYS,
+) -> int:
+    """Elimina de la bitácora solo registros anteriores a la ventana de retención."""
+    cutoff = audit_retention_cutoff_iso(days)
+    cursor = conn.execute("DELETE FROM audit_log WHERE created_at < ?", (cutoff,))
+    return int(cursor.rowcount or 0)
 
 
 def list_audit(
     conn: sqlite3.Connection,
     *,
-    limit: int = 300,
+    limit: int = 2000,
     username: str | None = None,
+    days: int = AUDIT_RETENTION_DAYS,
 ) -> list[dict[str, Any]]:
-    limit = max(1, min(int(limit or 300), 2000))
+    purge_old_audit_logs(conn, days=days)
+    # Dentro del mes: devolver amplio historial (no un tope artificial bajo)
+    limit = max(1, min(int(limit or 2000), 10000))
+    cutoff = audit_retention_cutoff_iso(days)
+    params: list[Any] = [cutoff]
+    where = "created_at >= ?"
     if username:
-        rows = conn.execute(
-            """
-            SELECT id, created_at, user_id, username, action, entity, entity_id, detail
-            FROM audit_log
-            WHERE lower(username) LIKE lower(?)
-            ORDER BY id DESC
-            LIMIT ?
-            """,
-            (f"%{username.strip()}%", limit),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            """
-            SELECT id, created_at, user_id, username, action, entity, entity_id, detail
-            FROM audit_log
-            ORDER BY id DESC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
+        where += " AND lower(username) LIKE lower(?)"
+        params.append(f"%{username.strip()}%")
+    params.append(limit)
+    rows = conn.execute(
+        f"""
+        SELECT id, created_at, user_id, username, action, entity, entity_id, detail
+        FROM audit_log
+        WHERE {where}
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        tuple(params),
+    ).fetchall()
     return [
         {
             "id": row[0],
