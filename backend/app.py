@@ -7,7 +7,7 @@ import os
 import re
 import shutil
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import List, Optional
@@ -34,6 +34,7 @@ from users_persist import (
 from audit_persist import restore_audit_on_startup
 from app_config import ADMIN_PATH, ADMIN_URL, app_config_payload
 from auth_service import (
+    APP_TIMEZONE,
     PERMISSION_KEYS,
     count_pending_notifications,
     create_notification,
@@ -43,11 +44,13 @@ from auth_service import (
     delete_user,
     ensure_auth_tables,
     extract_bearer_token,
+    get_app_tz,
     get_notification,
     get_user_by_username,
     list_audit,
     list_notifications,
     list_users,
+    parse_app_datetime,
     public_user,
     resolve_notification,
     resolve_session,
@@ -1363,6 +1366,115 @@ def api_list_audit(
             "events": events,
             "retention_days": 30,
             "total": len(events),
+        }
+    )
+
+
+@app.get("/api/productivity/users")
+def api_productivity_users(
+    _user: dict = Depends(require_permission("section_home")),
+) -> JSONResponse:
+    """Productividad por usuario: constancias emitidas/confirmadas hoy y esta semana."""
+    tz = get_app_tz()
+    now_local = datetime.now(tz)
+    today_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = today_start - timedelta(days=today_start.weekday())  # lunes
+
+    with sqlite3.connect(DB_PATH) as conn:
+        ensure_auth_tables(conn)
+        users_rows = conn.execute(
+            """
+            SELECT id, username, display_name, active
+            FROM app_users
+            ORDER BY lower(display_name), lower(username)
+            """
+        ).fetchall()
+        audit_rows = conn.execute(
+            """
+            SELECT created_at, user_id, username, action
+            FROM audit_log
+            WHERE action IN ('constancia_create', 'constancia_confirm')
+            ORDER BY id DESC
+            LIMIT 20000
+            """
+        ).fetchall()
+        conn.commit()
+
+    by_key: dict[str, dict] = {}
+
+    def ensure_bucket(key: str, *, user_id=None, username="", display_name="", active=False) -> dict:
+        if key not in by_key:
+            by_key[key] = {
+                "user_id": user_id,
+                "username": username or key,
+                "display_name": display_name or username or key,
+                "active": bool(active),
+                "created_today": 0,
+                "created_week": 0,
+                "confirmed_today": 0,
+                "confirmed_week": 0,
+            }
+        return by_key[key]
+
+    for row in users_rows:
+        uid, uname, dname, active = row[0], row[1] or "", row[2] or "", int(row[3] or 0)
+        if not active:
+            continue
+        key = f"id:{uid}" if uid is not None else f"name:{(uname or '').strip().lower()}"
+        ensure_bucket(
+            key,
+            user_id=uid,
+            username=uname,
+            display_name=(dname or uname),
+            active=True,
+        )
+
+    for created_at, user_id, username, action in audit_rows:
+        dt = parse_app_datetime(created_at)
+        if dt is None:
+            continue
+        local_dt = dt.astimezone(tz)
+        if local_dt < week_start:
+            continue
+        uname = (username or "").strip()
+        key = f"id:{user_id}" if user_id is not None else f"name:{uname.lower()}"
+        bucket = ensure_bucket(
+            key,
+            user_id=user_id,
+            username=uname or "usuario",
+            display_name=uname or "usuario",
+            active=False,
+        )
+        if not bucket.get("username") and uname:
+            bucket["username"] = uname
+            if bucket["display_name"] in ("", "usuario"):
+                bucket["display_name"] = uname
+        in_today = local_dt >= today_start
+        if action == "constancia_create":
+            bucket["created_week"] += 1
+            if in_today:
+                bucket["created_today"] += 1
+        elif action == "constancia_confirm":
+            bucket["confirmed_week"] += 1
+            if in_today:
+                bucket["confirmed_today"] += 1
+
+    users = list(by_key.values())
+    users.sort(
+        key=lambda u: (
+            -int(u["created_today"]),
+            -int(u["created_week"]),
+            -int(u["confirmed_today"]),
+            -int(u["confirmed_week"]),
+            str(u.get("display_name") or "").lower(),
+        )
+    )
+    return JSONResponse(
+        {
+            "timezone": APP_TIMEZONE,
+            "today": today_start.date().isoformat(),
+            "week_start": week_start.date().isoformat(),
+            "users": users,
         }
     )
 

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home82" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home83" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -309,6 +309,16 @@
                 </div>
                 <div class="home-top-clients" id="homeTopClients">
                   <p class="home-empty">Sin constancias este mes.</p>
+                </div>
+              </div>
+
+              <div class="card home-panel home-panel--productivity">
+                <div class="home-panel-head">
+                  <h2 class="home-panel-title">Productividad del equipo</h2>
+                  <span class="tag-muted" id="homeProductivityMeta">Hoy / Esta semana</span>
+                </div>
+                <div class="home-productivity" id="homeProductivityList">
+                  <p class="home-empty">Cargando productividad…</p>
                 </div>
               </div>
             </div>
@@ -3832,9 +3842,87 @@
         }
         renderHomeWeekChart(list);
         renderHomeTopClients(list);
+        void loadHomeProductivity();
         bindHomeChartInteractions();
         if (currentSectionId === "section-home") triggerHomeAnimations();
         updateNavConstanciasBadge();
+      }
+
+      async function loadHomeProductivity() {
+        const wrap = document.getElementById("homeProductivityList");
+        const meta = document.getElementById("homeProductivityMeta");
+        if (!wrap) return;
+        if (!can("section_home")) {
+          wrap.innerHTML = `<p class="home-empty">Sin acceso a este resumen.</p>`;
+          return;
+        }
+        try {
+          const res = await fetch("/api/productivity/users", { cache: "no-store" });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            wrap.innerHTML = `<p class="home-empty">${data.detail || "No se pudo cargar la productividad."}</p>`;
+            return;
+          }
+          const users = Array.isArray(data.users) ? data.users : [];
+          if (meta) {
+            const today = data.today || "";
+            const week = data.week_start || "";
+            meta.textContent = today && week ? `Hoy ${today} · Semana desde ${week}` : "Hoy / Esta semana";
+          }
+          const me = window.QCAuth && window.QCAuth.getUser();
+          const meName = me ? String(me.username || "").toLowerCase() : "";
+          const meId = me && me.id != null ? Number(me.id) : null;
+          const withActivity = users.filter(
+            (u) =>
+              Number(u.created_today || 0) +
+                Number(u.created_week || 0) +
+                Number(u.confirmed_today || 0) +
+                Number(u.confirmed_week || 0) >
+              0
+          );
+          const rows = (withActivity.length ? withActivity : users).slice(0, 12);
+          if (!rows.length) {
+            wrap.innerHTML = `<p class="home-empty">Aún no hay emisiones registradas esta semana.</p>`;
+            return;
+          }
+          wrap.innerHTML = `
+            <table class="home-productivity-table">
+              <thead>
+                <tr>
+                  <th>Usuario</th>
+                  <th class="num">Emit. hoy</th>
+                  <th class="num">Conf. hoy</th>
+                  <th class="num">Emit. sem.</th>
+                  <th class="num">Conf. sem.</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows
+                  .map((u) => {
+                    const name = u.display_name || u.username || "Usuario";
+                    const uname = u.username || "";
+                    const isMe =
+                      (meId != null && Number(u.user_id) === meId) ||
+                      (meName && String(uname).toLowerCase() === meName);
+                    return `<tr class="${isMe ? "is-me" : ""}">
+                      <td>
+                        <div class="home-productivity-user">
+                          <strong>${name}${isMe ? " (tú)" : ""}</strong>
+                          <span>${uname}${u.active ? "" : " · inactivo"}</span>
+                        </div>
+                      </td>
+                      <td class="num">${Number(u.created_today || 0)}</td>
+                      <td class="num">${Number(u.confirmed_today || 0)}</td>
+                      <td class="num">${Number(u.created_week || 0)}</td>
+                      <td class="num">${Number(u.confirmed_week || 0)}</td>
+                    </tr>`;
+                  })
+                  .join("")}
+              </tbody>
+            </table>`;
+        } catch (err) {
+          wrap.innerHTML = `<p class="home-empty">Error al cargar productividad.</p>`;
+        }
       }
 
       function hideAllSections() {
