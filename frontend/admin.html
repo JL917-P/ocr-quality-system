@@ -852,7 +852,8 @@
             <div class="title">Bitácora de eventos</div>
             <div class="sub" style="margin-top:6px;">
               Quién hizo qué y cuándo (inicios de sesión, altas, ediciones, eliminaciones).
-              Se conserva el historial de los últimos 30 días; lo más antiguo se descarta automáticamente.
+              Se conserva el historial de los últimos 30 días (respaldo local + Google Sheets);
+              lo más antiguo se descarta automáticamente. No se pierde al reiniciar el servidor.
             </div>
             <div class="actions" style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:end;">
               <div class="field" style="margin:0; min-width:180px;">
@@ -7451,7 +7452,7 @@ async function savePdf(){
         const body = document.getElementById("auditListBody");
         if (!body) return;
         const filter = (document.getElementById("auditUserFilter")?.value || "").trim();
-        const qs = new URLSearchParams({ limit: "400" });
+        const qs = new URLSearchParams({ limit: "5000" });
         if (filter) qs.set("username", filter);
         const res = await fetch(`/api/audit?${qs.toString()}`);
         const data = await res.json().catch(() => ({}));
@@ -7460,8 +7461,9 @@ async function savePdf(){
           return;
         }
         const events = data.events || [];
+        const retention = Number(data.retention_days || 30);
         if (!events.length) {
-          body.innerHTML = `<tr><td colspan="5">Sin eventos todavía.</td></tr>`;
+          body.innerHTML = `<tr><td colspan="5">Sin eventos en los últimos ${retention} días.</td></tr>`;
           return;
         }
         body.innerHTML = events

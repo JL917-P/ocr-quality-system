@@ -479,8 +479,8 @@ def write_audit(
     entity: str | None = None,
     entity_id: Any = None,
     detail: str | None = None,
-) -> None:
-    conn.execute(
+) -> int:
+    cursor = conn.execute(
         """
         INSERT INTO audit_log (created_at, user_id, username, action, entity, entity_id, detail)
         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -495,8 +495,19 @@ def write_audit(
             detail,
         ),
     )
+    event_id = int(cursor.lastrowid or 0)
     # Descartar solo eventos con más de 1 mes de antigüedad
     purge_old_audit_logs(conn)
+    # Persistir fuera de SQLite (Render borra la BD al reiniciar)
+    if event_id:
+        try:
+            from audit_persist import persist_audit_event, default_data_dir
+
+            persist_audit_event(conn, default_data_dir(), event_id)
+        except Exception:
+            # No tumbar la operación de negocio si falla el respaldo
+            pass
+    return event_id
 
 
 def purge_old_audit_logs(

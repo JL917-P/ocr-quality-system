@@ -31,6 +31,7 @@ from users_persist import (
     persist_user_row,
     restore_users_on_startup,
 )
+from audit_persist import restore_audit_on_startup
 from app_config import ADMIN_PATH, ADMIN_URL, app_config_payload
 from auth_service import (
     PERMISSION_KEYS,
@@ -1151,6 +1152,7 @@ def on_startup() -> None:
         with sqlite3.connect(DB_PATH) as conn:
             ensure_auth_tables(conn)
             restored = restore_users_on_startup(conn, DATA_DIR)
+            audit_restored = restore_audit_on_startup(conn, DATA_DIR)
             conn.commit()
         logging.getLogger(__name__).warning(
             "[STARTUP] Usuarios: file=%s sheets=%s total=%s",
@@ -1158,8 +1160,15 @@ def on_startup() -> None:
             restored.get("from_sheets"),
             restored.get("total"),
         )
+        logging.getLogger(__name__).warning(
+            "[STARTUP] Bitácora: before=%s file=%s sheets=%s total=%s",
+            audit_restored.get("before"),
+            audit_restored.get("from_file"),
+            audit_restored.get("from_sheets"),
+            audit_restored.get("total"),
+        )
     except Exception:
-        logging.getLogger(__name__).exception("[STARTUP] No se pudieron restaurar usuarios")
+        logging.getLogger(__name__).exception("[STARTUP] No se pudieron restaurar usuarios/bitácora")
     run_startup_sheets_backup_check(DB_PATH)
     # Tras redeploy a veces la BD queda vacía: restaurar automáticamente desde Sheets.
     try:
@@ -1910,6 +1919,7 @@ async def create_product(
         product_id,
         lambda: sync_product_created(product_id, data, created_at),
     )
+    _audit(user, "product_create", "product", product_id, f"Creó producto {data['name']}")
     return JSONResponse({"id": product_id})
 
 
@@ -1977,6 +1987,7 @@ async def update_product(
         product_id,
         lambda: sync_product_upsert(product_id, data, created_at),
     )
+    _audit(user, "product_update", "product", product_id, f"Actualizó producto {data['name']}")
     return JSONResponse({"ok": True})
 
 
@@ -2026,6 +2037,7 @@ async def create_client(
         client_id,
         lambda: sync_client_created(client_id, name, ruc, created_at),
     )
+    _audit(user, "client_create", "client", client_id, f"Creó cliente {name}")
     return JSONResponse({"id": client_id})
 
 
@@ -2057,6 +2069,7 @@ async def update_client(
         client_id,
         lambda: sync_client_upsert(client_id, name, ruc, created_at),
     )
+    _audit(user, "client_update", "client", client_id, f"Actualizó cliente {name}")
     return JSONResponse({"ok": True})
 
 
@@ -2102,6 +2115,7 @@ async def create_transport(
         transport_id,
         lambda: sync_transport_created(transport_id, plate, created_at),
     )
+    _audit(user, "transport_create", "transport", transport_id, f"Creó matrícula {plate}")
     return JSONResponse({"id": transport_id})
 
 
@@ -2132,6 +2146,7 @@ async def update_transport(
         transport_id,
         lambda: sync_transport_upsert(transport_id, plate, created_at),
     )
+    _audit(user, "transport_update", "transport", transport_id, f"Actualizó matrícula {plate}")
     return JSONResponse({"ok": True})
 
 
