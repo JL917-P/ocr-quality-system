@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home81" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home82" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -212,7 +212,15 @@
           <button type="button" id="syncSheetsBtn" class="btn btn-secondary btn-sync-sheets hidden" title="Respaldo SQLite → Google Sheets" aria-hidden="true" tabindex="-1">
             Sincronizar con Google Sheets
           </button>
-          <span class="topbar-badge">Área Calidad</span>
+          <div class="header-user-profile" id="headerUserProfile" title="Usuario en sesión">
+            <span class="header-user-avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6">
+                <circle cx="12" cy="8" r="3.4" />
+                <path d="M5.5 19.2c1.4-3.2 3.6-4.8 6.5-4.8s5.1 1.6 6.5 4.8" stroke-linecap="round" />
+              </svg>
+            </span>
+            <span class="header-user-name" id="headerUserName">Usuario</span>
+          </div>
         </div>
       </header>
       <main class="content" id="mainContent">
@@ -7199,14 +7207,26 @@ async function savePdf(){
         const user = window.QCAuth ? window.QCAuth.getUser() : null;
         const chip = document.getElementById("sidebarUserChip");
         const nameEl = document.getElementById("sidebarUserName");
+        const headerProfile = document.getElementById("headerUserProfile");
+        const headerName = document.getElementById("headerUserName");
+        const label = user
+          ? (user.display_name || user.username || "Usuario")
+          : "Usuario";
         if (chip && nameEl) {
           if (user) {
             chip.classList.remove("hidden");
-            nameEl.textContent = user.display_name || user.username;
+            nameEl.textContent = label;
             chip.title = user.is_admin ? "Administrador" : "Usuario";
           } else {
             chip.classList.add("hidden");
           }
+        }
+        if (headerName) headerName.textContent = label;
+        if (headerProfile) {
+          headerProfile.title = user
+            ? (user.is_admin ? `Administrador · ${label}` : label)
+            : "Usuario";
+          headerProfile.classList.toggle("hidden", !user);
         }
 
         // Respetar permisos de sección (Ver Inicio, Ver Trasiegos, etc.)

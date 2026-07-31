@@ -617,18 +617,45 @@ body.page-admin {
   margin-top: 2px;
 }
 
-.topbar-badge {
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
+.header-user-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 56px;
+  padding: 2px 4px;
   color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.header-user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(148, 163, 184, 0.35);
+  border: 1.5px solid rgba(255, 255, 255, 0.45);
+  color: #f8fafc;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.header-user-avatar svg {
+  display: block;
+}
+
+.header-user-name {
+  max-width: 92px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
   white-space: nowrap;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #ffffff;
+  letter-spacing: 0.01em;
 }
 
 .sidebar-nav {
@@ -4198,9 +4225,13 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
     order: 3;
   }
 
-  .topbar-badge {
-    flex: 1 1 100%;
-    text-align: center;
+  .header-user-profile {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+
+  .header-user-name {
+    max-width: 72px;
     font-size: 0.62rem;
   }
 
