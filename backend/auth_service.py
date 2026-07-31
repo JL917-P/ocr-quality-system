@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -62,15 +63,52 @@ ADMIN_PERMISSIONS: dict[str, bool] = {key: True for key in PERMISSION_KEYS}
 SESSION_DAYS = 14
 # Bitácora: conservar al menos 1 mes; descartar solo lo más antiguo
 AUDIT_RETENTION_DAYS = 30
+# Hora local de la planta (Perú/Colombia UTC-5). Configurable con APP_TIMEZONE.
+APP_TIMEZONE = os.getenv("APP_TIMEZONE", "America/Lima")
 PBKDF2_ITERATIONS = 120_000
+
+
+def get_app_tz():
+    try:
+        from zoneinfo import ZoneInfo
+
+        return ZoneInfo(APP_TIMEZONE)
+    except Exception:
+        # Fallback fijo UTC-5 si no hay tzdata en el entorno
+        return timezone(timedelta(hours=-5))
 
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def local_now_iso() -> str:
+    """Hora local de la aplicación (bitácora / notificaciones visibles)."""
+    return datetime.now(get_app_tz()).isoformat(timespec="seconds")
+
+
+def parse_app_datetime(value: str | None) -> datetime | None:
+    """Interpreta timestamps viejos (UTC) y nuevos (zona local)."""
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        text = raw.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        # Registros antiguos sin zona se guardaron en UTC
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def audit_retention_cutoff_dt(days: int = AUDIT_RETENTION_DAYS) -> datetime:
+    return datetime.now(get_app_tz()) - timedelta(days=max(1, int(days)))
+
+
 def audit_retention_cutoff_iso(days: int = AUDIT_RETENTION_DAYS) -> str:
-    return (datetime.now(timezone.utc) - timedelta(days=max(1, int(days)))).isoformat()
+    return audit_retention_cutoff_dt(days).isoformat(timespec="seconds")
 
 
 def _hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
@@ -486,7 +524,7 @@ def write_audit(
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            utc_now_iso(),
+            local_now_iso(),
             user.get("id") if user else None,
             (user.get("display_name") or user.get("username") or "sistema") if user else "sistema",
             action,
@@ -516,9 +554,19 @@ def purge_old_audit_logs(
     days: int = AUDIT_RETENTION_DAYS,
 ) -> int:
     """Elimina de la bitácora solo registros anteriores a la ventana de retención."""
-    cutoff = audit_retention_cutoff_iso(days)
-    cursor = conn.execute("DELETE FROM audit_log WHERE created_at < ?", (cutoff,))
-    return int(cursor.rowcount or 0)
+    cutoff = audit_retention_cutoff_dt(days)
+    rows = conn.execute("SELECT id, created_at FROM audit_log").fetchall()
+    to_delete: list[int] = []
+    for row in rows:
+        dt = parse_app_datetime(row[1])
+        if dt is None:
+            continue
+        if dt.astimezone(get_app_tz()) < cutoff:
+            to_delete.append(int(row[0]))
+    if not to_delete:
+        return 0
+    conn.executemany("DELETE FROM audit_log WHERE id = ?", [(i,) for i in to_delete])
+    return len(to_delete)
 
 
 def list_audit(
@@ -531,36 +579,37 @@ def list_audit(
     purge_old_audit_logs(conn, days=days)
     # Dentro del mes: devolver amplio historial (no un tope artificial bajo)
     limit = max(1, min(int(limit or 2000), 10000))
-    cutoff = audit_retention_cutoff_iso(days)
-    params: list[Any] = [cutoff]
-    where = "created_at >= ?"
-    if username:
-        where += " AND lower(username) LIKE lower(?)"
-        params.append(f"%{username.strip()}%")
-    params.append(limit)
+    cutoff = audit_retention_cutoff_dt(days)
     rows = conn.execute(
-        f"""
+        """
         SELECT id, created_at, user_id, username, action, entity, entity_id, detail
         FROM audit_log
-        WHERE {where}
         ORDER BY id DESC
-        LIMIT ?
-        """,
-        tuple(params),
+        """
     ).fetchall()
-    return [
-        {
-            "id": row[0],
-            "created_at": row[1],
-            "user_id": row[2],
-            "username": row[3],
-            "action": row[4],
-            "entity": row[5] or "",
-            "entity_id": row[6] or "",
-            "detail": row[7] or "",
-        }
-        for row in rows
-    ]
+    events: list[dict[str, Any]] = []
+    uname = (username or "").strip().lower()
+    for row in rows:
+        dt = parse_app_datetime(row[1])
+        if dt is not None and dt.astimezone(get_app_tz()) < cutoff:
+            continue
+        if uname and uname not in str(row[3] or "").lower():
+            continue
+        events.append(
+            {
+                "id": row[0],
+                "created_at": row[1],
+                "user_id": row[2],
+                "username": row[3],
+                "action": row[4],
+                "entity": row[5] or "",
+                "entity_id": row[6] or "",
+                "detail": row[7] or "",
+            }
+        )
+        if len(events) >= limit:
+            break
+    return events
 
 
 def extract_bearer_token(authorization: str | None, cookie_token: str | None = None) -> str | None:
@@ -618,7 +667,7 @@ def create_notification(
     target_user_id: int | None = None,
     target_name: str | None = None,
 ) -> dict[str, Any]:
-    now = utc_now_iso()
+    now = local_now_iso()
     requester_name = (target_name or "").strip() or "usuario"
     requester_id = target_user_id
     if requester_id is None and user:

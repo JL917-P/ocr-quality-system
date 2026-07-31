@@ -7447,6 +7447,34 @@ async function savePdf(){
         });
       }
 
+      function formatLocalDateTime(iso) {
+        if (!iso) return "";
+        const raw = String(iso).trim();
+        let date;
+        if (/Z$/i.test(raw) || /[+-]\d{2}:\d{2}$/.test(raw)) {
+          date = new Date(raw);
+        } else {
+          // Registros antiguos sin zona se guardaron en UTC
+          const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+          date = new Date(`${normalized}Z`);
+        }
+        if (Number.isNaN(date.getTime())) {
+          return raw.replace("T", " ").slice(0, 19);
+        }
+        const parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "America/Lima",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }).formatToParts(date);
+        const get = (type) => parts.find((p) => p.type === type)?.value || "";
+        return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
+      }
+
       async function loadAuditLog() {
         if (!can("audit_view")) return;
         const body = document.getElementById("auditListBody");
@@ -7468,7 +7496,7 @@ async function savePdf(){
         }
         body.innerHTML = events
           .map((ev) => {
-            const when = ev.created_at ? String(ev.created_at).replace("T", " ").slice(0, 19) : "";
+            const when = formatLocalDateTime(ev.created_at);
             const entity = [ev.entity, ev.entity_id].filter(Boolean).join(" #");
             return `<tr>
               <td>${when}</td>
@@ -7617,6 +7645,7 @@ async function savePdf(){
 
       function formatNotifWhen(iso) {
         if (!iso) return "";
+        if (typeof formatLocalDateTime === "function") return formatLocalDateTime(iso);
         return String(iso).replace("T", " ").slice(0, 19);
       }
 

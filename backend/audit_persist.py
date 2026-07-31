@@ -12,7 +12,13 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from auth_service import AUDIT_RETENTION_DAYS, audit_retention_cutoff_iso, purge_old_audit_logs
+from auth_service import (
+    AUDIT_RETENTION_DAYS,
+    audit_retention_cutoff_dt,
+    get_app_tz,
+    parse_app_datetime,
+    purge_old_audit_logs,
+)
 from google_sheets import (
     get_spreadsheet,
     read_sheet_rows,
@@ -48,29 +54,32 @@ def audit_backup_path(data_dir: Path) -> Path:
 
 def _fetch_retained_events(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     purge_old_audit_logs(conn)
-    cutoff = audit_retention_cutoff_iso()
+    cutoff = audit_retention_cutoff_dt()
     rows = conn.execute(
         """
         SELECT id, created_at, user_id, username, action, entity, entity_id, detail
         FROM audit_log
-        WHERE created_at >= ?
         ORDER BY id
-        """,
-        (cutoff,),
+        """
     ).fetchall()
-    return [
-        {
-            "id": row[0],
-            "created_at": row[1],
-            "user_id": row[2],
-            "username": row[3],
-            "action": row[4],
-            "entity": row[5] or "",
-            "entity_id": row[6] or "",
-            "detail": row[7] or "",
-        }
-        for row in rows
-    ]
+    events: list[dict[str, Any]] = []
+    for row in rows:
+        dt = parse_app_datetime(row[1])
+        if dt is not None and dt.astimezone(get_app_tz()) < cutoff:
+            continue
+        events.append(
+            {
+                "id": row[0],
+                "created_at": row[1],
+                "user_id": row[2],
+                "username": row[3],
+                "action": row[4],
+                "entity": row[5] or "",
+                "entity_id": row[6] or "",
+                "detail": row[7] or "",
+            }
+        )
+    return events
 
 
 def save_audit_backup_file(conn: sqlite3.Connection, data_dir: Path) -> Path:
@@ -224,13 +233,13 @@ def restore_audit_from_backup_file(conn: sqlite3.Connection, data_dir: Path) -> 
     events = payload.get("events") if isinstance(payload, dict) else None
     if not isinstance(events, list):
         return 0
-    cutoff = audit_retention_cutoff_iso()
+    cutoff = audit_retention_cutoff_dt()
     restored = 0
     for item in events:
         if not isinstance(item, dict):
             continue
-        created = str(item.get("created_at") or "")
-        if created and created < cutoff:
+        dt = parse_app_datetime(str(item.get("created_at") or ""))
+        if dt is not None and dt.astimezone(get_app_tz()) < cutoff:
             continue
         if _insert_event_if_missing(conn, item):
             restored += 1
@@ -249,13 +258,13 @@ def restore_audit_from_sheets(conn: sqlite3.Connection) -> int:
     except Exception:
         logger.exception("[AUDIT] No se pudo leer pestaña %s", TAB_BITACORA)
         return 0
-    cutoff = audit_retention_cutoff_iso()
+    cutoff = audit_retention_cutoff_dt()
     restored = 0
     for row in rows:
         if not isinstance(row, dict):
             continue
-        created = str(row.get("created_at") or "")
-        if created and created < cutoff:
+        dt = parse_app_datetime(str(row.get("created_at") or ""))
+        if dt is not None and dt.astimezone(get_app_tz()) < cutoff:
             continue
         if _insert_event_if_missing(conn, row):
             restored += 1
