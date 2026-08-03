@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home83" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home84" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -1230,7 +1230,7 @@
       if (importSheetsBtn) {
         importSheetsBtn.addEventListener("click", () => {
           showConfirmModal(
-            "¿Importar registros desde Google Sheets a SQLite?\n\nSolo se insertarán los que falten (por ID).\nNo se sobrescriben trasiegos ni productos de constancias ya guardados.\nLos registros eliminados no volverán.",
+            "",
             async () => {
           importSheetsBtn.disabled = true;
           const prevText = importSheetsBtn.textContent;
@@ -1253,16 +1253,7 @@
             if (data.ok) {
               const byTab = data.by_tab || {};
               const inDb = data.in_db || {};
-              const tabs = ["CLIENTES", "PRODUCTOS", "TRANSPORTES", "CONSTANCIAS", "TRASIEGOS"];
               const importedTotal = Number(data.imported ?? data.total ?? 0);
-              const linesNuevos = tabs.map((tab) => {
-                const n = Number(byTab[tab] ?? 0);
-                return `${tab}: ${n} nuevos`;
-              });
-              const linesDb = tabs.map((tab) => {
-                const n = Number(inDb[tab] ?? 0);
-                return `${tab}: ${n} en base`;
-              });
               await Promise.all([
                 loadClients(),
                 loadProducts(),
@@ -1270,14 +1261,7 @@
                 loadConstancias(),
                 loadTrasiegos(),
               ]);
-              const resumen =
-                importedTotal === 0
-                  ? "No había registros nuevos por ID (ya estaban en SQLite).\nLos datos actuales siguen disponibles."
-                  : `Se agregaron ${importedTotal} registro(s) nuevo(s).`;
-              showSuccessModal(
-                `${resumen}\n\nNuevos en esta importación:\n${linesNuevos.join("\n")}\n\nTotales ahora en el sistema:\n${linesDb.join("\n")}`,
-                { title: "Importación completada" }
-              );
+              showImportResultModal({ importedTotal, byTab, inDb });
             } else {
               const detail =
                 data.error ||
@@ -1299,7 +1283,23 @@
           }
             },
             null,
-            { title: "Importar desde Google Sheets" }
+            {
+              title: "Importar desde Google Sheets",
+              wide: true,
+              confirmText: "Importar",
+              cancelText: "Cancelar",
+              bodyHtml: `
+                <p class="import-modal-lead">¿Deseas importar los registros faltantes desde Google Sheets a SQLite?</p>
+                <div class="import-modal-note">
+                  <strong>Qué hace esta acción</strong>
+                  <ul>
+                    <li>Solo inserta lo que falta (por ID)</li>
+                    <li>No sobrescribe trasiegos ni productos ya guardados</li>
+                    <li>Los registros eliminados no vuelven</li>
+                  </ul>
+                </div>
+              `,
+            }
           );
         });
       }
@@ -6262,10 +6262,14 @@
         backdrop.className = "modal-backdrop show";
         const modal = document.createElement("div");
         modal.className = `modal modal-notice modal-notice-${variant}`;
+        if (options.wide) modal.classList.add("modal-notice--wide");
+        const body = options.bodyHtml
+          ? options.bodyHtml
+          : `<div class="sub">${formatModalMessage(message)}</div>`;
         modal.innerHTML = `
           <div class="notice-badge" aria-hidden="true">${icons[variant] || icons.info}</div>
           <div class="title">${formatModalMessage(title)}</div>
-          <div class="sub">${formatModalMessage(message)}</div>
+          ${body}
           <div class="actions">
             <button class="btn btn-primary" id="noticeOkBtn" type="button">${formatModalMessage(buttonText)}</button>
           </div>
@@ -6296,19 +6300,63 @@
         showNoticeModal(message, { ...options, variant: "info" });
       }
 
+      function buildImportStatsGrid(tabs, values, hint, accentWhenPositive) {
+        return `<div class="import-stats-grid">${tabs
+          .map((tab) => {
+            const n = Number(values[tab] ?? 0);
+            const accent = accentWhenPositive && n > 0 ? " is-accent" : "";
+            return `<div class="import-stat-card${accent}">
+              <span class="import-stat-name">${tab}</span>
+              <span class="import-stat-value">${n}</span>
+              <span class="import-stat-hint">${hint}</span>
+            </div>`;
+          })
+          .join("")}</div>`;
+      }
+
+      function showImportResultModal({ importedTotal, byTab, inDb }) {
+        const tabs = ["CLIENTES", "PRODUCTOS", "TRANSPORTES", "CONSTANCIAS", "TRASIEGOS"];
+        const isSync = Number(importedTotal) === 0;
+        const bannerClass = isSync ? "is-sync" : "is-new";
+        const bannerText = isSync
+          ? "No había registros nuevos por ID. Los datos actuales siguen disponibles."
+          : `Se agregaron <strong>${Number(importedTotal)}</strong> registro(s) nuevo(s) a SQLite.`;
+        showSuccessModal("", {
+          title: "Importación completada",
+          wide: true,
+          bodyHtml: `
+            <div class="import-result-banner ${bannerClass}">${bannerText}</div>
+            <div class="import-stats-block">
+              <p class="import-stats-label">Nuevos en esta importación</p>
+              ${buildImportStatsGrid(tabs, byTab || {}, "nuevos", true)}
+            </div>
+            <div class="import-stats-block">
+              <p class="import-stats-label">Totales en el sistema</p>
+              ${buildImportStatsGrid(tabs, inDb || {}, "en base", false)}
+            </div>
+          `,
+        });
+      }
+
       function showConfirmModal(message, onConfirm, onCancel, options = {}) {
         const title = options.title || "Confirmación";
+        const confirmText = options.confirmText || "Sí";
+        const cancelText = options.cancelText || "No";
         const backdrop = document.createElement("div");
         backdrop.className = "modal-backdrop show";
         const modal = document.createElement("div");
         modal.className = "modal modal-notice modal-notice-confirm";
+        if (options.wide) modal.classList.add("modal-notice--wide");
+        const body = options.bodyHtml
+          ? options.bodyHtml
+          : `<div class="sub">${formatModalMessage(message)}</div>`;
         modal.innerHTML = `
           <div class="notice-badge" aria-hidden="true">?</div>
           <div class="title">${formatModalMessage(title)}</div>
-          <div class="sub">${formatModalMessage(message)}</div>
+          ${body}
           <div class="actions actions-row">
-            <button class="btn btn-success" id="confirmOkBtn" type="button">Sí</button>
-            <button class="btn btn-outline" id="confirmCancelBtn" type="button">No</button>
+            <button class="btn btn-success" id="confirmOkBtn" type="button">${formatModalMessage(confirmText)}</button>
+            <button class="btn btn-outline" id="confirmCancelBtn" type="button">${formatModalMessage(cancelText)}</button>
           </div>
         `;
         backdrop.appendChild(modal);

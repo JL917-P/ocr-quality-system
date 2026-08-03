@@ -3933,6 +3933,25 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   text-align: center;
   width: min(400px, 92vw);
   padding: 28px 24px 22px;
+  border-top: 3px solid var(--qc-teal, #0d9488);
+  box-shadow: 0 24px 56px rgba(12, 35, 64, 0.22);
+  border-radius: 16px;
+}
+
+.modal-notice.modal-notice--wide {
+  width: min(520px, 94vw);
+  text-align: left;
+  padding: 28px 26px 22px;
+}
+
+.modal-notice.modal-notice--wide .notice-badge,
+.modal-notice.modal-notice--wide .title,
+.modal-notice.modal-notice--wide .actions {
+  text-align: center;
+}
+
+.modal-notice.modal-notice--wide .title {
+  text-align: center;
 }
 
 .modal-success .success-badge,
@@ -3969,42 +3988,169 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
 }
 
 .modal-notice-confirm .notice-badge {
-  background: #eff6ff;
-  border: 2px solid #bfdbfe;
-  color: #1d4ed8;
+  background: linear-gradient(145deg, #ecfeff, #e0f2fe);
+  border: 2px solid #7dd3fc;
+  color: #0e7490;
 }
 
 .modal-success .title,
 .modal-notice .title {
-  font-size: 1.15rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--qc-navy);
+  letter-spacing: -0.02em;
   margin-bottom: 8px;
 }
 
-.modal-success .sub,
 .modal-notice .sub {
-  font-size: 14px;
-  line-height: 1.5;
-  margin-bottom: 20px;
-  text-align: center;
+  font-size: 0.92rem;
+  color: var(--qc-slate);
+  line-height: 1.45;
+  margin-bottom: 18px;
 }
 
-.modal-success .actions,
 .modal-notice .actions {
   border-top: none;
-  padding-top: 0;
+  padding-top: 8px;
+  margin-top: 4px;
+  display: flex;
   justify-content: center;
+  gap: 10px;
 }
 
 .modal-notice .actions-row {
   display: flex;
-  gap: 10px;
   justify-content: center;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
-.modal-success .actions .btn,
 .modal-notice .actions .btn {
-  min-width: 120px;
+  min-width: 110px;
+}
+
+/* —— Resumen Importar (moderno) —— */
+.import-modal-lead {
+  margin: 0 0 16px;
+  font-size: 0.95rem;
+  color: #334155;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.import-modal-note {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.import-modal-note strong {
+  display: block;
+  color: var(--qc-navy);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.import-modal-note ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.import-modal-note li {
+  margin: 2px 0;
+}
+
+.import-result-banner {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.import-result-banner.is-sync {
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+  color: #155e75;
+}
+
+.import-result-banner.is-new {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+}
+
+.import-stats-block {
+  margin: 0 0 14px;
+}
+
+.import-stats-label {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+}
+
+.import-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (min-width: 480px) {
+  .import-stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.import-stat-card {
+  padding: 10px 10px 9px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  text-align: left;
+}
+
+.import-stat-card .import-stat-name {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.import-stat-card .import-stat-value {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--qc-navy);
+  line-height: 1.1;
+}
+
+.import-stat-card .import-stat-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+.import-stat-card.is-accent {
+  background: linear-gradient(180deg, #f0fdfa, #ffffff);
+  border-color: #99f6e4;
 }
 
 .page-admin .card {
