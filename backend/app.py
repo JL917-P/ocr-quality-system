@@ -1792,6 +1792,7 @@ def import_from_sheets_admin(user: dict = Depends(require_permission("sheets_syn
             "imported": result.get("imported", 0),
             "total": result.get("total", 0),
             "by_tab": result.get("by_tab", {}),
+            "in_db": result.get("in_db", {}),
             "error": result.get("error"),
             "users_restored": result.get("users_restored"),
         }

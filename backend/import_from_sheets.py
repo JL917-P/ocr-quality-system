@@ -404,10 +404,29 @@ def run_import_from_sheets(db_path: Path, *, reset: bool = True) -> dict[str, An
 
     total = sum(by_tab.values())
     print(f"TOTAL IMPORTADOS: {total}")
+
+    # Totales actuales en SQLite (para que el usuario vea que los datos están)
+    table_by_tab = {
+        TAB_CLIENTES: "clients",
+        TAB_PRODUCTOS: "products",
+        TAB_TRANSPORTES: "transports",
+        TAB_CONSTANCIAS: "constancias",
+        TAB_TRASIEGOS: "trasiegos",
+    }
+    in_db: dict[str, int] = {}
+    with sqlite3.connect(db_path) as conn:
+        for tab, table in table_by_tab.items():
+            try:
+                row = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()
+                in_db[tab] = int(row[0] if row else 0)
+            except sqlite3.Error:
+                in_db[tab] = 0
+
     return {
         "ok": True,
         "message": "Importación completada",
         "by_tab": by_tab,
+        "in_db": in_db,
         "total": total,
         "imported": total,
     }

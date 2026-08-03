@@ -1251,9 +1251,18 @@
               return;
             }
             if (data.ok) {
-              const lines = Object.entries(data.by_tab || {}).map(
-                ([tab, n]) => `${tab}: ${n} importados`
-              );
+              const byTab = data.by_tab || {};
+              const inDb = data.in_db || {};
+              const tabs = ["CLIENTES", "PRODUCTOS", "TRANSPORTES", "CONSTANCIAS", "TRASIEGOS"];
+              const importedTotal = Number(data.imported ?? data.total ?? 0);
+              const linesNuevos = tabs.map((tab) => {
+                const n = Number(byTab[tab] ?? 0);
+                return `${tab}: ${n} nuevos`;
+              });
+              const linesDb = tabs.map((tab) => {
+                const n = Number(inDb[tab] ?? 0);
+                return `${tab}: ${n} en base`;
+              });
               await Promise.all([
                 loadClients(),
                 loadProducts(),
@@ -1261,8 +1270,12 @@
                 loadConstancias(),
                 loadTrasiegos(),
               ]);
+              const resumen =
+                importedTotal === 0
+                  ? "No había registros nuevos por ID (ya estaban en SQLite).\nLos datos actuales siguen disponibles."
+                  : `Se agregaron ${importedTotal} registro(s) nuevo(s).`;
               showSuccessModal(
-                `Total: ${data.imported ?? data.total ?? 0}\n\n${lines.join("\n")}`,
+                `${resumen}\n\nNuevos en esta importación:\n${linesNuevos.join("\n")}\n\nTotales ahora en el sistema:\n${linesDb.join("\n")}`,
                 { title: "Importación completada" }
               );
             } else {
