@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home84" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home85" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -607,16 +607,16 @@
               <div class="constancias-command-sep" aria-hidden="true"></div>
               <div class="constancias-command-group constancias-command-group--date">
                 <span class="constancias-command-label">Fecha</span>
-                <div class="constancia-date-bar">
-                  <label class="constancia-date-trigger" title="Elegir fecha">
-                    <input id="constanciaDateFilter" type="date" class="constancia-date-input-overlay" aria-label="Elegir fecha de emisión" />
-                    <svg class="constancia-date-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <div class="constancia-date-bar" id="constanciaDateBar" title="Elegir fecha">
+                  <input id="constanciaDateFilter" type="date" class="constancia-date-input-overlay" aria-label="Elegir fecha de emisión" />
+                  <span class="constancia-date-trigger" aria-hidden="true">
+                    <svg class="constancia-date-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <rect x="3" y="4" width="18" height="18" rx="2" />
                       <line x1="16" y1="2" x2="16" y2="6" />
                       <line x1="8" y1="2" x2="8" y2="6" />
                       <line x1="3" y1="10" x2="21" y2="10" />
                     </svg>
-                  </label>
+                  </span>
                   <span id="constanciaDateLabel" class="constancia-date-label">Todas</span>
                   <button
                     type="button"
@@ -3226,9 +3226,40 @@
       constanciaSearch.addEventListener("input", applyConstanciaFilters);
       if (constanciaDateFilter) {
         constanciaDateFilter.addEventListener("change", applyConstanciaFilters);
+        const openConstanciaDatePicker = () => {
+          try {
+            if (typeof constanciaDateFilter.showPicker === "function") {
+              constanciaDateFilter.showPicker();
+              return;
+            }
+          } catch (_) {
+            /* showPicker puede fallar si no hay gesto de usuario válido */
+          }
+          constanciaDateFilter.focus();
+        };
+        constanciaDateFilter.addEventListener("click", (event) => {
+          event.stopPropagation();
+          openConstanciaDatePicker();
+        });
+        const constanciaDateBar = document.getElementById("constanciaDateBar");
+        if (constanciaDateBar) {
+          constanciaDateBar.addEventListener("click", (event) => {
+            if (event.target.closest("#constanciaDateClearBtn")) return;
+            if (event.target === constanciaDateFilter) return;
+            openConstanciaDatePicker();
+          });
+          constanciaDateBar.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            if (event.target.closest("#constanciaDateClearBtn")) return;
+            event.preventDefault();
+            openConstanciaDatePicker();
+          });
+        }
       }
       if (constanciaDateClearBtn) {
-        constanciaDateClearBtn.addEventListener("click", () => {
+        constanciaDateClearBtn.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
           if (constanciaDateFilter) constanciaDateFilter.value = "";
           applyConstanciaFilters();
         });
