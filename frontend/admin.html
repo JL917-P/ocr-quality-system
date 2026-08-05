@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home85" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home86" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -6294,6 +6294,8 @@
         const modal = document.createElement("div");
         modal.className = `modal modal-notice modal-notice-${variant}`;
         if (options.wide) modal.classList.add("modal-notice--wide");
+        if (options.compact) modal.classList.add("modal-notice--compact");
+        if (options.importResult) modal.classList.add("modal-notice--import");
         const body = options.bodyHtml
           ? options.bodyHtml
           : `<div class="sub">${formatModalMessage(message)}</div>`;
@@ -6331,18 +6333,30 @@
         showNoticeModal(message, { ...options, variant: "info" });
       }
 
-      function buildImportStatsGrid(tabs, values, hint, accentWhenPositive) {
-        return `<div class="import-stats-grid">${tabs
+      function buildImportStatsTable(tabs, byTab, inDb) {
+        const rows = tabs
           .map((tab) => {
-            const n = Number(values[tab] ?? 0);
-            const accent = accentWhenPositive && n > 0 ? " is-accent" : "";
-            return `<div class="import-stat-card${accent}">
-              <span class="import-stat-name">${tab}</span>
-              <span class="import-stat-value">${n}</span>
-              <span class="import-stat-hint">${hint}</span>
-            </div>`;
+            const nuevos = Number(byTab[tab] ?? 0);
+            const total = Number(inDb[tab] ?? 0);
+            const accent = nuevos > 0 ? " is-accent" : "";
+            const short = tab.charAt(0) + tab.slice(1).toLowerCase();
+            return `<tr class="import-stats-row${accent}">
+              <td class="import-stats-name">${short}</td>
+              <td class="import-stats-new">${nuevos}</td>
+              <td class="import-stats-total">${total}</td>
+            </tr>`;
           })
-          .join("")}</div>`;
+          .join("");
+        return `<table class="import-stats-table">
+          <thead>
+            <tr>
+              <th scope="col">Tipo</th>
+              <th scope="col">Nuevos</th>
+              <th scope="col">En base</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`;
       }
 
       function showImportResultModal({ importedTotal, byTab, inDb }) {
@@ -6355,16 +6369,11 @@
         showSuccessModal("", {
           title: "Importación completada",
           wide: true,
+          compact: true,
+          importResult: true,
           bodyHtml: `
             <div class="import-result-banner ${bannerClass}">${bannerText}</div>
-            <div class="import-stats-block">
-              <p class="import-stats-label">Nuevos en esta importación</p>
-              ${buildImportStatsGrid(tabs, byTab || {}, "nuevos", true)}
-            </div>
-            <div class="import-stats-block">
-              <p class="import-stats-label">Totales en el sistema</p>
-              ${buildImportStatsGrid(tabs, inDb || {}, "en base", false)}
-            </div>
+            ${buildImportStatsTable(tabs, byTab || {}, inDb || {})}
           `,
         });
       }
