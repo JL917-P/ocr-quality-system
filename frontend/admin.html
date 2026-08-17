@@ -6482,15 +6482,10 @@
       }
 
       function formatDateMinusDays(dateText, days) {
-        const parts = (dateText || "").split("/").map((p) => p.trim());
-        const hasParts = parts.length === 3 && parts.every((p) => p.length >= 1);
-        let baseDate = new Date();
-        if (hasParts) {
-          const [dd, mm, yyyy] = parts.map((p) => parseInt(p, 10));
-          if (!Number.isNaN(dd) && !Number.isNaN(mm) && !Number.isNaN(yyyy)) {
-            baseDate = new Date(yyyy, mm - 1, dd);
-          }
-        }
+        const parsed = parseConstanciaDate(dateText);
+        if (!parsed) return "";
+        const baseDate = new Date(parsed.year, parsed.month - 1, parsed.day);
+        if (Number.isNaN(baseDate.getTime())) return "";
         baseDate.setDate(baseDate.getDate() - days);
         const dd = String(baseDate.getDate()).padStart(2, "0");
         const mm = String(baseDate.getMonth() + 1).padStart(2, "0");
