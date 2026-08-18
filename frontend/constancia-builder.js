@@ -20,6 +20,29 @@
         return "";
       }
 
+      /** Firma por entorno: solo user01 (Vladimir) usa firma propia; admin y resto conservan firma.png */
+      const FIRMA_BY_USERNAME = {
+        user01: "/static/firma-user01.png?v=1",
+      };
+
+      function resolveFirmaSrcForUsername(username) {
+        const key = String(username || "")
+          .trim()
+          .toLowerCase();
+        return FIRMA_BY_USERNAME[key] || "/static/firma.png";
+      }
+
+      function getConstanciaFirmaSrc() {
+        if (typeof window !== "undefined" && window.QC_CONSTANCIA_FIRMA_SRC) {
+          return String(window.QC_CONSTANCIA_FIRMA_SRC);
+        }
+        try {
+          const me = window.QCAuth && window.QCAuth.getUser && window.QCAuth.getUser();
+          if (me && me.username) return resolveFirmaSrcForUsername(me.username);
+        } catch (e) {}
+        return "/static/firma.png";
+      }
+
 function parseConstanciaDate(dateText) {
         const value = (dateText || "").trim();
         if (!value) return null;
@@ -277,7 +300,7 @@ function parseConstanciaDate(dateText) {
               <div class="aj-sign-row">
                 <div class="aj-sign-col">
                   <div class="aj-sign-img-wrap">
-                    <img class="aj-firma" src="/static/firma.png" alt="Firma" />
+                    <img class="aj-firma" src="${getConstanciaFirmaSrc()}" alt="Firma" />
                   </div>
                   <div class="aj-sign-line"></div>
                   <div class="aj-sign-lbl">NOMBRE DE REPRESENTANTE DE LA EMPRESA</div>
@@ -424,7 +447,7 @@ function parseConstanciaDate(dateText) {
             </div>
             <div class="footer">
               <div class="firma-wrap">
-                <img class="firma" src="/static/firma.png" alt="Firma" />
+                <img class="firma" src="${getConstanciaFirmaSrc()}" alt="Firma" />
               </div>
               <div class="footer-text">
                 <div>Av. Camino Real N° 931 Dpto. 201 San Isidro - Lima.</div>
@@ -576,7 +599,7 @@ function parseConstanciaDate(dateText) {
             </div>
             <div class="footer">
               <div class="firma-wrap">
-                <img class="firma" src="/static/firma.png" alt="Firma" />
+                <img class="firma" src="${getConstanciaFirmaSrc()}" alt="Firma" />
               </div>
               <div class="footer-text">
                 <div>Av. Camino Real N° 931 Dpto. 201 San Isidro - Lima.</div>
@@ -672,7 +695,7 @@ function parseConstanciaDate(dateText) {
             </div>
             <div class="footer">
               <div class="firma-wrap">
-                <img class="firma" src="/static/firma.png" alt="Firma" />
+                <img class="firma" src="${getConstanciaFirmaSrc()}" alt="Firma" />
               </div>
               <div class="footer-text">
                 <div>Av. Camino Real N° 931 Dpto. 201 San Isidro - Lima.</div>
@@ -919,5 +942,7 @@ async function savePdf(){
       }
       globalThis.buildConstanciaHtml = buildConstanciaHtml;
       globalThis.isCencosudCdLimaClient = isCencosudCdLimaClient;
+      globalThis.resolveFirmaSrcForUsername = resolveFirmaSrcForUsername;
+      globalThis.getConstanciaFirmaSrc = getConstanciaFirmaSrc;
 
 })();

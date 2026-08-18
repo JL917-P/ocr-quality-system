@@ -2039,6 +2039,7 @@ def admin_page() -> HTMLResponse:
 @app.get("/constancia-view", response_class=HTMLResponse)
 def constancia_view_page(constancia_id: int = Query(..., alias="id")) -> HTMLResponse:
     builder_v = _constancia_builder_version()
+    auth_api_v = "auth11"
     html = f"""
     <!doctype html>
     <html lang="es">
@@ -2049,6 +2050,7 @@ def constancia_view_page(constancia_id: int = Query(..., alias="id")) -> HTMLRes
       </head>
       <body>
         <div style="font-family: Arial, sans-serif; padding: 16px;">Cargando constancia...</div>
+        <script src="/static/auth-api.js?v={auth_api_v}"></script>
         <script src="/static/constancia-builder.js?v={builder_v}"></script>
         <script>
           async function loadConstancia() {{
@@ -2056,13 +2058,30 @@ def constancia_view_page(constancia_id: int = Query(..., alias="id")) -> HTMLRes
               if (typeof window.buildConstanciaHtml !== "function") {{
                 throw new Error("builder");
               }}
-              const res = await fetch('/api/constancias/{constancia_id}', {{ cache: 'no-store' }});
+              const params = new URLSearchParams(window.location.search || "");
+              const envParam = params.get("env");
+              if (window.QCAuth) {{
+                if (envParam) window.QCAuth.setEnvOwnerId(envParam);
+              }}
+              try {{
+                const envRes = await fetch("/api/environment", {{ cache: "no-store", credentials: "include" }});
+                const envData = await envRes.json().catch(() => ({{}}));
+                if (envRes.ok && envData.owner && typeof window.resolveFirmaSrcForUsername === "function") {{
+                  window.QC_CONSTANCIA_FIRMA_SRC = window.resolveFirmaSrcForUsername(envData.owner.username);
+                }} else if (envRes.ok && envData.owner) {{
+                  const u = String(envData.owner.username || "").trim().toLowerCase();
+                  window.QC_CONSTANCIA_FIRMA_SRC = u === "user01"
+                    ? "/static/firma-user01.png?v=1"
+                    : "/static/firma.png";
+                }}
+              }} catch (e) {{}}
+              const res = await fetch('/api/constancias/{constancia_id}', {{ cache: 'no-store', credentials: 'include' }});
               const data = await res.json();
               if (!res.ok) throw new Error("notfound");
-              const prodRes = await fetch('/api/products', {{ cache: 'no-store' }});
+              const prodRes = await fetch('/api/products', {{ cache: 'no-store', credentials: 'include' }});
               const prodData = await prodRes.json();
               const catalog = prodData.products || [];
-              const clientRes = await fetch('/api/clients', {{ cache: 'no-store' }});
+              const clientRes = await fetch('/api/clients', {{ cache: 'no-store', credentials: 'include' }});
               const clientData = await clientRes.json();
               const clients = clientData.clients || [];
               const html = window.buildConstanciaHtml(data, catalog, clients);
