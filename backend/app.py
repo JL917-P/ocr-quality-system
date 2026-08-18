@@ -40,7 +40,7 @@ from tenant_env import (
     env_counts,
     get_master_admin_id,
     migrate_existing_rows_to_admin,
-    repair_operator_constancias_misassigned_to_admin,
+    reclaim_operator_constancias_to_admin_once,
     resolve_env_owner_id,
     row_belongs_to_owner,
 )
@@ -308,7 +308,7 @@ def init_db() -> None:
         ensure_auth_tables(conn)
         ensure_owner_columns(conn)
         migrate_existing_rows_to_admin(conn)
-        repair_operator_constancias_misassigned_to_admin(conn)
+        reclaim_operator_constancias_to_admin_once(conn)
         conn.commit()
         repair_all_trasiegos_in_sqlite(conn)
         conn.commit()

@@ -246,59 +246,107 @@ def row_belongs_to_owner(conn: sqlite3.Connection, table: str, record_id: int, o
     return bool(row)
 
 
-def repair_operator_constancias_misassigned_to_admin(conn: sqlite3.Connection) -> int:
-    """Si un operador creó una constancia y quedó en el entorno admin, la devuelve a su dueño.
+def _ensure_app_meta(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS app_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT
+        )
+        """
+    )
 
-    Usa la bitácora (constancia_create). No toca creaciones hechas por el admin.
+
+def _meta_get(conn: sqlite3.Connection, key: str) -> str | None:
+    _ensure_app_meta(conn)
+    row = conn.execute("SELECT value FROM app_meta WHERE key = ?", (key,)).fetchone()
+    return str(row[0]) if row else None
+
+
+def _meta_set(conn: sqlite3.Connection, key: str, value: str) -> None:
+    _ensure_app_meta(conn)
+    conn.execute(
+        """
+        INSERT INTO app_meta (key, value, updated_at) VALUES (?, ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+        """,
+        (key, value, utc_now_iso()),
+    )
+
+
+def reclaim_operator_constancias_to_admin_once(conn: sqlite3.Connection) -> dict[str, Any]:
+    """Una sola vez: devuelve al admin las constancias/trasiegos de operadores.
+
+    Los catálogos (clientes/productos/transportes) de cada operador se conservan.
+    Así user01/02/… quedan en 0 constancias y pueden crear las suyas en su entorno.
     """
+    flag = "reclaim_operator_constancias_v1"
+    if _meta_get(conn, flag) == "done":
+        return {"ok": True, "skipped": True, "moved_constancias": 0, "moved_trasiegos": 0}
+
     admin_id = get_master_admin_id(conn)
     if admin_id is None:
-        return 0
-    try:
-        rows = conn.execute(
-            """
-            SELECT a.entity_id, a.user_id
-            FROM audit_log a
-            JOIN app_users u ON u.id = a.user_id
-            WHERE a.action = 'constancia_create'
-              AND a.entity = 'constancia'
-              AND a.user_id IS NOT NULL
-              AND a.entity_id IS NOT NULL
-              AND u.is_admin = 0
-              AND u.active = 1
-            """
-        ).fetchall()
-    except sqlite3.Error:
-        return 0
+        return {"ok": False, "error": "No hay admin", "moved_constancias": 0, "moved_trasiegos": 0}
 
-    fixed = 0
-    for entity_id, user_id in rows:
-        try:
-            cid = int(str(entity_id).strip())
-            uid = int(user_id)
-        except (TypeError, ValueError):
-            continue
+    op_ids = [
+        int(r[0])
+        for r in conn.execute(
+            "SELECT id FROM app_users WHERE COALESCE(is_admin, 0) = 0"
+        ).fetchall()
+    ]
+    moved_c = 0
+    moved_t = 0
+    for oid in op_ids:
         cur = conn.execute(
-            "SELECT owner_user_id FROM constancias WHERE id = ?",
-            (cid,),
-        ).fetchone()
-        if not cur:
-            continue
-        current = cur[0]
-        if current is not None and int(current) == uid:
-            continue
-        if current is not None and int(current) != int(admin_id):
-            continue
-        conn.execute(
-            "UPDATE constancias SET owner_user_id = ? WHERE id = ?",
-            (uid, cid),
+            "UPDATE constancias SET owner_user_id = ? WHERE owner_user_id = ?",
+            (admin_id, oid),
         )
-        try:
-            conn.execute(
-                "UPDATE trasiegos SET owner_user_id = ? WHERE constancia_id = ?",
-                (uid, cid),
-            )
-        except sqlite3.Error:
-            pass
-        fixed += 1
-    return fixed
+        moved_c += int(cur.rowcount or 0)
+        cur = conn.execute(
+            "UPDATE trasiegos SET owner_user_id = ? WHERE owner_user_id = ?",
+            (admin_id, oid),
+        )
+        moved_t += int(cur.rowcount or 0)
+
+    # Quitar duplicados del admin (mismo número+cliente) tras reunificar.
+    try:
+        from constancia_utils import consolidate_constancia_duplicates
+
+        groups = conn.execute(
+            """
+            SELECT trim(coalesce(number, '')), lower(trim(coalesce(client_name, ''))),
+                   MIN(id), COUNT(*)
+            FROM constancias
+            WHERE owner_user_id = ?
+              AND trim(coalesce(number, '')) != ''
+            GROUP BY 1, 2
+            HAVING COUNT(*) > 1
+            """,
+            (admin_id,),
+        ).fetchall()
+        for _num, _client, keep_id, _cnt in groups:
+            row = conn.execute(
+                "SELECT number, client_name FROM constancias WHERE id = ?",
+                (keep_id,),
+            ).fetchone()
+            if row:
+                consolidate_constancia_duplicates(
+                    conn,
+                    int(keep_id),
+                    row[0] or "",
+                    row[1] or "",
+                    owner_user_id=admin_id,
+                )
+    except Exception:
+        pass
+
+    _meta_set(conn, flag, "done")
+    return {
+        "ok": True,
+        "skipped": False,
+        "moved_constancias": moved_c,
+        "moved_trasiegos": moved_t,
+        "admin_id": admin_id,
+        "operator_ids": op_ids,
+    }

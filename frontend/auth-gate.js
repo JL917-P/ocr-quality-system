@@ -113,6 +113,10 @@
         return;
       }
       window.QCAuth.setSession(data.token, data.user, remember);
+      // Operadores nunca heredan entorno de impersonación del admin.
+      if (!data.user?.is_admin) {
+        window.QCAuth.clearEnvOwnerId();
+      }
       runLoading();
     } catch (err) {
       if (loginError) loginError.textContent = "No se pudo conectar con el servidor.";
@@ -195,6 +199,12 @@
       }
       const remember = localStorage.getItem(window.QCAuth.REMEMBER_KEY) === "1";
       window.QCAuth.setSession(token, data.user, remember);
+      if (!data.user?.is_admin) {
+        const params = new URLSearchParams(window.location.search || "");
+        if (!params.get("env")) {
+          window.QCAuth.clearEnvOwnerId();
+        }
+      }
       hideScreen(loginScreen);
       hideScreen(loadingScreen);
       hideScreen(welcomeScreen);
