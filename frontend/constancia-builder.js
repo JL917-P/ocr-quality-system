@@ -548,6 +548,19 @@ function parseConstanciaDate(dateText) {
           .join("");
         const fumigacionLastHeader = user01Layout ? "Fecha de Instalaciones" : "Unidad Transporte";
         const fumigacionColspan = 13;
+        const user01WideCss = user01Layout
+          ? `
+                /* user01: márgenes laterales reducidos (fumigación + calidad) */
+                body.user01-wide .page { padding: 6mm 4mm 8mm; }
+                body.user01-wide .ajiles-quality-page { padding: 5mm 4mm 5mm; }
+                body.user01-wide .data { font-size: 7.5px; }
+                body.user01-wide .data th, body.user01-wide .data td { padding: 2px; }
+                body.user01-wide .data.quality th, body.user01-wide .data.quality td { font-size: 7.5px; }
+                body.user01-wide .box { padding: 4px; }
+                body.user01-wide .meta { font-size: 9px; }
+                body.user01-wide .note { font-size: 9px; }
+              `
+          : "";
         const itemQuality = (item, snapKey, legacyKey) => {
           const key = (itemSnapshotField(item, "product_name_snapshot", "product") || "").trim().toLowerCase();
           const prod = (catalog || []).find((p) => (p.name || "").trim().toLowerCase() === key);
@@ -955,9 +968,10 @@ async function savePdf(){
                   .actions { display: none; }
                   .page { margin: 0; box-shadow: none; }
                 }
+                ${user01WideCss}
               </style>
             </head>
-            <body>
+            <body class="${user01Layout ? "user01-wide" : ""}">
               <div class="actions">
                 <button class="btn" onclick="printDoc()">Imprimir</button>
                 <button class="btn" onclick="savePdf()">Guardar PDF</button>
