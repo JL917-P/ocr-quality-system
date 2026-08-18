@@ -756,7 +756,7 @@ function parseConstanciaDate(dateText) {
                 Mediante el presente documento dejamos constancia que los lotes de arroz pilado, detallados han sido tratados con Fosfuro de Aluminio (PHOSFIN) en nuestro almacén principal, en dosis de 5 tab/ton.
               </div>
               ${wrapUser01Table(`
-              <table class="data">
+              <table class="data${isAjilesFumigacion ? " ajiles-fum" : ""}">
                 <thead>
                   <tr>
                     ${fumigacionTableHead}
@@ -963,6 +963,25 @@ async function savePdf(){
                 .data th:nth-child(11) { width: 5%; }
                 .data th:nth-child(12) { width: 5%; }
                 .data th:nth-child(13) { width: 7%; }
+                /* Ajiles fumigación: más ancho en F. Producción / F. Vencimiento */
+                .data.ajiles-fum th:nth-child(1) { width: 3%; }
+                .data.ajiles-fum th:nth-child(2) { width: 7%; }
+                .data.ajiles-fum th:nth-child(3) { width: 22%; }
+                .data.ajiles-fum th:nth-child(4) { width: 7%; }
+                .data.ajiles-fum th:nth-child(5) { width: 10%; }
+                .data.ajiles-fum th:nth-child(6) { width: 10%; }
+                .data.ajiles-fum th:nth-child(7) { width: 6%; }
+                .data.ajiles-fum th:nth-child(8) { width: 8%; }
+                .data.ajiles-fum th:nth-child(9) { width: 7%; }
+                .data.ajiles-fum th:nth-child(10) { width: 6%; }
+                .data.ajiles-fum th:nth-child(11) { width: 7%; }
+                .data.ajiles-fum th:nth-child(12) { width: 7%; }
+                .data.ajiles-fum td:nth-child(5),
+                .data.ajiles-fum td:nth-child(6) {
+                  white-space: nowrap;
+                  word-break: normal;
+                  overflow: hidden;
+                }
                 .data.quality th, .data.quality td { font-size: 8px; }
                 .data.quality th:nth-child(1) { width: 4%; }
                 .data.quality th:nth-child(2) { width: 26%; }
