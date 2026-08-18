@@ -165,6 +165,13 @@ def build_item_snapshot(
     if quantity not in (None, ""):
         snap["quantity"] = quantity
 
+    f_fum = _str(item.get("f_fumigacion") or item.get("fumigacion_date") or (previous or {}).get("f_fumigacion"))
+    f_lib = _str(item.get("f_liberacion") or item.get("liberacion_date") or (previous or {}).get("f_liberacion"))
+    if f_fum:
+        snap["f_fumigacion"] = f_fum
+    if f_lib:
+        snap["f_liberacion"] = f_lib
+
     for cat_key, snap_key in QUALITY_SNAPSHOT_MAP:
         if catalog and catalog.get(cat_key) is not None:
             snap[snap_key] = catalog[cat_key]
@@ -224,6 +231,8 @@ ITEM_HISTORY_FIELDS = (
     ("production_date_snapshot", "fecha_producción"),
     ("expiration_date_snapshot", "fecha_vencimiento"),
     ("quantity", "cantidad"),
+    ("f_fumigacion", "fecha_fumigación"),
+    ("f_liberacion", "fecha_liberación"),
     ("humidity_snapshot", "humedad"),
     ("broken_grains_snapshot", "quebrados"),
     ("chalky_grains_1_snapshot", "tizados_1"),

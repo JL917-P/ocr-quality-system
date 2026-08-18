@@ -504,8 +504,12 @@ function parseConstanciaDate(dateText) {
               <td>${item.quantity ?? ""}</td>
               <td>${itemSnapshotField(item, "production_date_snapshot", "production_text") || "-"}</td>
               <td>${itemSnapshotField(item, "expiration_date_snapshot", "expiration_text") || "-"}</td>
-            <td>${formatShortDate(fumigacion)}</td>
-            <td>${formatShortDate(liberacion)}</td>
+            <td>${formatShortDate(
+                itemSnapshotField(item, "f_fumigacion", "fumigacion_date") || fumigacion
+              )}</td>
+            <td>${formatShortDate(
+                itemSnapshotField(item, "f_liberacion", "liberacion_date") || liberacion
+              )}</td>
               <td>400</td>
               <td>100</td>
               <td>1800</td>

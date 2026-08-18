@@ -420,11 +420,13 @@
                   <thead>
                     <tr>
                       <th style="width:50px;">Item</th>
-                      <th style="width:35%;">Producto *</th>
-                      <th style="width:110px;">Lote</th>
-                      <th style="width:110px;">F. Producción</th>
-                      <th style="width:110px;">F. Vencimiento</th>
-                      <th style="width:90px;">Cantidad (u)</th>
+                      <th style="width:28%;">Producto *</th>
+                      <th style="width:90px;">Lote</th>
+                      <th style="width:100px;">F. Producción</th>
+                      <th style="width:100px;">F. Vencimiento</th>
+                      <th style="width:80px;">Cantidad (u)</th>
+                      <th style="width:100px;">F. Fumigación</th>
+                      <th style="width:100px;">F. Liberación</th>
                       <th style="width:60px;">Eliminar</th>
                     </tr>
                   </thead>
@@ -1662,18 +1664,40 @@
 
       bindOcrHeaderCollapse();
 
-      function addRow(productValue = "") {
-        const row = document.createElement("tr");
-        row.className = "ocr-product-row";
-        row.innerHTML = `
+      if (constanciaFecha) {
+        constanciaFecha.addEventListener("change", () => {
+          refreshDefaultFumigacionDatesOnRows({ onlyEmpty: true });
+        });
+      }
+
+      function getDefaultFumigacionDate() {
+        const base = (constanciaFecha && constanciaFecha.value) || formatToday();
+        return typeof formatDateMinusDays === "function" ? formatDateMinusDays(base, 9) : "";
+      }
+
+      function getDefaultLiberacionDate() {
+        const base = (constanciaFecha && constanciaFecha.value) || formatToday();
+        return typeof formatDateMinusDays === "function" ? formatDateMinusDays(base, 2) : "";
+      }
+
+      function buildProductRowHtml(productValue = "") {
+        const safeProduct = (productValue || "").replace(/"/g, "&quot;");
+        const fumDefault = getDefaultFumigacionDate();
+        const libDefault = getDefaultLiberacionDate();
+        return `
           <td class="itemCell"></td>
-          <td><input type="text" class="product-input" value="${productValue.replace(/"/g, "&quot;")}" placeholder="Buscar producto..." autocomplete="off" /></td>
-          <td><input type="text" placeholder="-" /></td>
-          <td><input type="text" placeholder="Ej: DIC25" /></td>
-          <td><input type="text" placeholder="Ej: AGO26" /></td>
-          <td><input type="number" min="0" step="any" placeholder="" /></td>
+          <td><input type="text" class="product-input" value="${safeProduct}" placeholder="Buscar producto..." autocomplete="off" /></td>
+          <td><input type="text" class="lot-input" placeholder="-" /></td>
+          <td><input type="text" class="prod-date-input" placeholder="Ej: DIC25" /></td>
+          <td><input type="text" class="exp-date-input" placeholder="Ej: AGO26" /></td>
+          <td><input type="number" class="qty-input" min="0" step="any" placeholder="" /></td>
+          <td><input type="text" class="fumigacion-date-input" value="${fumDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AAAA" /></td>
+          <td><input type="text" class="liberacion-date-input" value="${libDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AAAA" /></td>
           <td><button class="btn btn-danger btn-sm">🗑</button></td>
         `;
+      }
+
+      function wireProductRow(row) {
         const itemCell = row.querySelector(".itemCell");
         itemCell.innerHTML = `<span class="row-number"></span> <button class="btn btn-success btn-mini" type="button">+</button>`;
         itemCell.querySelector(".btn-mini").addEventListener("click", () => {
@@ -1684,6 +1708,13 @@
           row.remove();
           reindexRows();
         });
+      }
+
+      function addRow(productValue = "") {
+        const row = document.createElement("tr");
+        row.className = "ocr-product-row";
+        row.innerHTML = buildProductRowHtml(productValue);
+        wireProductRow(row);
         productsBody.appendChild(row);
         reindexRows();
         return row;
@@ -1692,25 +1723,8 @@
       function insertRowAfter(targetRow) {
         const newRow = document.createElement("tr");
         newRow.className = "ocr-product-row";
-        newRow.innerHTML = `
-          <td class="itemCell"></td>
-          <td><input type="text" class="product-input" placeholder="Buscar producto..." autocomplete="off" /></td>
-          <td><input type="text" placeholder="-" /></td>
-          <td><input type="text" placeholder="Ej: DIC25" /></td>
-          <td><input type="text" placeholder="Ej: AGO26" /></td>
-          <td><input type="number" min="0" step="any" placeholder="" /></td>
-          <td><button class="btn btn-danger btn-sm">🗑</button></td>
-        `;
-        const itemCell = newRow.querySelector(".itemCell");
-        itemCell.innerHTML = `<span class="row-number"></span> <button class="btn btn-success btn-mini" type="button">+</button>`;
-        itemCell.querySelector(".btn-mini").addEventListener("click", () => {
-          insertRowAfter(newRow);
-        });
-        const deleteBtn = newRow.querySelector(".btn-danger");
-        deleteBtn.addEventListener("click", () => {
-          newRow.remove();
-          reindexRows();
-        });
+        newRow.innerHTML = buildProductRowHtml("");
+        wireProductRow(newRow);
         targetRow.insertAdjacentElement("afterend", newRow);
         reindexRows();
       }
@@ -2888,15 +2902,40 @@
         (items || []).forEach((itm) => {
           const name = itemSnapshotField(itm, "product_name_snapshot", "product");
           const row = addRow(name);
-          const inputs = row.querySelectorAll("input");
-          if (inputs[1]) inputs[1].value = itemSnapshotField(itm, "lote_snapshot", "lot");
-          if (inputs[2]) inputs[2].value = itemSnapshotField(itm, "production_date_snapshot", "production_text");
-          if (inputs[3]) inputs[3].value = itemSnapshotField(itm, "expiration_date_snapshot", "expiration_text");
-          if (inputs[4] && itm.quantity !== undefined && itm.quantity !== null && itm.quantity !== "") {
-            inputs[4].value = itm.quantity;
+          const lotInput = row.querySelector(".lot-input");
+          const prodInput = row.querySelector(".prod-date-input");
+          const expInput = row.querySelector(".exp-date-input");
+          const qtyInput = row.querySelector(".qty-input");
+          const fumInput = row.querySelector(".fumigacion-date-input");
+          const libInput = row.querySelector(".liberacion-date-input");
+          if (lotInput) lotInput.value = itemSnapshotField(itm, "lote_snapshot", "lot");
+          if (prodInput) prodInput.value = itemSnapshotField(itm, "production_date_snapshot", "production_text");
+          if (expInput) expInput.value = itemSnapshotField(itm, "expiration_date_snapshot", "expiration_text");
+          if (qtyInput && itm.quantity !== undefined && itm.quantity !== null && itm.quantity !== "") {
+            qtyInput.value = itm.quantity;
           }
+          const savedFum = itemSnapshotField(itm, "f_fumigacion", "fumigacion_date");
+          const savedLib = itemSnapshotField(itm, "f_liberacion", "liberacion_date");
+          if (fumInput) fumInput.value = savedFum || getDefaultFumigacionDate();
+          if (libInput) libInput.value = savedLib || getDefaultLiberacionDate();
         });
         if (!items?.length) addRow();
+      }
+
+      function refreshDefaultFumigacionDatesOnRows({ onlyEmpty = true } = {}) {
+        const fumDefault = getDefaultFumigacionDate();
+        const libDefault = getDefaultLiberacionDate();
+        if (!productsBody) return;
+        productsBody.querySelectorAll("tr").forEach((row) => {
+          const fumInput = row.querySelector(".fumigacion-date-input");
+          const libInput = row.querySelector(".liberacion-date-input");
+          if (fumInput && (!onlyEmpty || !(fumInput.value || "").trim())) {
+            fumInput.value = fumDefault;
+          }
+          if (libInput && (!onlyEmpty || !(libInput.value || "").trim())) {
+            libInput.value = libDefault;
+          }
+        });
       }
 
       function moveToCell(currentInput, rowDelta, colDelta) {
@@ -4829,12 +4868,13 @@
       function collectConstanciaItems() {
         const items = [];
         [...productsBody.querySelectorAll("tr")].forEach((tr) => {
-          const inputs = tr.querySelectorAll("input");
-          const product = inputs[0]?.value?.trim() || "";
-          const lot = inputs[1]?.value?.trim() || "";
-          const prodDate = inputs[2]?.value?.trim() || "";
-          const expDate = inputs[3]?.value?.trim() || "";
-          const qtyRaw = inputs[4]?.value;
+          const product = (tr.querySelector(".product-input")?.value || "").trim();
+          const lot = (tr.querySelector(".lot-input")?.value || tr.querySelectorAll("input")[1]?.value || "").trim();
+          const prodDate = (tr.querySelector(".prod-date-input")?.value || "").trim();
+          const expDate = (tr.querySelector(".exp-date-input")?.value || "").trim();
+          const qtyRaw = tr.querySelector(".qty-input")?.value;
+          const fumDate = (tr.querySelector(".fumigacion-date-input")?.value || "").trim();
+          const libDate = (tr.querySelector(".liberacion-date-input")?.value || "").trim();
           const qty = qtyRaw === "" || qtyRaw === undefined ? null : Number(qtyRaw);
           if (product) {
             const match = getProductByName(product);
@@ -4843,6 +4883,8 @@
               lot,
               production_text: prodDate,
               expiration_text: expDate,
+              f_fumigacion: fumDate || getDefaultFumigacionDate(),
+              f_liberacion: libDate || getDefaultLiberacionDate(),
             };
             if (match?.id) row.product_id = match.id;
             if (qty !== null && !Number.isNaN(qty)) row.quantity = qty;
@@ -6966,8 +7008,12 @@
               <td>${item.quantity ?? ""}</td>
               <td>${itemSnapshotField(item, "production_date_snapshot", "production_text") || "-"}</td>
               <td>${itemSnapshotField(item, "expiration_date_snapshot", "expiration_text") || "-"}</td>
-            <td>${formatShortDate(fumigacion)}</td>
-            <td>${formatShortDate(liberacion)}</td>
+            <td>${formatShortDate(
+                itemSnapshotField(item, "f_fumigacion", "fumigacion_date") || fumigacion
+              )}</td>
+            <td>${formatShortDate(
+                itemSnapshotField(item, "f_liberacion", "liberacion_date") || liberacion
+              )}</td>
               <td>400</td>
               <td>100</td>
               <td>1800</td>
