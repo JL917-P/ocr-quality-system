@@ -416,9 +416,9 @@
               </div>
 
               <div class="ocr-products-scroll" id="ocrProductsScroll">
-                <table class="ocr-products-table">
+                <table class="ocr-products-table" id="ocrProductsTable">
                   <thead>
-                    <tr>
+                    <tr id="productsHeadRow">
                       <th style="width:50px;">Item</th>
                       <th style="width:28%;">Producto *</th>
                       <th style="width:90px;">Lote</th>
@@ -1569,11 +1569,13 @@
       }
 
       function isOcrHeaderReadyToCollapse() {
+        const ajiles = isActiveAjilesClient();
+        const plateOk = ajiles ? Boolean(constanciaTransporteInput.value.trim()) : true;
         return Boolean(
           constanciaNumero.value.trim() &&
             constanciaFecha.value.trim() &&
             constanciaClienteInput.value.trim() &&
-            constanciaTransporteInput.value.trim() &&
+            plateOk &&
             (constanciaFumigacion.checked || constanciaCalidad.checked)
         );
       }
@@ -1671,7 +1673,25 @@
         });
       }
 
+      function isActiveAjilesClient() {
+        return typeof isAjilesPeruClient === "function"
+          ? isAjilesPeruClient(constanciaClienteInput?.value || "")
+          : false;
+      }
+
+      function formatEmissionDateForInput() {
+        const base = (constanciaFecha && constanciaFecha.value) || formatToday();
+        if (typeof formatShortDate === "function") return formatShortDate(base) || "";
+        if (/^\d{4}-\d{2}-\d{2}$/.test(base)) {
+          const [y, m, d] = base.split("-");
+          return `${d}/${m}/${y}`;
+        }
+        return base;
+      }
+
       function getDefaultFumigacionDate() {
+        // Ajiles: F. Fumigación = emisión − 2 días (misma lógica que liberación)
+        if (isActiveAjilesClient()) return getDefaultLiberacionDate();
         const base = (constanciaFecha && constanciaFecha.value) || formatToday();
         return typeof formatDateMinusDays === "function" ? formatDateMinusDays(base, 9) : "";
       }
@@ -1686,11 +1706,92 @@
         return typeof formatDateMinusDays === "function" ? formatDateMinusDays(base, 0) : "";
       }
 
+      function renderOcrProductsHeader() {
+        const head = document.getElementById("productsHeadRow");
+        if (!head) return;
+        if (isActiveAjilesClient()) {
+          head.innerHTML = `
+            <th style="width:45px;">Item</th>
+            <th style="width:95px;">Fecha envío</th>
+            <th style="width:22%;">Producto *</th>
+            <th style="width:80px;">Lote</th>
+            <th style="width:90px;">F. Producción</th>
+            <th style="width:90px;">F. Vencimiento</th>
+            <th style="width:75px;">Cantidad</th>
+            <th style="width:95px;">F. Fumigación</th>
+            <th style="width:85px;">Fum. por sacos</th>
+            <th style="width:70px;">Tabletas</th>
+            <th style="width:80px;">Nivel fosfina</th>
+            <th style="width:55px;">Eliminar</th>
+          `;
+        } else {
+          head.innerHTML = `
+            <th style="width:50px;">Item</th>
+            <th style="width:28%;">Producto *</th>
+            <th style="width:90px;">Lote</th>
+            <th style="width:100px;">F. Producción</th>
+            <th style="width:100px;">F. Vencimiento</th>
+            <th style="width:90px;">Cantidad (u)</th>
+            <th style="width:95px;">F. Fumigación</th>
+            <th style="width:95px;">F. Liberación</th>
+            <th style="width:95px;">F. Instalaciones</th>
+            <th style="width:60px;">Eliminar</th>
+          `;
+        }
+      }
+
+      function syncAjilesTransportVisibility() {
+        const group = document.querySelector(".ocr-command-group--transport");
+        if (!group) return;
+        const show = isActiveAjilesClient();
+        group.classList.toggle("hidden", !show);
+        const prev = group.previousElementSibling;
+        if (prev && prev.classList.contains("ocr-command-sep")) {
+          prev.classList.toggle("hidden", !show);
+        }
+      }
+
+      function applyOcrLayoutForClient({ force = false } = {}) {
+        const ajiles = isActiveAjilesClient();
+        if (!force && applyOcrLayoutForClient._lastMode === ajiles) {
+          syncAjilesTransportVisibility();
+          updateOcrHeaderCollapseUi();
+          return;
+        }
+        applyOcrLayoutForClient._lastMode = ajiles;
+        renderOcrProductsHeader();
+        syncAjilesTransportVisibility();
+        if (!productsBody) return;
+        const items = collectConstanciaItems();
+        fillConstanciaItems(items);
+        updateOcrHeaderCollapseUi();
+      }
+      applyOcrLayoutForClient._lastMode = null;
+      syncAjilesTransportVisibility();
+      renderOcrProductsHeader();
+
       function buildProductRowHtml(productValue = "") {
         const safeProduct = (productValue || "").replace(/"/g, "&quot;");
         const fumDefault = getDefaultFumigacionDate();
         const libDefault = getDefaultLiberacionDate();
         const instDefault = getDefaultInstalacionesDate();
+        if (isActiveAjilesClient()) {
+          const shipDefault = formatEmissionDateForInput();
+          return `
+          <td class="itemCell"></td>
+          <td><input type="text" class="shipping-date-input" value="${shipDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AAAA" /></td>
+          <td><input type="text" class="product-input" value="${safeProduct}" placeholder="Buscar producto..." autocomplete="off" /></td>
+          <td><input type="text" class="lot-input" placeholder="-" /></td>
+          <td><input type="text" class="prod-date-input" placeholder="Ej: DIC25" /></td>
+          <td><input type="text" class="exp-date-input" placeholder="Ej: AGO26" /></td>
+          <td><input type="number" class="qty-input" min="0" step="any" placeholder="" /></td>
+          <td><input type="text" class="fumigacion-date-input" value="${fumDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AAAA" /></td>
+          <td><input type="number" class="fum-sacos-input" min="0" step="any" value="400" placeholder="400" /></td>
+          <td><input type="number" class="tabletas-input" min="0" step="any" value="100" placeholder="100" /></td>
+          <td><input type="number" class="fosfina-input" min="0" step="any" value="1800" placeholder="1800" /></td>
+          <td><button class="btn btn-danger btn-sm">🗑</button></td>
+        `;
+        }
         return `
           <td class="itemCell"></td>
           <td><input type="text" class="product-input" value="${safeProduct}" placeholder="Buscar producto..." autocomplete="off" /></td>
@@ -1749,10 +1850,10 @@
         productsBody.querySelectorAll("tr").forEach((row) => {
           const productInput = row.querySelector(".product-input");
           const product = (productInput?.value || "").trim();
+          const lot = (row.querySelector(".lot-input")?.value || "").trim();
           const otherInputs = Array.from(row.querySelectorAll("input")).filter(
             (el) => !el.classList.contains("product-input")
           );
-          const lot = (otherInputs[0]?.value || "").trim();
           const hasOtherData = otherInputs.some((el) => (el.value || "").trim());
           const incomplete = (!product && hasOtherData) || (product && !lot);
           row.classList.toggle("ocr-row-incomplete", incomplete);
@@ -2880,14 +2981,16 @@
 
       function applyProductDetailsForRow(tr) {
         if (!allProducts.length) return;
-        const inputs = tr.querySelectorAll("input");
-        const productInput = inputs[0];
+        const productInput = tr.querySelector(".product-input");
         if (!productInput) return;
         const match = getProductByName(productInput.value || "");
         if (!match) return;
-        if (inputs[1] && !inputs[1].value) inputs[1].value = match.lot || "";
-        if (inputs[2] && !inputs[2].value) inputs[2].value = match.production_text || "";
-        if (inputs[3] && !inputs[3].value) inputs[3].value = match.expiration_text || "";
+        const lotInput = tr.querySelector(".lot-input");
+        const prodInput = tr.querySelector(".prod-date-input");
+        const expInput = tr.querySelector(".exp-date-input");
+        if (lotInput && !lotInput.value) lotInput.value = match.lot || "";
+        if (prodInput && !prodInput.value) prodInput.value = match.production_text || "";
+        if (expInput && !expInput.value) expInput.value = match.expiration_text || "";
       }
 
       function applyProductDetailsFromCatalog() {
@@ -2906,10 +3009,14 @@
       }
 
       function fillConstanciaItems(items) {
+        renderOcrProductsHeader();
+        syncAjilesTransportVisibility();
+        applyOcrLayoutForClient._lastMode = isActiveAjilesClient();
         productsBody.innerHTML = "";
         (items || []).forEach((itm) => {
           const name = itemSnapshotField(itm, "product_name_snapshot", "product");
           const row = addRow(name);
+          const shipInput = row.querySelector(".shipping-date-input");
           const lotInput = row.querySelector(".lot-input");
           const prodInput = row.querySelector(".prod-date-input");
           const expInput = row.querySelector(".exp-date-input");
@@ -2917,6 +3024,13 @@
           const fumInput = row.querySelector(".fumigacion-date-input");
           const libInput = row.querySelector(".liberacion-date-input");
           const instInput = row.querySelector(".instalaciones-date-input");
+          const sacosInput = row.querySelector(".fum-sacos-input");
+          const tabletasInput = row.querySelector(".tabletas-input");
+          const fosfinaInput = row.querySelector(".fosfina-input");
+          if (shipInput) {
+            shipInput.value =
+              itemSnapshotField(itm, "fecha_envio", "shipping_date") || formatEmissionDateForInput();
+          }
           if (lotInput) lotInput.value = itemSnapshotField(itm, "lote_snapshot", "lot");
           if (prodInput) prodInput.value = itemSnapshotField(itm, "production_date_snapshot", "production_text");
           if (expInput) expInput.value = itemSnapshotField(itm, "expiration_date_snapshot", "expiration_text");
@@ -2929,6 +3043,18 @@
           if (fumInput) fumInput.value = savedFum || getDefaultFumigacionDate();
           if (libInput) libInput.value = savedLib || getDefaultLiberacionDate();
           if (instInput) instInput.value = savedInst || getDefaultInstalacionesDate();
+          if (sacosInput) {
+            const sacos = itemSnapshotField(itm, "fumigacion_sacos", "cant_fumigada");
+            if (sacos !== "") sacosInput.value = sacos;
+          }
+          if (tabletasInput) {
+            const tab = itemSnapshotField(itm, "tabletas", "n_tabletas");
+            if (tab !== "") tabletasInput.value = tab;
+          }
+          if (fosfinaInput) {
+            const fos = itemSnapshotField(itm, "nivel_fosfina", "fosfina");
+            if (fos !== "") fosfinaInput.value = fos;
+          }
         });
         if (!items?.length) addRow();
       }
@@ -2937,11 +3063,13 @@
         const fumDefault = getDefaultFumigacionDate();
         const libDefault = getDefaultLiberacionDate();
         const instDefault = getDefaultInstalacionesDate();
+        const shipDefault = formatEmissionDateForInput();
         if (!productsBody) return;
         productsBody.querySelectorAll("tr").forEach((row) => {
           const fumInput = row.querySelector(".fumigacion-date-input");
           const libInput = row.querySelector(".liberacion-date-input");
           const instInput = row.querySelector(".instalaciones-date-input");
+          const shipInput = row.querySelector(".shipping-date-input");
           if (fumInput && (!onlyEmpty || !(fumInput.value || "").trim())) {
             fumInput.value = fumDefault;
           }
@@ -2950,6 +3078,9 @@
           }
           if (instInput && (!onlyEmpty || !(instInput.value || "").trim())) {
             instInput.value = instDefault;
+          }
+          if (shipInput && (!onlyEmpty || !(shipInput.value || "").trim())) {
+            shipInput.value = shipDefault;
           }
         });
       }
@@ -3095,8 +3226,17 @@
 
       if (constanciaClienteInput) {
         clientFieldAutocomplete.bindInput(constanciaClienteInput);
-        constanciaClienteInput.addEventListener("change", checkUnknownCliente);
-        constanciaClienteInput.addEventListener("blur", checkUnknownCliente);
+        constanciaClienteInput.addEventListener("change", () => {
+          checkUnknownCliente();
+          applyOcrLayoutForClient();
+        });
+        constanciaClienteInput.addEventListener("blur", () => {
+          checkUnknownCliente();
+          applyOcrLayoutForClient();
+        });
+        constanciaClienteInput.addEventListener("input", () => {
+          applyOcrLayoutForClient();
+        });
       }
       if (constanciaTransporteInput) {
         transportFieldAutocomplete.bindInput(constanciaTransporteInput);
@@ -4883,15 +5023,20 @@
 
       function collectConstanciaItems() {
         const items = [];
+        const ajiles = isActiveAjilesClient();
         [...productsBody.querySelectorAll("tr")].forEach((tr) => {
           const product = (tr.querySelector(".product-input")?.value || "").trim();
-          const lot = (tr.querySelector(".lot-input")?.value || tr.querySelectorAll("input")[1]?.value || "").trim();
+          const lot = (tr.querySelector(".lot-input")?.value || "").trim();
           const prodDate = (tr.querySelector(".prod-date-input")?.value || "").trim();
           const expDate = (tr.querySelector(".exp-date-input")?.value || "").trim();
           const qtyRaw = tr.querySelector(".qty-input")?.value;
           const fumDate = (tr.querySelector(".fumigacion-date-input")?.value || "").trim();
           const libDate = (tr.querySelector(".liberacion-date-input")?.value || "").trim();
           const instDate = (tr.querySelector(".instalaciones-date-input")?.value || "").trim();
+          const shipDate = (tr.querySelector(".shipping-date-input")?.value || "").trim();
+          const sacosRaw = tr.querySelector(".fum-sacos-input")?.value;
+          const tabletasRaw = tr.querySelector(".tabletas-input")?.value;
+          const fosfinaRaw = tr.querySelector(".fosfina-input")?.value;
           const qty = qtyRaw === "" || qtyRaw === undefined ? null : Number(qtyRaw);
           if (product) {
             const match = getProductByName(product);
@@ -4901,9 +5046,18 @@
               production_text: prodDate,
               expiration_text: expDate,
               f_fumigacion: fumDate || getDefaultFumigacionDate(),
-              f_liberacion: libDate || getDefaultLiberacionDate(),
-              f_instalaciones: instDate || getDefaultInstalacionesDate(),
             };
+            if (ajiles) {
+              row.fecha_envio = shipDate || formatEmissionDateForInput();
+              row.fumigacion_sacos =
+                sacosRaw === "" || sacosRaw === undefined ? 400 : Number(sacosRaw);
+              row.tabletas = tabletasRaw === "" || tabletasRaw === undefined ? 100 : Number(tabletasRaw);
+              row.nivel_fosfina =
+                fosfinaRaw === "" || fosfinaRaw === undefined ? 1800 : Number(fosfinaRaw);
+            } else {
+              row.f_liberacion = libDate || getDefaultLiberacionDate();
+              row.f_instalaciones = instDate || getDefaultInstalacionesDate();
+            }
             if (match?.id) row.product_id = match.id;
             if (qty !== null && !Number.isNaN(qty)) row.quantity = qty;
             items.push(row);
@@ -4945,6 +5099,9 @@
         constanciaTransporteInput.value = "";
         constanciaFumigacion.checked = true;
         constanciaCalidad.checked = true;
+        applyOcrLayoutForClient._lastMode = null;
+        renderOcrProductsHeader();
+        syncAjilesTransportVisibility();
         productsBody.innerHTML = "";
         addRow();
         currentConstanciaId = null;
@@ -4979,6 +5136,12 @@
           });
           return;
         }
+        if (isActiveAjilesClient() && !constanciaTransporteInput.value.trim()) {
+          showInfoModal("Para Ajiles debes indicar la placa de transporte.", {
+            title: "Campo requerido",
+          });
+          return;
+        }
         const items = collectConstanciaItems();
         if (!items.length) {
           showInfoModal("Agrega al menos un producto a la constancia antes de guardar.", {
@@ -4990,7 +5153,7 @@
           number: constanciaNumero.value.trim(),
           issue_date: constanciaFecha.value.trim(),
           client_name: constanciaClienteInput.value.trim(),
-          transport_plate: constanciaTransporteInput.value.trim(),
+          transport_plate: isActiveAjilesClient() ? constanciaTransporteInput.value.trim() : "",
           fumigacion: constanciaFumigacion.checked,
           calidad: constanciaCalidad.checked,
           status,
@@ -5084,7 +5247,10 @@
         constanciaTransporteInput.value = data.transport_plate || "";
         constanciaFumigacion.checked = data.fumigacion !== 0 && data.fumigacion !== false;
         constanciaCalidad.checked = data.calidad !== 0 && data.calidad !== false;
+        applyOcrLayoutForClient._lastMode = null;
         fillConstanciaItems(data.items || []);
+        applyOcrLayoutForClient._lastMode = isActiveAjilesClient();
+        syncAjilesTransportVisibility();
         updateRestoreConstanciaButton(data.items || []);
         if (data.repaired_from_duplicate) {
           showSuccessModal(
@@ -7035,11 +7201,13 @@
         const showFumigacion = constancia.fumigacion !== 0 && constancia.fumigacion !== false;
         const showCalidad = constancia.calidad !== 0 && constancia.calidad !== false;
         const user01Layout = isUser01ConstanciaLayout();
+        const isAjilesFumigacion = isAjilesPeruClient(cliente);
         const items = constancia.items || [];
         const rows = items
           .map((item, idx) => {
+            const fumDefault = isAjilesFumigacion ? liberacion : fumigacion;
             const fumCell = formatShortDate(
-              itemSnapshotField(item, "f_fumigacion", "fumigacion_date") || fumigacion
+              itemSnapshotField(item, "f_fumigacion", "fumigacion_date") || fumDefault
             );
             const libCell = formatShortDate(
               itemSnapshotField(item, "f_liberacion", "liberacion_date") || liberacion
@@ -7047,6 +7215,34 @@
             const instCell = formatShortDate(
               itemSnapshotField(item, "f_instalaciones", "instalaciones_date") || instalaciones
             );
+            const shipRaw = itemSnapshotField(item, "fecha_envio", "shipping_date");
+            const shipCell = shipRaw ? formatShortDate(shipRaw) || shipRaw : formatShippingDate(fecha);
+            const sacos =
+              itemSnapshotField(item, "fumigacion_sacos", "cant_fumigada") || "400";
+            const tabletas = itemSnapshotField(item, "tabletas", "n_tabletas") || "100";
+            const fosfina = itemSnapshotField(item, "nivel_fosfina", "fosfina") || "1800";
+            if (isAjilesFumigacion) {
+              const plateCell =
+                idx === 0
+                  ? `<td rowspan="${Math.max(items.length, 1)}" style="text-align:center; vertical-align:middle;">${transporte || "-"}</td>`
+                  : "";
+              return `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>${shipCell}</td>
+              <td>${itemSnapshotField(item, "product_name_snapshot", "product")}</td>
+              <td>${itemSnapshotField(item, "lote_snapshot", "lot") || "-"}</td>
+              <td>${itemSnapshotField(item, "production_date_snapshot", "production_text") || "-"}</td>
+              <td>${itemSnapshotField(item, "expiration_date_snapshot", "expiration_text") || "-"}</td>
+              <td>${item.quantity ?? ""}</td>
+              <td>${fumCell}</td>
+              <td>${sacos}</td>
+              <td>${tabletas}</td>
+              <td>${fosfina}</td>
+              ${plateCell}
+            </tr>
+          `;
+            }
             const lastCol = user01Layout
               ? `<td style="text-align:center; vertical-align:middle;">${instCell}</td>`
               : idx === 0
@@ -7071,8 +7267,42 @@
           `;
           })
           .join("");
-        const fumigacionLastHeader = user01Layout ? "Fecha de Instalaciones" : "Unidad Transporte";
-        const fumigacionColspan = 13;
+        const fumigacionLastHeader = isAjilesFumigacion
+          ? "Placa transporte"
+          : user01Layout
+            ? "Fecha de Instalaciones"
+            : "Unidad Transporte";
+        const fumigacionColspan = isAjilesFumigacion ? 12 : 13;
+        const fumigacionTableHead = isAjilesFumigacion
+          ? `
+                    <th>Item</th>
+                    <th>Fecha de Envío</th>
+                    <th>Producto</th>
+                    <th>Lote</th>
+                    <th>Fecha de Producción</th>
+                    <th>Fecha de Vencimiento</th>
+                    <th>Cantidad</th>
+                    <th>Fecha de Fumigación</th>
+                    <th>Fumigación por sacos</th>
+                    <th>Tabletas</th>
+                    <th>Nivel de fosfina</th>
+                    <th>${fumigacionLastHeader}</th>
+          `
+          : `
+                    <th>Item</th>
+                    <th>Fecha de Envío</th>
+                    <th>Producto</th>
+                    <th>Lote</th>
+                    <th>Cant.<br>env<br>(u)</th>
+                    <th>Fecha de Producción</th>
+                    <th>Fecha de Vencimiento</th>
+                    <th>Fecha de Fumigación</th>
+                    <th>Fecha de Liberación</th>
+                    <th>Cantidad Fumigada</th>
+                    <th>N° de tabletas</th>
+                    <th>Nivel de fosfina</th>
+                    <th>${fumigacionLastHeader}</th>
+          `;
         // user01: ≤12 registros = tamaño fijo; >12 = zoom dinámico (fumigación + calidad)
         const user01ItemCount = Math.max(items.length || 0, 0);
         const user01DynamicZoom = user01Layout && user01ItemCount > 12;
@@ -7220,19 +7450,7 @@
               <table class="data">
                 <thead>
                   <tr>
-                    <th>Item</th>
-                    <th>Fecha de Envío</th>
-                    <th>Producto</th>
-                    <th>Lote</th>
-                    <th>Cant.<br>env<br>(u)</th>
-                    <th>Fecha de Producción</th>
-                    <th>Fecha de Vencimiento</th>
-                    <th>Fecha de Fumigación</th>
-                    <th>Fecha de Liberación</th>
-                    <th>Cantidad Fumigada</th>
-                    <th>N° de tabletas</th>
-                    <th>Nivel de fosfina</th>
-                    <th>${fumigacionLastHeader}</th>
+                    ${fumigacionTableHead}
                   </tr>
                 </thead>
                 <tbody>

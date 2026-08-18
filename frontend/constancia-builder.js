@@ -510,11 +510,13 @@ function parseConstanciaDate(dateText) {
         const showFumigacion = constancia.fumigacion !== 0 && constancia.fumigacion !== false;
         const showCalidad = constancia.calidad !== 0 && constancia.calidad !== false;
         const user01Layout = isUser01ConstanciaLayout();
+        const isAjilesFumigacion = isAjilesPeruClient(cliente);
         const items = constancia.items || [];
         const rows = items
           .map((item, idx) => {
+            const fumDefault = isAjilesFumigacion ? liberacion : fumigacion;
             const fumCell = formatShortDate(
-              itemSnapshotField(item, "f_fumigacion", "fumigacion_date") || fumigacion
+              itemSnapshotField(item, "f_fumigacion", "fumigacion_date") || fumDefault
             );
             const libCell = formatShortDate(
               itemSnapshotField(item, "f_liberacion", "liberacion_date") || liberacion
@@ -522,6 +524,34 @@ function parseConstanciaDate(dateText) {
             const instCell = formatShortDate(
               itemSnapshotField(item, "f_instalaciones", "instalaciones_date") || instalaciones
             );
+            const shipRaw = itemSnapshotField(item, "fecha_envio", "shipping_date");
+            const shipCell = shipRaw ? formatShortDate(shipRaw) || shipRaw : formatShippingDate(fecha);
+            const sacos =
+              itemSnapshotField(item, "fumigacion_sacos", "cant_fumigada") || "400";
+            const tabletas = itemSnapshotField(item, "tabletas", "n_tabletas") || "100";
+            const fosfina = itemSnapshotField(item, "nivel_fosfina", "fosfina") || "1800";
+            if (isAjilesFumigacion) {
+              const plateCell =
+                idx === 0
+                  ? `<td rowspan="${Math.max(items.length, 1)}" style="text-align:center; vertical-align:middle;">${transporte || "-"}</td>`
+                  : "";
+              return `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>${shipCell}</td>
+              <td>${itemSnapshotField(item, "product_name_snapshot", "product")}</td>
+              <td>${itemSnapshotField(item, "lote_snapshot", "lot") || "-"}</td>
+              <td>${itemSnapshotField(item, "production_date_snapshot", "production_text") || "-"}</td>
+              <td>${itemSnapshotField(item, "expiration_date_snapshot", "expiration_text") || "-"}</td>
+              <td>${item.quantity ?? ""}</td>
+              <td>${fumCell}</td>
+              <td>${sacos}</td>
+              <td>${tabletas}</td>
+              <td>${fosfina}</td>
+              ${plateCell}
+            </tr>
+          `;
+            }
             const lastCol = user01Layout
               ? `<td style="text-align:center; vertical-align:middle;">${instCell}</td>`
               : idx === 0
@@ -546,8 +576,42 @@ function parseConstanciaDate(dateText) {
           `;
           })
           .join("");
-        const fumigacionLastHeader = user01Layout ? "Fecha de Instalaciones" : "Unidad Transporte";
-        const fumigacionColspan = 13;
+        const fumigacionLastHeader = isAjilesFumigacion
+          ? "Placa transporte"
+          : user01Layout
+            ? "Fecha de Instalaciones"
+            : "Unidad Transporte";
+        const fumigacionColspan = isAjilesFumigacion ? 12 : 13;
+        const fumigacionTableHead = isAjilesFumigacion
+          ? `
+                    <th>Item</th>
+                    <th>Fecha de Envío</th>
+                    <th>Producto</th>
+                    <th>Lote</th>
+                    <th>Fecha de Producción</th>
+                    <th>Fecha de Vencimiento</th>
+                    <th>Cantidad</th>
+                    <th>Fecha de Fumigación</th>
+                    <th>Fumigación por sacos</th>
+                    <th>Tabletas</th>
+                    <th>Nivel de fosfina</th>
+                    <th>${fumigacionLastHeader}</th>
+          `
+          : `
+                    <th>Item</th>
+                    <th>Fecha de Envío</th>
+                    <th>Producto</th>
+                    <th>Lote</th>
+                    <th>Cant.<br>env<br>(u)</th>
+                    <th>Fecha de Producción</th>
+                    <th>Fecha de Vencimiento</th>
+                    <th>Fecha de Fumigación</th>
+                    <th>Fecha de Liberación</th>
+                    <th>Cantidad Fumigada</th>
+                    <th>N° de tabletas</th>
+                    <th>Nivel de fosfina</th>
+                    <th>${fumigacionLastHeader}</th>
+          `;
         // user01: ≤12 registros = tamaño fijo; >12 = zoom dinámico (fumigación + calidad)
         const user01ItemCount = Math.max(items.length || 0, 0);
         const user01DynamicZoom = user01Layout && user01ItemCount > 12;
@@ -695,19 +759,7 @@ function parseConstanciaDate(dateText) {
               <table class="data">
                 <thead>
                   <tr>
-                    <th>Item</th>
-                    <th>Fecha de Envío</th>
-                    <th>Producto</th>
-                    <th>Lote</th>
-                    <th>Cant.<br>env<br>(u)</th>
-                    <th>Fecha de Producción</th>
-                    <th>Fecha de Vencimiento</th>
-                    <th>Fecha de Fumigación</th>
-                    <th>Fecha de Liberación</th>
-                    <th>Cantidad Fumigada</th>
-                    <th>N° de tabletas</th>
-                    <th>Nivel de fosfina</th>
-                    <th>${fumigacionLastHeader}</th>
+                    ${fumigacionTableHead}
                   </tr>
                 </thead>
                 <tbody>

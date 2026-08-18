@@ -179,6 +179,29 @@ def build_item_snapshot(
     if f_inst:
         snap["f_instalaciones"] = f_inst
 
+    fecha_envio = _str(
+        item.get("fecha_envio") or item.get("shipping_date") or (previous or {}).get("fecha_envio")
+    )
+    if fecha_envio:
+        snap["fecha_envio"] = fecha_envio
+        snap["shipping_date"] = fecha_envio
+
+    for key, aliases in (
+        ("fumigacion_sacos", ("cant_fumigada",)),
+        ("tabletas", ("n_tabletas",)),
+        ("nivel_fosfina", ("fosfina",)),
+    ):
+        val = item.get(key)
+        if val in (None, ""):
+            for alias in aliases:
+                if item.get(alias) not in (None, ""):
+                    val = item.get(alias)
+                    break
+        if val in (None, "") and previous:
+            val = previous.get(key)
+        if val not in (None, ""):
+            snap[key] = val
+
     for cat_key, snap_key in QUALITY_SNAPSHOT_MAP:
         if catalog and catalog.get(cat_key) is not None:
             snap[snap_key] = catalog[cat_key]
@@ -241,6 +264,10 @@ ITEM_HISTORY_FIELDS = (
     ("f_fumigacion", "fecha_fumigación"),
     ("f_liberacion", "fecha_liberación"),
     ("f_instalaciones", "fecha_instalaciones"),
+    ("fecha_envio", "fecha_envío"),
+    ("fumigacion_sacos", "fumigación_sacos"),
+    ("tabletas", "tabletas"),
+    ("nivel_fosfina", "nivel_fosfina"),
     ("humidity_snapshot", "humedad"),
     ("broken_grains_snapshot", "quebrados"),
     ("chalky_grains_1_snapshot", "tizados_1"),
