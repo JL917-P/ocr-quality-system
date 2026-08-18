@@ -35,7 +35,6 @@ from audit_persist import restore_audit_on_startup
 from tenant_env import (
     ENV_OWNER_HEADER,
     clone_catalog,
-    ensure_catalog_if_empty,
     ensure_owner_columns,
     ensure_user_environment,
     env_counts,
@@ -1358,9 +1357,6 @@ def auth_continue(request: Request) -> JSONResponse:
 def get_environment(request: Request, user: dict = Depends(get_current_user)) -> JSONResponse:
     owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
-        prepared = ensure_catalog_if_empty(conn, owner_id)
-        if prepared and prepared.get("ok") and not prepared.get("skipped"):
-            conn.commit()
         target = get_user_by_id(conn, owner_id)
         counts = env_counts(conn, owner_id)
     return JSONResponse(
@@ -1369,7 +1365,7 @@ def get_environment(request: Request, user: dict = Depends(get_current_user)) ->
             "is_impersonating": int(owner_id) != int(user["id"]),
             "owner": public_user(target) if target else None,
             "counts": counts,
-            "catalog_prepared": prepared,
+            "catalog_prepared": None,
         }
     )
 
@@ -1379,31 +1375,15 @@ def ensure_environment_catalog(
     request: Request,
     user: dict = Depends(get_current_user),
 ) -> JSONResponse:
-    """Copia el catálogo del admin al entorno activo si está vacío (sin constancias)."""
+    """No copia catálogo: cada entorno es independiente (vacío o propio del owner)."""
     owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
-        prepared = ensure_catalog_if_empty(conn, owner_id)
-        if prepared is None:
-            counts = env_counts(conn, owner_id)
-            return JSONResponse(
-                {
-                    "ok": True,
-                    "skipped": True,
-                    "message": "El entorno ya tiene catálogo.",
-                    "counts": counts,
-                    "owner_user_id": owner_id,
-                }
-            )
-        if not prepared.get("ok"):
-            raise HTTPException(status_code=400, detail=prepared.get("error") or "No se pudo copiar el catálogo.")
-        conn.commit()
         counts = env_counts(conn, owner_id)
     return JSONResponse(
         {
             "ok": True,
-            "skipped": bool(prepared.get("skipped")),
-            "message": prepared.get("message") or "Catálogo listo.",
-            "copied": prepared.get("copied"),
+            "skipped": True,
+            "message": "Catálogos independientes: no se copia desde admin.",
             "counts": counts,
             "owner_user_id": owner_id,
         }
@@ -1452,30 +1432,16 @@ def enter_user_environment(
 ) -> JSONResponse:
     """Solo admin: abre el entorno de otro usuario (sin su contraseña).
 
-    Si el catálogo del operador está vacío (p. ej. usuario creado antes de entornos),
-    copia una vez el catálogo del origen indicado (por defecto el maestro admin).
+    No copia catálogo automáticamente: el entorno del operador queda como esté
+    (vacío o con sus propios clientes/productos/transportes).
     """
     if not user.get("is_admin"):
         raise HTTPException(status_code=403, detail="Solo el administrador puede ver entornos de otros usuarios.")
-    body = payload or {}
     with sqlite3.connect(DB_PATH) as conn:
         target = get_user_by_id(conn, int(user_id))
         if not target or not target.get("active"):
             raise HTTPException(status_code=404, detail="Usuario no encontrado o inactivo.")
         counts = env_counts(conn, int(target["id"]))
-        catalog_total = counts["clients"] + counts["products"] + counts["transports"]
-        prepared = None
-        if catalog_total == 0 and not target.get("is_admin"):
-            source_raw = body.get("source_owner_id")
-            source_id = int(source_raw) if source_raw not in (None, "") else get_master_admin_id(conn)
-            if source_id is not None:
-                prepared = ensure_user_environment(
-                    conn,
-                    dest_user_id=int(target["id"]),
-                    source_owner_id=int(source_id),
-                    force=False,
-                )
-                counts = env_counts(conn, int(target["id"]))
         write_audit(
             conn,
             user=user,
@@ -1491,7 +1457,7 @@ def enter_user_environment(
             "env_owner_id": int(target["id"]),
             "owner": public_user(target),
             "counts": counts,
-            "catalog_prepared": prepared,
+            "catalog_prepared": None,
         }
     )
 
@@ -1519,8 +1485,8 @@ async def api_create_user(
                 permissions=payload.get("permissions") if isinstance(payload.get("permissions"), dict) else None,
                 active=payload.get("active", True) is not False,
             )
-            if not created.get("is_admin"):
-                # Copia UNA sola vez al crear: catálogo completo del origen elegido por el admin.
+            if not created.get("is_admin") and payload.get("seed_catalog") is True:
+                # Solo si el admin pide explícitamente seed_catalog=true
                 source_raw = payload.get("catalog_source_owner_id")
                 source_id = int(source_raw) if source_raw not in (None, "") else get_master_admin_id(conn)
                 if source_id is None:
@@ -1546,6 +1512,8 @@ async def api_create_user(
                     f"Alta de usuario {created['username']}"
                     + (
                         f" (catálogo desde owner {payload.get('catalog_source_owner_id') or 'admin'})"
+                        if (not created.get("is_admin") and payload.get("seed_catalog") is True)
+                        else " (catálogo vacío / propio)"
                         if not created.get("is_admin")
                         else ""
                     )
@@ -2020,11 +1988,6 @@ def import_from_sheets_admin(
     """Importación manual: Google Sheets → SQLite (solo registros faltantes por id)."""
     owner_id = _env_owner_from_request(request, user)
     init_db()
-    catalog_prepared = None
-    with sqlite3.connect(DB_PATH) as conn:
-        catalog_prepared = ensure_catalog_if_empty(conn, owner_id)
-        if catalog_prepared and catalog_prepared.get("ok") and not catalog_prepared.get("skipped"):
-            conn.commit()
     try:
         result = run_import_from_sheets(DB_PATH, owner_user_id=owner_id)
     except Exception as exc:
@@ -2064,14 +2027,7 @@ def import_from_sheets_admin(
             detail=f"Importados {result.get('imported', 0)} registros",
         )
     msg = result.get("message", "Importación completada")
-    if catalog_prepared and catalog_prepared.get("ok") and not catalog_prepared.get("skipped"):
-        copied = catalog_prepared.get("copied") or {}
-        msg = (
-            f"Se copió el catálogo al entorno "
-            f"({copied.get('clients', 0)} clientes, {copied.get('products', 0)} productos, "
-            f"{copied.get('transports', 0)} transportes). {msg}"
-        )
-    # Recalcular in_db tras posible copia de catálogo
+    # Recalcular in_db del entorno activo (solo su owner)
     try:
         from google_sheets import (
             TAB_CLIENTES,
@@ -2103,7 +2059,7 @@ def import_from_sheets_admin(
             "error": result.get("error"),
             "users_restored": result.get("users_restored"),
             "owner_user_id": owner_id,
-            "catalog_prepared": catalog_prepared,
+            "catalog_prepared": None,
         }
     )
 
@@ -2273,9 +2229,6 @@ def list_products(
 ) -> JSONResponse:
     owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
-        prepared = ensure_catalog_if_empty(conn, owner_id)
-        if prepared and prepared.get("ok") and not prepared.get("skipped"):
-            conn.commit()
         rows = conn.execute(
             """
             SELECT id, name, code, origin, um, active, lot, production_text, expiration_text,
@@ -2474,9 +2427,6 @@ def list_clients(
 ) -> JSONResponse:
     owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
-        prepared = ensure_catalog_if_empty(conn, owner_id)
-        if prepared and prepared.get("ok") and not prepared.get("skipped"):
-            conn.commit()
         rows = conn.execute(
             "SELECT id, name, ruc, created_at FROM clients WHERE owner_user_id = ? ORDER BY id DESC LIMIT ?",
             (owner_id, limit),
@@ -2573,9 +2523,6 @@ def list_transports(
 ) -> JSONResponse:
     owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
-        prepared = ensure_catalog_if_empty(conn, owner_id)
-        if prepared and prepared.get("ok") and not prepared.get("skipped"):
-            conn.commit()
         rows = conn.execute(
             "SELECT id, plate, created_at FROM transports WHERE owner_user_id = ? ORDER BY id DESC LIMIT ?",
             (owner_id, limit),

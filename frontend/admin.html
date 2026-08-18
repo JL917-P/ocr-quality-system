@@ -7896,9 +7896,6 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
       }
 
       async function reloadActiveEnvironmentData() {
-        try {
-          await fetch("/api/environment/ensure-catalog", { method: "POST" });
-        } catch (e) {}
         const tasks = [];
         if (typeof loadClients === "function") tasks.push(loadClients());
         if (typeof loadProducts === "function") tasks.push(loadProducts());

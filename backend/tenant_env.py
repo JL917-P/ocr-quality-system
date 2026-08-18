@@ -211,6 +211,15 @@ def clone_catalog(
     }
 
 
+def ensure_catalog_if_empty(conn: sqlite3.Connection, owner_user_id: int) -> dict[str, Any] | None:
+    """Ya no copia el catálogo del admin.
+
+    Cada operador (p. ej. user01) mantiene catálogos propios vacíos o cargados
+    por él / import de su owner. No se migran ni se rellenan desde admin.
+    """
+    return None
+
+
 def ensure_user_environment(
     conn: sqlite3.Connection,
     *,
@@ -218,6 +227,7 @@ def ensure_user_environment(
     source_owner_id: int | None = None,
     force: bool = False,
 ) -> dict[str, Any]:
+    """Copia explícita de catálogo (solo si se invoca a propósito, p. ej. prepare-environment)."""
     dest = get_user_by_id(conn, dest_user_id)
     if not dest:
         return {"ok": False, "error": "Usuario destino no encontrado."}
@@ -233,26 +243,6 @@ def ensure_user_environment(
     result["dest_user_id"] = int(dest_user_id)
     result["source_owner_id"] = int(source_id)
     return result
-
-
-def ensure_catalog_if_empty(conn: sqlite3.Connection, owner_user_id: int) -> dict[str, Any] | None:
-    """Si un operador no tiene catálogo, copia clientes/productos/transportes del admin (sin constancias)."""
-    target = get_user_by_id(conn, int(owner_user_id))
-    if not target or target.get("is_admin"):
-        return None
-    counts = env_counts(conn, int(owner_user_id))
-    catalog_total = counts["clients"] + counts["products"] + counts["transports"]
-    if catalog_total > 0:
-        return None
-    admin_id = get_master_admin_id(conn)
-    if admin_id is None or int(admin_id) == int(owner_user_id):
-        return None
-    return ensure_user_environment(
-        conn,
-        dest_user_id=int(owner_user_id),
-        source_owner_id=int(admin_id),
-        force=False,
-    )
 
 
 def row_belongs_to_owner(conn: sqlite3.Connection, table: str, record_id: int, owner_user_id: int) -> bool:
