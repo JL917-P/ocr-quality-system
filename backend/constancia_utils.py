@@ -99,19 +99,28 @@ def item_quality_value(
     return ""
 
 
-def find_product_by_name(conn: sqlite3.Connection, name: str) -> Optional[dict[str, Any]]:
+def find_product_by_name(
+    conn: sqlite3.Connection,
+    name: str,
+    owner_user_id: int | None = None,
+) -> Optional[dict[str, Any]]:
     target = _str(name).lower()
     if not target:
         return None
+    params: list[Any] = [target]
+    owner_sql = ""
+    if owner_user_id is not None:
+        owner_sql = " AND owner_user_id = ?"
+        params.append(owner_user_id)
     row = conn.execute(
-        """
+        f"""
         SELECT id, name, lot, production_text, expiration_text,
                humidity, broken_grains, chalky_1, chalky_2, damaged_grains, whiteness
         FROM products
-        WHERE lower(trim(name)) = ?
+        WHERE lower(trim(name)) = ?{owner_sql}
         LIMIT 1
         """,
-        (target,),
+        tuple(params),
     ).fetchone()
     if not row:
         return None
@@ -171,6 +180,7 @@ def normalize_items_for_save(
     conn: sqlite3.Connection,
     items: list[dict[str, Any]],
     previous_items: Optional[list[dict[str, Any]]] = None,
+    owner_user_id: int | None = None,
 ) -> list[dict[str, Any]]:
     prev_list = previous_items or []
     normalized: list[dict[str, Any]] = []
@@ -180,7 +190,7 @@ def normalize_items_for_save(
         product_name = _str(raw.get("product") or raw.get("product_name_snapshot"))
         if not product_name:
             continue
-        catalog = find_product_by_name(conn, product_name)
+        catalog = find_product_by_name(conn, product_name, owner_user_id=owner_user_id)
         previous = prev_list[idx] if idx < len(prev_list) else None
         normalized.append(build_item_snapshot(raw, catalog, previous))
     return normalized

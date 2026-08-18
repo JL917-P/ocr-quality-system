@@ -917,11 +917,61 @@ def _upsert_all_for_tab_batch(
     return count
 
 
+def entity_specs_for_owner(owner_user_id: int | None = None) -> list[tuple[str, str, Sequence[str], str]]:
+    """SQL de sync; si hay owner, solo exporta filas de ese entorno."""
+    if owner_user_id is None:
+        return list(ENTITY_SPECS)
+    oid = int(owner_user_id)
+    return [
+        (
+            TAB_CLIENTES,
+            "clients",
+            HEADERS_CLIENTES,
+            f"SELECT id, name, ruc, created_at FROM clients WHERE owner_user_id = {oid} ORDER BY id",
+        ),
+        (
+            TAB_PRODUCTOS,
+            "products",
+            HEADERS_PRODUCTOS,
+            f"""
+        SELECT id, name, code, origin, um, active, lot, production_text, expiration_text,
+               humidity, broken_grains, chalky_1, chalky_2, damaged_grains, whiteness, created_at
+        FROM products WHERE owner_user_id = {oid} ORDER BY id
+        """,
+        ),
+        (
+            TAB_TRANSPORTES,
+            "transports",
+            HEADERS_TRANSPORTES,
+            f"SELECT id, plate, created_at FROM transports WHERE owner_user_id = {oid} ORDER BY id",
+        ),
+        (
+            TAB_CONSTANCIAS,
+            "constancias",
+            HEADERS_CONSTANCIAS,
+            f"""
+        SELECT id, number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json, created_at
+        FROM constancias WHERE owner_user_id = {oid} ORDER BY id
+        """,
+        ),
+        (
+            TAB_TRASIEGOS,
+            "trasiegos",
+            HEADERS_TRASIEGOS,
+            f"""
+        SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
+        FROM trasiegos WHERE owner_user_id = {oid} ORDER BY id
+        """,
+        ),
+    ]
+
+
 def export_all_missing_from_sqlite(
     db_path: Path,
     *,
     pause_between_tabs: bool = True,
     reset: bool = True,
+    owner_user_id: int | None = None,
 ) -> dict[str, Any]:
     if reset:
         reset_connection()
@@ -937,7 +987,7 @@ def export_all_missing_from_sqlite(
 
     by_tab: dict[str, int] = {}
     total = 0
-    specs = list(ENTITY_SPECS)
+    specs = entity_specs_for_owner(owner_user_id)
     with sqlite3.connect(db_path) as conn:
         for idx, (tab, _table_key, headers, sql) in enumerate(specs):
             if pause_between_tabs and idx > 0:
@@ -961,8 +1011,10 @@ def run_initial_migration(db_path: Path) -> dict[str, Any]:
     return export_all_missing_from_sqlite(db_path, pause_between_tabs=True)
 
 
-def run_manual_resync(db_path: Path) -> dict[str, Any]:
-    result = export_all_missing_from_sqlite(db_path, pause_between_tabs=True)
+def run_manual_resync(db_path: Path, owner_user_id: int | None = None) -> dict[str, Any]:
+    result = export_all_missing_from_sqlite(
+        db_path, pause_between_tabs=True, owner_user_id=owner_user_id
+    )
     result["message"] = "Sincronización completada"
     result["synced"] = result.get("total", 0)
     return result

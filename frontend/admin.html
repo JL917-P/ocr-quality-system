@@ -8,6 +8,21 @@
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
+      .env-impersonation-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 0 0 12px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        background: #ecfeff;
+        border: 1px solid #67e8f9;
+        color: #0e7490;
+        font-size: 0.9rem;
+        font-weight: 600;
+      }
+      .env-impersonation-banner.hidden { display: none; }
       #adminLayout .sidebar {
         position: fixed;
         top: 0;
@@ -224,6 +239,10 @@
         </div>
       </header>
       <main class="content" id="mainContent">
+        <div id="envImpersonationBanner" class="env-impersonation-banner hidden" role="status">
+          <span id="envImpersonationText">Viendo entorno de usuario</span>
+          <button type="button" class="btn btn-outline btn-mini" id="envExitBtn">Volver al entorno maestro</button>
+        </div>
         <div class="container">
         <section id="section-home">
             <div class="home-dashboard home-dashboard--ready" id="homeDashboard">
@@ -843,7 +862,7 @@
         <section id="section-users" class="hidden">
           <div class="card">
             <div class="title">Usuarios y permisos</div>
-            <div class="sub" style="margin-top:6px;">Todos ven los mismos datos. Tú defines qué acciones puede hacer cada persona.</div>
+            <div class="sub" style="margin-top:6px;">Cada usuario tiene su propio entorno de datos. El administrador conserva el entorno maestro y puede ver el de otros sin su contraseña.</div>
             <div class="actions" style="margin-top:12px;">
               <button class="btn btn-success" id="addUserBtn" type="button">+ Nuevo usuario</button>
               <button class="btn btn-outline" id="refreshUsersBtn" type="button">Actualizar</button>
@@ -1143,7 +1162,7 @@
       <div id="ocrBandejaPanel" class="dropdown-panel hidden"></div>
     </div>
 
-    <script src="/static/auth-api.js?v=auth6"></script>
+    <script src="/static/auth-api.js?v=auth9"></script>
     <script>
       const productsBody = document.getElementById("productsBody");
       const addRowBtn = document.getElementById("addRowBtn");
@@ -7615,17 +7634,37 @@ async function savePdf(){
         body.innerHTML = "";
         users.forEach((u) => {
           const tr = document.createElement("tr");
+          const canEnterEnv = !!(window.QCAuth && window.QCAuth.getUser() && window.QCAuth.getUser().is_admin);
           tr.innerHTML = `
             <td>${u.username}</td>
             <td>${u.display_name || ""}</td>
             <td>${u.is_admin ? "Administrador" : "Operador"}</td>
             <td>${u.active ? "Activo" : "Inactivo"}</td>
-            <td>
+            <td style="display:flex;gap:6px;flex-wrap:wrap;">
               <button type="button" class="btn btn-outline btn-mini user-edit-btn">Editar</button>
+              ${
+                canEnterEnv
+                  ? `<button type="button" class="btn btn-outline btn-mini user-env-btn" title="Abrir entorno sin contraseña">Ver entorno</button>`
+                  : ""
+              }
               ${u.username === "admin" ? "" : '<button type="button" class="btn btn-danger btn-mini user-del-btn">Eliminar</button>'}
             </td>
           `;
           tr.querySelector(".user-edit-btn")?.addEventListener("click", () => openUserModal(u));
+          tr.querySelector(".user-env-btn")?.addEventListener("click", async () => {
+            try {
+              const res = await fetch(`/api/users/${u.id}/enter-environment`, { method: "POST" });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                showErrorModal(data.detail || "No se pudo abrir el entorno.", { title: "Error" });
+                return;
+              }
+              const url = `${window.location.pathname}?env=${encodeURIComponent(u.id)}`;
+              window.open(url, "_blank", "noopener");
+            } catch (err) {
+              showErrorModal(String(err?.message || err), { title: "Error" });
+            }
+          });
           tr.querySelector(".user-del-btn")?.addEventListener("click", () => {
             showConfirmModal(
               `¿Eliminar al usuario ${u.username}?`,
@@ -7819,6 +7858,51 @@ async function savePdf(){
         void refreshNotifications();
       });
       // No aplicar restricciones hasta tener sesión (evita pantalla vacía al cargar)
+      (function initEnvironmentContext() {
+        const params = new URLSearchParams(window.location.search || "");
+        const envParam = params.get("env");
+        if (window.QCAuth) {
+          if (envParam && window.QCAuth.getUser()?.is_admin) {
+            window.QCAuth.setEnvOwnerId(envParam);
+          } else if (!envParam) {
+            // En pestaña normal del admin/operador, usar su propio entorno
+            window.QCAuth.clearEnvOwnerId();
+          }
+        }
+        const banner = document.getElementById("envImpersonationBanner");
+        const text = document.getElementById("envImpersonationText");
+        const exitBtn = document.getElementById("envExitBtn");
+        const refreshBanner = async () => {
+          if (!banner || !window.QCAuth) return;
+          const envId = window.QCAuth.getEnvOwnerId();
+          const me = window.QCAuth.getUser();
+          if (!envId || !me || String(envId) === String(me.id)) {
+            banner.classList.add("hidden");
+            return;
+          }
+          try {
+            const res = await fetch("/api/environment");
+            const data = await res.json().catch(() => ({}));
+            const owner = data.owner || {};
+            const label = owner.display_name || owner.username || `usuario #${envId}`;
+            if (text) {
+              text.textContent = `Estás viendo el entorno de ${label} (sin su contraseña). Los cambios afectan solo a ese entorno.`;
+            }
+            banner.classList.remove("hidden");
+          } catch (_) {
+            banner.classList.remove("hidden");
+            if (text) text.textContent = `Estás viendo el entorno del usuario #${envId}.`;
+          }
+        };
+        exitBtn?.addEventListener("click", () => {
+          window.QCAuth?.clearEnvOwnerId();
+          const url = new URL(window.location.href);
+          url.searchParams.delete("env");
+          window.location.href = url.pathname + url.hash;
+        });
+        void refreshBanner();
+      })();
+
       if (window.QCAuth && window.QCAuth.getUser()) {
         applyAccessControl();
         ensureAllowedSection();

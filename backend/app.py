@@ -32,6 +32,17 @@ from users_persist import (
     restore_users_on_startup,
 )
 from audit_persist import restore_audit_on_startup
+from tenant_env import (
+    ENV_OWNER_HEADER,
+    clone_catalog,
+    ensure_owner_columns,
+    ensure_user_environment,
+    env_counts,
+    get_master_admin_id,
+    migrate_existing_rows_to_admin,
+    resolve_env_owner_id,
+    row_belongs_to_owner,
+)
 from app_config import ADMIN_PATH, ADMIN_URL, app_config_payload
 from auth_service import (
     APP_TIMEZONE,
@@ -46,6 +57,7 @@ from auth_service import (
     extract_bearer_token,
     get_app_tz,
     get_notification,
+    get_user_by_id,
     get_user_by_username,
     list_audit,
     list_notifications,
@@ -293,9 +305,47 @@ def init_db() -> None:
             """
         )
         ensure_auth_tables(conn)
+        ensure_owner_columns(conn)
+        migrate_existing_rows_to_admin(conn)
         conn.commit()
         repair_all_trasiegos_in_sqlite(conn)
         conn.commit()
+        # Preparar entorno de operadores existentes (catálogo copiado del admin, sin constancias).
+        try:
+            admin_id = get_master_admin_id(conn)
+            if admin_id is not None:
+                for row in conn.execute(
+                    "SELECT id, username FROM app_users WHERE is_admin = 0 AND active = 1"
+                ).fetchall():
+                    ensure_user_environment(
+                        conn,
+                        dest_user_id=int(row[0]),
+                        source_owner_id=int(admin_id),
+                        force=False,
+                    )
+                conn.commit()
+        except Exception:
+            logging.getLogger(__name__).exception("No se pudo preparar entornos de operadores")
+
+
+def _env_owner_from_request(request: Request, user: dict) -> int:
+    cached = getattr(request.state, "env_owner_id", None)
+    if isinstance(cached, int) and cached > 0:
+        return cached
+    with sqlite3.connect(DB_PATH) as conn:
+        owner_id = resolve_env_owner_id(
+            conn,
+            user,
+            request.headers.get(ENV_OWNER_HEADER),
+        )
+        conn.commit()
+    request.state.env_owner_id = owner_id
+    return owner_id
+
+
+def _require_owned_row(conn: sqlite3.Connection, table: str, record_id: int, owner_id: int) -> None:
+    if not row_belongs_to_owner(conn, table, record_id, owner_id):
+        raise HTTPException(status_code=404, detail="Registro no encontrado.")
 
 
 def _actor_label(user: dict | None) -> str:
@@ -1254,8 +1304,123 @@ def auth_logout(request: Request, user: dict = Depends(get_current_user)) -> JSO
 
 
 @app.get("/api/auth/me")
-def auth_me(user: dict = Depends(get_current_user)) -> JSONResponse:
-    return JSONResponse({"user": public_user(user), "permission_keys": list(PERMISSION_KEYS)})
+def auth_me(request: Request, user: dict = Depends(get_current_user)) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
+    env_user = None
+    with sqlite3.connect(DB_PATH) as conn:
+        target = get_user_by_id(conn, owner_id)
+        if target:
+            env_user = public_user(target)
+        counts = env_counts(conn, owner_id)
+    return JSONResponse(
+        {
+            "user": public_user(user),
+            "permission_keys": list(PERMISSION_KEYS),
+            "environment": {
+                "owner_user_id": owner_id,
+                "is_impersonating": int(owner_id) != int(user["id"]),
+                "owner": env_user,
+                "counts": counts,
+            },
+        }
+    )
+
+
+@app.get("/api/environment")
+def get_environment(request: Request, user: dict = Depends(get_current_user)) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
+    with sqlite3.connect(DB_PATH) as conn:
+        target = get_user_by_id(conn, owner_id)
+        counts = env_counts(conn, owner_id)
+    return JSONResponse(
+        {
+            "owner_user_id": owner_id,
+            "is_impersonating": int(owner_id) != int(user["id"]),
+            "owner": public_user(target) if target else None,
+            "counts": counts,
+        }
+    )
+
+
+@app.post("/api/users/{user_id}/prepare-environment")
+def prepare_user_environment(
+    user_id: int,
+    payload: dict | None = None,
+    user: dict = Depends(require_permission("users_manage")),
+) -> JSONResponse:
+    """Copia catálogo (clientes/productos/transportes) al entorno del usuario. No copia constancias."""
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Solo el administrador puede preparar entornos.")
+    body = payload or {}
+    source_raw = body.get("source_owner_id")
+    force = bool(body.get("force"))
+    with sqlite3.connect(DB_PATH) as conn:
+        source_id = int(source_raw) if source_raw not in (None, "") else get_master_admin_id(conn)
+        result = ensure_user_environment(
+            conn,
+            dest_user_id=int(user_id),
+            source_owner_id=source_id,
+            force=force,
+        )
+        if not result.get("ok"):
+            raise HTTPException(status_code=400, detail=result.get("error") or "No se pudo preparar el entorno.")
+        write_audit(
+            conn,
+            user=user,
+            action="env_prepare",
+            entity="user",
+            entity_id=user_id,
+            detail=result.get("message") or "Entorno preparado",
+        )
+        conn.commit()
+    return JSONResponse(result)
+
+
+@app.post("/api/users/{user_id}/enter-environment")
+def enter_user_environment(
+    user_id: int,
+    user: dict = Depends(require_permission("users_manage")),
+) -> JSONResponse:
+    """Solo admin: obtiene datos para abrir el entorno de otro usuario (sin su contraseña)."""
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Solo el administrador puede ver entornos de otros usuarios.")
+    with sqlite3.connect(DB_PATH) as conn:
+        target = get_user_by_id(conn, int(user_id))
+        if not target or not target.get("active"):
+            raise HTTPException(status_code=404, detail="Usuario no encontrado o inactivo.")
+        if target.get("is_admin") and int(target["id"]) == int(user["id"]):
+            # entrar al propio maestro
+            pass
+        counts = env_counts(conn, int(target["id"]))
+        # Si aún no tiene catálogo, copiar del admin automáticamente
+        if counts["clients"] + counts["products"] + counts["transports"] == 0 and not target.get("is_admin"):
+            admin_id = get_master_admin_id(conn)
+            if admin_id is not None:
+                ensure_user_environment(
+                    conn,
+                    dest_user_id=int(target["id"]),
+                    source_owner_id=int(admin_id),
+                    force=False,
+                )
+                counts = env_counts(conn, int(target["id"]))
+                conn.commit()
+        write_audit(
+            conn,
+            user=user,
+            action="env_enter",
+            entity="user",
+            entity_id=int(target["id"]),
+            detail=f"Admin abrió entorno de {target.get('username')}",
+        )
+        conn.commit()
+    return JSONResponse(
+        {
+            "ok": True,
+            "env_owner_id": int(target["id"]),
+            "owner": public_user(target),
+            "counts": counts,
+        }
+    )
 
 
 @app.get("/api/users")
@@ -1281,6 +1446,15 @@ async def api_create_user(
                 permissions=payload.get("permissions") if isinstance(payload.get("permissions"), dict) else None,
                 active=payload.get("active", True) is not False,
             )
+            if not created.get("is_admin"):
+                source_raw = payload.get("catalog_source_owner_id")
+                source_id = int(source_raw) if source_raw not in (None, "") else get_master_admin_id(conn)
+                ensure_user_environment(
+                    conn,
+                    dest_user_id=int(created["id"]),
+                    source_owner_id=source_id,
+                    force=False,
+                )
             write_audit(
                 conn,
                 user=user,
@@ -1730,10 +1904,14 @@ def get_app_config() -> JSONResponse:
 
 
 @app.post("/api/sync/sheets")
-def sync_sheets_manual(user: dict = Depends(require_permission("sheets_sync"))) -> JSONResponse:
-    """Respaldo manual: SQLite → Google Sheets (solo registros faltantes por id)."""
-    result = run_manual_resync(DB_PATH)
-    _audit(user, "sheets_sync", "sheets", detail="Respaldo SQLite → Google Sheets")
+def sync_sheets_manual(
+    request: Request,
+    user: dict = Depends(require_permission("sheets_sync")),
+) -> JSONResponse:
+    """Respaldo manual: SQLite → Google Sheets (solo registros del entorno activo)."""
+    owner_id = _env_owner_from_request(request, user)
+    result = run_manual_resync(DB_PATH, owner_user_id=owner_id)
+    _audit(user, "sheets_sync", "sheets", detail=f"Respaldo SQLite → Google Sheets (entorno {owner_id})")
     return JSONResponse(
         {
             "ok": bool(result.get("ok")),
@@ -1741,6 +1919,7 @@ def sync_sheets_manual(user: dict = Depends(require_permission("sheets_sync"))) 
             "synced": result.get("synced", 0),
             "by_tab": result.get("by_tab", {}),
             "metrics": result.get("metrics", {}),
+            "owner_user_id": owner_id,
         }
     )
 
@@ -1934,17 +2113,23 @@ def list_results(limit: int = 20) -> JSONResponse:
 
 
 @app.get("/api/products")
-def list_products(limit: int = 200) -> JSONResponse:
+def list_products(
+    request: Request,
+    limit: int = 200,
+    user: dict = Depends(get_current_user),
+) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             """
             SELECT id, name, code, origin, um, active, lot, production_text, expiration_text,
                    humidity, broken_grains, chalky_1, chalky_2, damaged_grains, whiteness, created_at
             FROM products
+            WHERE owner_user_id = ?
             ORDER BY id DESC
             LIMIT ?
             """,
-            (limit,),
+            (owner_id, limit),
         ).fetchall()
     products = [
         {
@@ -1975,9 +2160,11 @@ def list_products(limit: int = 200) -> JSONResponse:
 
 @app.post("/api/products")
 async def create_product(
+    request: Request,
     payload: dict,
     user: dict = Depends(require_permission("products_write")),
 ) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
     name = (payload.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Nombre es obligatorio.")
@@ -2003,9 +2190,9 @@ async def create_product(
             """
             INSERT INTO products (
                 name, code, origin, um, active, lot, production_text, expiration_text,
-                humidity, broken_grains, chalky_1, chalky_2, damaged_grains, whiteness, created_at
+                humidity, broken_grains, chalky_1, chalky_2, damaged_grains, whiteness, created_at, owner_user_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data["name"],
@@ -2023,6 +2210,7 @@ async def create_product(
                 data["damaged_grains"],
                 data["whiteness"],
                 created_at,
+                owner_id,
             ),
         )
         conn.commit()
@@ -2038,10 +2226,12 @@ async def create_product(
 
 @app.put("/api/products/{product_id}")
 async def update_product(
+    request: Request,
     product_id: int,
     payload: dict,
     user: dict = Depends(require_permission("products_write")),
 ) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
     name = (payload.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Nombre es obligatorio.")
@@ -2062,9 +2252,10 @@ async def update_product(
         "whiteness": payload.get("whiteness"),
     }
     with sqlite3.connect(DB_PATH) as conn:
+        _require_owned_row(conn, "products", product_id, owner_id)
         created_row = conn.execute(
-            "SELECT created_at FROM products WHERE id = ?",
-            (product_id,),
+            "SELECT created_at FROM products WHERE id = ? AND owner_user_id = ?",
+            (product_id, owner_id),
         ).fetchone()
         if not created_row:
             raise HTTPException(status_code=404, detail="Producto no encontrado.")
@@ -2073,7 +2264,7 @@ async def update_product(
             UPDATE products
             SET name = ?, code = ?, origin = ?, um = ?, active = ?, lot = ?, production_text = ?, expiration_text = ?,
                 humidity = ?, broken_grains = ?, chalky_1 = ?, chalky_2 = ?, damaged_grains = ?, whiteness = ?
-            WHERE id = ?
+            WHERE id = ? AND owner_user_id = ?
             """,
             (
                 data["name"],
@@ -2091,6 +2282,7 @@ async def update_product(
                 data["damaged_grains"],
                 data["whiteness"],
                 product_id,
+                owner_id,
             ),
         )
         conn.commit()
@@ -2106,20 +2298,29 @@ async def update_product(
 
 @app.delete("/api/products/{product_id}")
 def delete_product(
+    request: Request,
     product_id: int,
     user: dict = Depends(require_permission("products_write")),
 ) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
+    with sqlite3.connect(DB_PATH) as conn:
+        _require_owned_row(conn, "products", product_id, owner_id)
     _audit(user, "product_delete", "product", product_id)
     _delete_with_sheets_sync("products", TAB_PRODUCTOS, HEADERS_PRODUCTOS, product_id)
     return JSONResponse({"ok": True})
 
 
 @app.get("/api/clients")
-def list_clients(limit: int = 200) -> JSONResponse:
+def list_clients(
+    request: Request,
+    limit: int = 200,
+    user: dict = Depends(get_current_user),
+) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
-            "SELECT id, name, ruc, created_at FROM clients ORDER BY id DESC LIMIT ?",
-            (limit,),
+            "SELECT id, name, ruc, created_at FROM clients WHERE owner_user_id = ? ORDER BY id DESC LIMIT ?",
+            (owner_id, limit),
         ).fetchall()
     clients = [
         {"id": row[0], "name": row[1], "ruc": row[2], "created_at": row[3]}
@@ -2130,9 +2331,11 @@ def list_clients(limit: int = 200) -> JSONResponse:
 
 @app.post("/api/clients")
 async def create_client(
+    request: Request,
     payload: dict,
     user: dict = Depends(require_permission("clients_write")),
 ) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
     name = (payload.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Nombre es obligatorio.")
@@ -2140,8 +2343,8 @@ async def create_client(
     created_at = datetime.now(timezone.utc).isoformat()
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.execute(
-            "INSERT INTO clients (name, ruc, created_at) VALUES (?, ?, ?)",
-            (name, ruc, created_at),
+            "INSERT INTO clients (name, ruc, created_at, owner_user_id) VALUES (?, ?, ?, ?)",
+            (name, ruc, created_at, owner_id),
         )
         conn.commit()
         client_id = cursor.lastrowid
@@ -2156,24 +2359,27 @@ async def create_client(
 
 @app.put("/api/clients/{client_id}")
 async def update_client(
+    request: Request,
     client_id: int,
     payload: dict,
     user: dict = Depends(require_permission("clients_write")),
 ) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
     name = (payload.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Nombre es obligatorio.")
     ruc = (payload.get("ruc") or "").strip() or None
     with sqlite3.connect(DB_PATH) as conn:
+        _require_owned_row(conn, "clients", client_id, owner_id)
         created_row = conn.execute(
-            "SELECT created_at FROM clients WHERE id = ?",
-            (client_id,),
+            "SELECT created_at FROM clients WHERE id = ? AND owner_user_id = ?",
+            (client_id, owner_id),
         ).fetchone()
         if not created_row:
             raise HTTPException(status_code=404, detail="Cliente no encontrado.")
         conn.execute(
-            "UPDATE clients SET name = ?, ruc = ? WHERE id = ?",
-            (name, ruc, client_id),
+            "UPDATE clients SET name = ?, ruc = ? WHERE id = ? AND owner_user_id = ?",
+            (name, ruc, client_id, owner_id),
         )
         conn.commit()
         created_at = created_row[0]
@@ -2188,20 +2394,29 @@ async def update_client(
 
 @app.delete("/api/clients/{client_id}")
 def delete_client(
+    request: Request,
     client_id: int,
     user: dict = Depends(require_permission("clients_write")),
 ) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
+    with sqlite3.connect(DB_PATH) as conn:
+        _require_owned_row(conn, "clients", client_id, owner_id)
     _audit(user, "client_delete", "client", client_id)
     _delete_with_sheets_sync("clients", TAB_CLIENTES, HEADERS_CLIENTES, client_id)
     return JSONResponse({"ok": True})
 
 
 @app.get("/api/transports")
-def list_transports(limit: int = 200) -> JSONResponse:
+def list_transports(
+    request: Request,
+    limit: int = 200,
+    user: dict = Depends(get_current_user),
+) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
-            "SELECT id, plate, created_at FROM transports ORDER BY id DESC LIMIT ?",
-            (limit,),
+            "SELECT id, plate, created_at FROM transports WHERE owner_user_id = ? ORDER BY id DESC LIMIT ?",
+            (owner_id, limit),
         ).fetchall()
     transports = [{"id": row[0], "plate": row[1], "created_at": row[2]} for row in rows]
     return JSONResponse({"transports": transports})
@@ -2209,17 +2424,19 @@ def list_transports(limit: int = 200) -> JSONResponse:
 
 @app.post("/api/transports")
 async def create_transport(
+    request: Request,
     payload: dict,
     user: dict = Depends(require_permission("transports_write")),
 ) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
     plate = (payload.get("plate") or "").strip()
     if not plate:
         raise HTTPException(status_code=400, detail="Matrícula es obligatoria.")
     created_at = datetime.now(timezone.utc).isoformat()
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.execute(
-            "INSERT INTO transports (plate, created_at) VALUES (?, ?)",
-            (plate, created_at),
+            "INSERT INTO transports (plate, created_at, owner_user_id) VALUES (?, ?, ?)",
+            (plate, created_at, owner_id),
         )
         conn.commit()
         transport_id = cursor.lastrowid
@@ -2301,6 +2518,7 @@ def _apply_constancia_trasiegos(
     payload: dict,
     *,
     now: str,
+    owner_user_id: int | None = None,
 ) -> tuple[list[int], list[int]]:
     if "trasiego_extra" not in payload:
         return [], []
@@ -2312,6 +2530,7 @@ def _apply_constancia_trasiegos(
         items,
         extra if isinstance(extra, dict) else None,
         now=now,
+        owner_user_id=owner_user_id,
     )
 
 
@@ -2356,16 +2575,22 @@ def _queue_trasiego_sheet_sync(new_ids: list[int], deleted_ids: list[int]) -> No
 
 
 @app.get("/api/trasiegos")
-def list_trasiegos(limit: int = 500) -> JSONResponse:
+def list_trasiegos(
+    request: Request,
+    limit: int = 500,
+    user: dict = Depends(get_current_user),
+) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             """
             SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at, constancia_id
             FROM trasiegos
+            WHERE owner_user_id = ?
             ORDER BY id ASC
             LIMIT ?
             """,
-            (limit,),
+            (owner_id, limit),
         ).fetchall()
         out: list[dict] = []
         for row in rows:
@@ -2385,9 +2610,11 @@ def list_trasiegos(limit: int = 500) -> JSONResponse:
 
 @app.post("/api/trasiegos")
 async def create_trasiego(
+    request: Request,
     payload: dict,
     user: dict = Depends(require_permission("trasiegos_write")),
 ) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
     now = datetime.now(timezone.utc).isoformat()
     fecha = (payload.get("fecha") or "").strip() or None
     mp = (payload.get("mp") or "").strip() or None
@@ -2402,10 +2629,10 @@ async def create_trasiego(
         cursor = conn.execute(
             """
             INSERT INTO trasiegos (
-                fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at, owner_user_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, now, now),
+            (fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, now, now, owner_id),
         )
         conn.commit()
         row_id = cursor.lastrowid
@@ -2497,9 +2724,11 @@ def delete_trasiego(
 
 @app.post("/api/constancias")
 async def create_constancia(
+    request: Request,
     payload: dict,
     user: dict = Depends(require_permission("constancia_create")),
 ) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
     items = payload.get("items") or []
     if not isinstance(items, list):
         raise HTTPException(status_code=400, detail="Items invalidos.")
@@ -2519,13 +2748,13 @@ async def create_constancia(
     actor = _actor_label(user)
     created_at = datetime.now(timezone.utc).isoformat()
     with sqlite3.connect(DB_PATH) as conn:
-        items_snap = normalize_items_for_save(conn, items)
+        items_snap = normalize_items_for_save(conn, items, owner_user_id=owner_id)
         items_json = json.dumps(items_snap, ensure_ascii=True)
         cursor = conn.execute(
             """
             INSERT INTO constancias (
-                number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json, created_at, owner_user_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 header["number"],
@@ -2537,6 +2766,7 @@ async def create_constancia(
                 header["status"],
                 items_json,
                 created_at,
+                owner_id,
             ),
         )
         constancia_id = cursor.lastrowid
@@ -2556,6 +2786,7 @@ async def create_constancia(
             items_snap,
             payload,
             now=created_at,
+            owner_user_id=owner_id,
         )
         write_audit(
             conn,
@@ -2588,14 +2819,21 @@ async def create_constancia(
 
 
 @app.get("/api/constancias")
-def list_constancias(limit: int | None = None) -> JSONResponse:
-    """Lista todas las constancias. El parámetro limit es opcional (sin tope por defecto)."""
+def list_constancias(
+    request: Request,
+    limit: int | None = None,
+    user: dict = Depends(get_current_user),
+) -> JSONResponse:
+    """Lista constancias del entorno activo. El parámetro limit es opcional."""
+    owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             """
             SELECT id, number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json, created_at
             FROM constancias
+            WHERE owner_user_id = ?
             """,
+            (owner_id,),
         ).fetchall()
         total_in_db = len(rows)
         rows = sort_constancia_rows_by_issue_date(dedupe_constancia_rows(list(rows)))
@@ -2834,9 +3072,13 @@ def confirm_constancia(
 
 @app.delete("/api/constancias/{constancia_id}")
 def delete_constancia(
+    request: Request,
     constancia_id: int,
     user: dict = Depends(require_permission("constancia_delete")),
 ) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
+    with sqlite3.connect(DB_PATH) as conn:
+        _require_owned_row(conn, "constancias", constancia_id, owner_id)
     _audit(user, "constancia_delete", "constancia", constancia_id, "Eliminó constancia")
     _delete_with_sheets_sync(
         "constancias",
@@ -2877,19 +3119,25 @@ def get_constancia_history(constancia_id: int) -> JSONResponse:
 
 
 @app.get("/api/constancias/{constancia_id}")
-def get_constancia(constancia_id: int) -> JSONResponse:
+def get_constancia(
+    request: Request,
+    constancia_id: int,
+    user: dict = Depends(get_current_user),
+) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
     repaired = False
     items_json_for_sync: Optional[str] = None
     created_at_for_sync: Optional[str] = None
     header_for_sync: Optional[tuple] = None
     with sqlite3.connect(DB_PATH) as conn:
+        _require_owned_row(conn, "constancias", constancia_id, owner_id)
         row = conn.execute(
             """
             SELECT id, number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json, created_at
             FROM constancias
-            WHERE id = ?
+            WHERE id = ? AND owner_user_id = ?
             """,
-            (constancia_id,),
+            (constancia_id, owner_id),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Constancia no encontrada.")
@@ -2943,10 +3191,12 @@ def get_constancia(constancia_id: int) -> JSONResponse:
 
 @app.put("/api/constancias/{constancia_id}")
 async def update_constancia(
+    request: Request,
     constancia_id: int,
     payload: dict,
     user: dict = Depends(require_permission("constancia_edit")),
 ) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
     items = payload.get("items") or []
     if not isinstance(items, list):
         raise HTTPException(status_code=400, detail="Items invalidos.")
@@ -2956,9 +3206,10 @@ async def update_constancia(
     if status == "confirmada" and not user_has_permission(user, "constancia_confirm"):
         # Permitir re-guardar una ya confirmada; bloquear promoción a confirmada sin permiso.
         with sqlite3.connect(DB_PATH) as conn:
+            _require_owned_row(conn, "constancias", constancia_id, owner_id)
             prev = conn.execute(
-                "SELECT status FROM constancias WHERE id = ?",
-                (constancia_id,),
+                "SELECT status FROM constancias WHERE id = ? AND owner_user_id = ?",
+                (constancia_id, owner_id),
             ).fetchone()
         if not prev:
             raise HTTPException(status_code=404, detail="Constancia no encontrada.")
@@ -2975,12 +3226,13 @@ async def update_constancia(
     header = constancia_header_snapshot(payload)
     usuario = _actor_label(user)
     with sqlite3.connect(DB_PATH) as conn:
+        _require_owned_row(conn, "constancias", constancia_id, owner_id)
         row = conn.execute(
             """
             SELECT number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json
-            FROM constancias WHERE id = ?
+            FROM constancias WHERE id = ? AND owner_user_id = ?
             """,
-            (constancia_id,),
+            (constancia_id, owner_id),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Constancia no encontrada.")
@@ -2994,13 +3246,13 @@ async def update_constancia(
             "status": row[6],
         }
         old_items = parse_items_json(row[7])
-        items_snap = normalize_items_for_save(conn, items, old_items)
+        items_snap = normalize_items_for_save(conn, items, old_items, owner_user_id=owner_id)
         conn.execute(
             """
             UPDATE constancias
             SET number = ?, issue_date = ?, client_name = ?, transport_plate = ?,
                 fumigacion = ?, calidad = ?, status = ?, items_json = ?
-            WHERE id = ?
+            WHERE id = ? AND owner_user_id = ?
             """,
             (
                 header["number"],
@@ -3012,6 +3264,7 @@ async def update_constancia(
                 header["status"],
                 json.dumps(items_snap, ensure_ascii=True),
                 constancia_id,
+                owner_id,
             ),
         )
         record_constancia_history(
@@ -3030,6 +3283,7 @@ async def update_constancia(
             items_snap,
             payload,
             now=datetime.now(timezone.utc).isoformat(),
+            owner_user_id=owner_id,
         )
         created_at_row = conn.execute(
             "SELECT created_at FROM constancias WHERE id = ?",

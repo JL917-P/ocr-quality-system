@@ -107,15 +107,40 @@
     window.QC_CURRENT_USER = user;
   }
 
+  const ENV_OWNER_KEY = "qc_env_owner_id";
+
   function clearSession() {
     try {
       sessionStorage.removeItem(TOKEN_KEY);
       sessionStorage.removeItem(USER_KEY);
+      sessionStorage.removeItem(ENV_OWNER_KEY);
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
       localStorage.removeItem(REMEMBER_KEY);
     } catch (e) {}
     window.QC_CURRENT_USER = null;
+  }
+
+  function getEnvOwnerId() {
+    try {
+      return sessionStorage.getItem(ENV_OWNER_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function setEnvOwnerId(ownerId) {
+    try {
+      if (ownerId === null || ownerId === undefined || ownerId === "") {
+        sessionStorage.removeItem(ENV_OWNER_KEY);
+      } else {
+        sessionStorage.setItem(ENV_OWNER_KEY, String(ownerId));
+      }
+    } catch (e) {}
+  }
+
+  function clearEnvOwnerId() {
+    setEnvOwnerId("");
   }
 
   function hasPermission(key) {
@@ -129,6 +154,8 @@
     const headers = new Headers(extra || {});
     const token = getToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
+    const envOwner = getEnvOwnerId();
+    if (envOwner) headers.set("X-QC-Env-Owner", envOwner);
     return headers;
   }
 
@@ -146,12 +173,16 @@
     TOKEN_KEY,
     USER_KEY,
     REMEMBER_KEY,
+    ENV_OWNER_KEY,
     PERMISSION_LABELS,
     PERMISSION_GROUPS,
     getToken,
     getUser,
     setSession,
     clearSession,
+    getEnvOwnerId,
+    setEnvOwnerId,
+    clearEnvOwnerId,
     hasPermission,
     authHeaders,
     apiFetch,
@@ -168,6 +199,10 @@
       const token = getToken();
       if (token) {
         headers.set("Authorization", `Bearer ${token}`);
+      }
+      const envOwner = getEnvOwnerId();
+      if (envOwner) {
+        headers.set("X-QC-Env-Owner", envOwner);
       }
       opts.headers = headers;
       return nativeFetch(input, opts);

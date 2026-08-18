@@ -121,6 +121,7 @@ def replace_trasiegos_for_constancia(
     extra: dict[str, Any] | None,
     *,
     now: str,
+    owner_user_id: int | None = None,
 ) -> tuple[list[int], list[int]]:
     """Reemplaza filas de trasiego ligadas a una constancia. Retorna (nuevos_ids, eliminados_ids)."""
     deleted_ids = [
@@ -142,8 +143,8 @@ def replace_trasiegos_for_constancia(
             """
             INSERT INTO trasiegos (
                 fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad,
-                created_at, updated_at, constancia_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                created_at, updated_at, constancia_id, owner_user_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload["fecha"],
@@ -158,6 +159,7 @@ def replace_trasiegos_for_constancia(
                 now,
                 now,
                 constancia_id,
+                owner_user_id,
             ),
         )
         new_ids.append(int(cursor.lastrowid))
