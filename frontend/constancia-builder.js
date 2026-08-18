@@ -612,18 +612,23 @@ function parseConstanciaDate(dateText) {
                     <th>Nivel de fosfina</th>
                     <th>${fumigacionLastHeader}</th>
           `;
-        // user01: ≤12 registros = tamaño fijo; >12 = zoom dinámico (fumigación + calidad)
+        // user01 prueba: zoom dinámico proporcional (no Ajiles) en fumigación + calidad
+        // Pocos (2–3): filas un poco más altas sin desproporcionar cabeceras; muchos: compacta para caber
         const user01ItemCount = Math.max(items.length || 0, 0);
-        const user01DynamicZoom = user01Layout && user01ItemCount > 12;
+        const user01DynamicZoom = user01Layout && !isAjilesFumigacion;
         const user01ZoomCount = Math.max(user01ItemCount, 1);
-        const user01FontPx = Math.min(10, Math.max(6.2, 12.8 - user01ZoomCount * 0.2));
-        const user01PadPx = Math.min(4, Math.max(1.2, user01FontPx * 0.32));
-        const user01RowMm = Math.min(7, Math.max(4.0, 125 / user01ZoomCount));
+        const user01AvailMm = 128;
+        const user01IdealRowMm = user01AvailMm / user01ZoomCount;
+        const user01MaxRowMm =
+          user01ZoomCount <= 3 ? 13.5 : user01ZoomCount <= 6 ? 11 : user01ZoomCount <= 12 ? 8.5 : 6.8;
+        const user01RowMm = Math.min(user01MaxRowMm, Math.max(4.0, user01IdealRowMm));
+        const user01FontPx = Math.min(9.2, Math.max(6.5, user01RowMm * 0.7));
+        const user01PadPx = Math.min(3.5, Math.max(1.4, user01FontPx * 0.3));
         const user01FitStyle = user01DynamicZoom
           ? `--u01-n:${user01ZoomCount};--u01-fs:${user01FontPx.toFixed(2)}px;--u01-pad:${user01PadPx.toFixed(2)}px;--u01-row-h:${user01RowMm.toFixed(2)}mm;`
           : "";
         const wrapUser01Table = (tableHtml) =>
-          user01Layout ? `<div class="u01-table-slot">${tableHtml}</div>` : tableHtml;
+          user01Layout && user01DynamicZoom ? `<div class="u01-table-slot">${tableHtml}</div>` : tableHtml;
         const user01BodyClass = user01Layout
           ? `user01-wide${user01DynamicZoom ? " user01-zoom" : ""}`
           : "";
@@ -638,7 +643,7 @@ function parseConstanciaDate(dateText) {
                 body.user01-wide .box { padding: 4px; }
                 body.user01-wide .meta { font-size: 9px; }
                 body.user01-wide .note { font-size: 9px; }
-                /* user01: zoom dinámico solo si hay más de 12 productos (solo filas de datos; cabeceras fijas) */
+                /* Zoom proporcional no-Ajiles: cabeceras y datos con la misma tipografía */
                 body.user01-wide.user01-zoom .page { padding: 6mm 4mm 10mm; overflow: hidden; }
                 body.user01-wide.user01-zoom .box {
                   display: flex;
@@ -654,42 +659,28 @@ function parseConstanciaDate(dateText) {
                   min-height: 0;
                   margin-top: 2px;
                 }
-                body.user01-wide.user01-zoom .u01-table-slot .data {
+                body.user01-wide.user01-zoom .u01-table-slot .data:not(.ajiles-fum) {
                   width: 100%;
                   table-layout: fixed;
                   border-collapse: collapse;
+                  font-size: var(--u01-fs);
                 }
-                /* Cabeceras: mismo tamaño que ≤12 (no zoom) */
-                body.user01-wide.user01-zoom .u01-table-slot .data thead th {
+                body.user01-wide.user01-zoom .u01-table-slot .data:not(.ajiles-fum) thead th {
                   height: auto !important;
                   max-height: none !important;
-                  padding: 2px;
+                  padding: var(--u01-pad) 2px;
                   vertical-align: middle;
-                  font-size: 7.5px !important;
+                  font-size: var(--u01-fs) !important;
                   line-height: 1.15;
                   background: #fff;
                 }
-                body.user01-wide.user01-zoom .u01-table-slot .data.quality thead th {
-                  font-size: 7.5px !important;
-                }
-                /* Solo filas de datos se compactan */
-                body.user01-wide.user01-zoom .u01-table-slot .data tbody td {
+                body.user01-wide.user01-zoom .u01-table-slot .data:not(.ajiles-fum) tbody td {
                   height: var(--u01-row-h);
                   min-height: var(--u01-row-h);
                   padding: var(--u01-pad) 2px;
                   vertical-align: middle;
                   font-size: var(--u01-fs);
                   line-height: 1.15;
-                }
-                /* Ajiles: cabeceras fijas; solo compactar alto de filas de productos */
-                body.user01-wide.user01-zoom .ajiles-products th,
-                body.user01-wide.user01-zoom .ajiles-products .aj-head-row th,
-                body.user01-wide.user01-zoom .ajiles-products .aj-bar {
-                  font-size: 6.5pt !important;
-                }
-                body.user01-wide.user01-zoom .ajiles-products tbody td {
-                  height: max(10px, calc(var(--u01-row-h) * 0.55));
-                  font-size: 6.5pt;
                 }
                 body.user01-wide.user01-zoom .u01-org {
                   flex-shrink: 0;
