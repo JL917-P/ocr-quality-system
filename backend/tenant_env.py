@@ -235,6 +235,26 @@ def ensure_user_environment(
     return result
 
 
+def ensure_catalog_if_empty(conn: sqlite3.Connection, owner_user_id: int) -> dict[str, Any] | None:
+    """Si un operador no tiene catálogo, copia clientes/productos/transportes del admin (sin constancias)."""
+    target = get_user_by_id(conn, int(owner_user_id))
+    if not target or target.get("is_admin"):
+        return None
+    counts = env_counts(conn, int(owner_user_id))
+    catalog_total = counts["clients"] + counts["products"] + counts["transports"]
+    if catalog_total > 0:
+        return None
+    admin_id = get_master_admin_id(conn)
+    if admin_id is None or int(admin_id) == int(owner_user_id):
+        return None
+    return ensure_user_environment(
+        conn,
+        dest_user_id=int(owner_user_id),
+        source_owner_id=int(admin_id),
+        force=False,
+    )
+
+
 def row_belongs_to_owner(conn: sqlite3.Connection, table: str, record_id: int, owner_user_id: int) -> bool:
     cols = _table_columns(conn, table)
     if "owner_user_id" not in cols:

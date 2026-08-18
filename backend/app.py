@@ -35,6 +35,7 @@ from audit_persist import restore_audit_on_startup
 from tenant_env import (
     ENV_OWNER_HEADER,
     clone_catalog,
+    ensure_catalog_if_empty,
     ensure_owner_columns,
     ensure_user_environment,
     env_counts,
@@ -1357,6 +1358,9 @@ def auth_continue(request: Request) -> JSONResponse:
 def get_environment(request: Request, user: dict = Depends(get_current_user)) -> JSONResponse:
     owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
+        prepared = ensure_catalog_if_empty(conn, owner_id)
+        if prepared and prepared.get("ok") and not prepared.get("skipped"):
+            conn.commit()
         target = get_user_by_id(conn, owner_id)
         counts = env_counts(conn, owner_id)
     return JSONResponse(
@@ -1365,6 +1369,43 @@ def get_environment(request: Request, user: dict = Depends(get_current_user)) ->
             "is_impersonating": int(owner_id) != int(user["id"]),
             "owner": public_user(target) if target else None,
             "counts": counts,
+            "catalog_prepared": prepared,
+        }
+    )
+
+
+@app.post("/api/environment/ensure-catalog")
+def ensure_environment_catalog(
+    request: Request,
+    user: dict = Depends(get_current_user),
+) -> JSONResponse:
+    """Copia el catálogo del admin al entorno activo si está vacío (sin constancias)."""
+    owner_id = _env_owner_from_request(request, user)
+    with sqlite3.connect(DB_PATH) as conn:
+        prepared = ensure_catalog_if_empty(conn, owner_id)
+        if prepared is None:
+            counts = env_counts(conn, owner_id)
+            return JSONResponse(
+                {
+                    "ok": True,
+                    "skipped": True,
+                    "message": "El entorno ya tiene catálogo.",
+                    "counts": counts,
+                    "owner_user_id": owner_id,
+                }
+            )
+        if not prepared.get("ok"):
+            raise HTTPException(status_code=400, detail=prepared.get("error") or "No se pudo copiar el catálogo.")
+        conn.commit()
+        counts = env_counts(conn, owner_id)
+    return JSONResponse(
+        {
+            "ok": True,
+            "skipped": bool(prepared.get("skipped")),
+            "message": prepared.get("message") or "Catálogo listo.",
+            "copied": prepared.get("copied"),
+            "counts": counts,
+            "owner_user_id": owner_id,
         }
     )
 
@@ -1979,6 +2020,11 @@ def import_from_sheets_admin(
     """Importación manual: Google Sheets → SQLite (solo registros faltantes por id)."""
     owner_id = _env_owner_from_request(request, user)
     init_db()
+    catalog_prepared = None
+    with sqlite3.connect(DB_PATH) as conn:
+        catalog_prepared = ensure_catalog_if_empty(conn, owner_id)
+        if catalog_prepared and catalog_prepared.get("ok") and not catalog_prepared.get("skipped"):
+            conn.commit()
     try:
         result = run_import_from_sheets(DB_PATH, owner_user_id=owner_id)
     except Exception as exc:
@@ -2017,10 +2063,39 @@ def import_from_sheets_admin(
             "sheets",
             detail=f"Importados {result.get('imported', 0)} registros",
         )
+    msg = result.get("message", "Importación completada")
+    if catalog_prepared and catalog_prepared.get("ok") and not catalog_prepared.get("skipped"):
+        copied = catalog_prepared.get("copied") or {}
+        msg = (
+            f"Se copió el catálogo al entorno "
+            f"({copied.get('clients', 0)} clientes, {copied.get('products', 0)} productos, "
+            f"{copied.get('transports', 0)} transportes). {msg}"
+        )
+    # Recalcular in_db tras posible copia de catálogo
+    try:
+        from google_sheets import (
+            TAB_CLIENTES,
+            TAB_PRODUCTOS,
+            TAB_TRANSPORTES,
+            TAB_CONSTANCIAS,
+            TAB_TRASIEGOS,
+        )
+
+        with sqlite3.connect(DB_PATH) as conn:
+            in_db_counts = env_counts(conn, owner_id)
+        result["in_db"] = {
+            TAB_CLIENTES: in_db_counts.get("clients", 0),
+            TAB_PRODUCTOS: in_db_counts.get("products", 0),
+            TAB_TRANSPORTES: in_db_counts.get("transports", 0),
+            TAB_CONSTANCIAS: in_db_counts.get("constancias", 0),
+            TAB_TRASIEGOS: in_db_counts.get("trasiegos", 0),
+        }
+    except Exception:
+        pass
     return JSONResponse(
         {
             "ok": bool(result.get("ok")),
-            "message": result.get("message", "Importación completada"),
+            "message": msg,
             "imported": result.get("imported", 0),
             "total": result.get("total", 0),
             "by_tab": result.get("by_tab", {}),
@@ -2028,6 +2103,7 @@ def import_from_sheets_admin(
             "error": result.get("error"),
             "users_restored": result.get("users_restored"),
             "owner_user_id": owner_id,
+            "catalog_prepared": catalog_prepared,
         }
     )
 
@@ -2193,6 +2269,9 @@ def list_products(
 ) -> JSONResponse:
     owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
+        prepared = ensure_catalog_if_empty(conn, owner_id)
+        if prepared and prepared.get("ok") and not prepared.get("skipped"):
+            conn.commit()
         rows = conn.execute(
             """
             SELECT id, name, code, origin, um, active, lot, production_text, expiration_text,
@@ -2391,6 +2470,9 @@ def list_clients(
 ) -> JSONResponse:
     owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
+        prepared = ensure_catalog_if_empty(conn, owner_id)
+        if prepared and prepared.get("ok") and not prepared.get("skipped"):
+            conn.commit()
         rows = conn.execute(
             "SELECT id, name, ruc, created_at FROM clients WHERE owner_user_id = ? ORDER BY id DESC LIMIT ?",
             (owner_id, limit),
@@ -2487,6 +2569,9 @@ def list_transports(
 ) -> JSONResponse:
     owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
+        prepared = ensure_catalog_if_empty(conn, owner_id)
+        if prepared and prepared.get("ok") and not prepared.get("skipped"):
+            conn.commit()
         rows = conn.execute(
             "SELECT id, plate, created_at FROM transports WHERE owner_user_id = ? ORDER BY id DESC LIMIT ?",
             (owner_id, limit),
