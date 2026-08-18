@@ -424,9 +424,10 @@
                       <th style="width:90px;">Lote</th>
                       <th style="width:100px;">F. Producción</th>
                       <th style="width:100px;">F. Vencimiento</th>
-                      <th style="width:80px;">Cantidad (u)</th>
-                      <th style="width:100px;">F. Fumigación</th>
-                      <th style="width:100px;">F. Liberación</th>
+                      <th style="width:90px;">Cantidad (u)</th>
+                      <th style="width:95px;">F. Fumigación</th>
+                      <th style="width:95px;">F. Liberación</th>
+                      <th style="width:95px;">F. Instalaciones</th>
                       <th style="width:60px;">Eliminar</th>
                     </tr>
                   </thead>
@@ -1680,10 +1681,16 @@
         return typeof formatDateMinusDays === "function" ? formatDateMinusDays(base, 2) : "";
       }
 
+      function getDefaultInstalacionesDate() {
+        const base = (constanciaFecha && constanciaFecha.value) || formatToday();
+        return typeof formatDateMinusDays === "function" ? formatDateMinusDays(base, 0) : "";
+      }
+
       function buildProductRowHtml(productValue = "") {
         const safeProduct = (productValue || "").replace(/"/g, "&quot;");
         const fumDefault = getDefaultFumigacionDate();
         const libDefault = getDefaultLiberacionDate();
+        const instDefault = getDefaultInstalacionesDate();
         return `
           <td class="itemCell"></td>
           <td><input type="text" class="product-input" value="${safeProduct}" placeholder="Buscar producto..." autocomplete="off" /></td>
@@ -1693,6 +1700,7 @@
           <td><input type="number" class="qty-input" min="0" step="any" placeholder="" /></td>
           <td><input type="text" class="fumigacion-date-input" value="${fumDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AAAA" /></td>
           <td><input type="text" class="liberacion-date-input" value="${libDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AAAA" /></td>
+          <td><input type="text" class="instalaciones-date-input" value="${instDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AAAA" /></td>
           <td><button class="btn btn-danger btn-sm">🗑</button></td>
         `;
       }
@@ -2908,6 +2916,7 @@
           const qtyInput = row.querySelector(".qty-input");
           const fumInput = row.querySelector(".fumigacion-date-input");
           const libInput = row.querySelector(".liberacion-date-input");
+          const instInput = row.querySelector(".instalaciones-date-input");
           if (lotInput) lotInput.value = itemSnapshotField(itm, "lote_snapshot", "lot");
           if (prodInput) prodInput.value = itemSnapshotField(itm, "production_date_snapshot", "production_text");
           if (expInput) expInput.value = itemSnapshotField(itm, "expiration_date_snapshot", "expiration_text");
@@ -2916,8 +2925,10 @@
           }
           const savedFum = itemSnapshotField(itm, "f_fumigacion", "fumigacion_date");
           const savedLib = itemSnapshotField(itm, "f_liberacion", "liberacion_date");
+          const savedInst = itemSnapshotField(itm, "f_instalaciones", "instalaciones_date");
           if (fumInput) fumInput.value = savedFum || getDefaultFumigacionDate();
           if (libInput) libInput.value = savedLib || getDefaultLiberacionDate();
+          if (instInput) instInput.value = savedInst || getDefaultInstalacionesDate();
         });
         if (!items?.length) addRow();
       }
@@ -2925,15 +2936,20 @@
       function refreshDefaultFumigacionDatesOnRows({ onlyEmpty = true } = {}) {
         const fumDefault = getDefaultFumigacionDate();
         const libDefault = getDefaultLiberacionDate();
+        const instDefault = getDefaultInstalacionesDate();
         if (!productsBody) return;
         productsBody.querySelectorAll("tr").forEach((row) => {
           const fumInput = row.querySelector(".fumigacion-date-input");
           const libInput = row.querySelector(".liberacion-date-input");
+          const instInput = row.querySelector(".instalaciones-date-input");
           if (fumInput && (!onlyEmpty || !(fumInput.value || "").trim())) {
             fumInput.value = fumDefault;
           }
           if (libInput && (!onlyEmpty || !(libInput.value || "").trim())) {
             libInput.value = libDefault;
+          }
+          if (instInput && (!onlyEmpty || !(instInput.value || "").trim())) {
+            instInput.value = instDefault;
           }
         });
       }
@@ -4875,6 +4891,7 @@
           const qtyRaw = tr.querySelector(".qty-input")?.value;
           const fumDate = (tr.querySelector(".fumigacion-date-input")?.value || "").trim();
           const libDate = (tr.querySelector(".liberacion-date-input")?.value || "").trim();
+          const instDate = (tr.querySelector(".instalaciones-date-input")?.value || "").trim();
           const qty = qtyRaw === "" || qtyRaw === undefined ? null : Number(qtyRaw);
           if (product) {
             const match = getProductByName(product);
@@ -4885,6 +4902,7 @@
               expiration_text: expDate,
               f_fumigacion: fumDate || getDefaultFumigacionDate(),
               f_liberacion: libDate || getDefaultLiberacionDate(),
+              f_instalaciones: instDate || getDefaultInstalacionesDate(),
             };
             if (match?.id) row.product_id = match.id;
             if (qty !== null && !Number.isNaN(qty)) row.quantity = qty;
@@ -6995,6 +7013,7 @@
         const transporte = constancia.transport_plate || "";
         const fumigacion = formatDateMinusDays(fecha, 9);
         const liberacion = formatDateMinusDays(fecha, 2);
+        const instalaciones = formatDateMinusDays(fecha, 0);
         const showFumigacion = constancia.fumigacion !== 0 && constancia.fumigacion !== false;
         const showCalidad = constancia.calidad !== 0 && constancia.calidad !== false;
         const items = constancia.items || [];
@@ -7013,6 +7032,9 @@
               )}</td>
             <td>${formatShortDate(
                 itemSnapshotField(item, "f_liberacion", "liberacion_date") || liberacion
+              )}</td>
+            <td>${formatShortDate(
+                itemSnapshotField(item, "f_instalaciones", "instalaciones_date") || instalaciones
               )}</td>
               <td>400</td>
               <td>100</td>
@@ -7094,6 +7116,7 @@
                     <th>Fecha de Vencimiento</th>
                     <th>Fecha de Fumigación</th>
                     <th>Fecha de Liberación</th>
+                    <th>Fecha de Instalaciones</th>
                     <th>Cantidad Fumigada</th>
                     <th>N° de tabletas</th>
                     <th>Nivel de fosfina</th>
@@ -7101,7 +7124,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  ${rows || "<tr><td colspan='13' class='empty'>Sin productos</td></tr>"}
+                  ${rows || "<tr><td colspan='14' class='empty'>Sin productos</td></tr>"}
                 </tbody>
               </table>
             </div>

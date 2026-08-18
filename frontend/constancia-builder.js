@@ -491,6 +491,7 @@ function parseConstanciaDate(dateText) {
         const transporte = constancia.transport_plate || "";
         const fumigacion = formatDateMinusDays(fecha, 9);
         const liberacion = formatDateMinusDays(fecha, 2);
+        const instalaciones = formatDateMinusDays(fecha, 0);
         const showFumigacion = constancia.fumigacion !== 0 && constancia.fumigacion !== false;
         const showCalidad = constancia.calidad !== 0 && constancia.calidad !== false;
         const items = constancia.items || [];
@@ -509,6 +510,9 @@ function parseConstanciaDate(dateText) {
               )}</td>
             <td>${formatShortDate(
                 itemSnapshotField(item, "f_liberacion", "liberacion_date") || liberacion
+              )}</td>
+            <td>${formatShortDate(
+                itemSnapshotField(item, "f_instalaciones", "instalaciones_date") || instalaciones
               )}</td>
               <td>400</td>
               <td>100</td>
@@ -590,6 +594,7 @@ function parseConstanciaDate(dateText) {
                     <th>Fecha de Vencimiento</th>
                     <th>Fecha de Fumigación</th>
                     <th>Fecha de Liberación</th>
+                    <th>Fecha de Instalaciones</th>
                     <th>Cantidad Fumigada</th>
                     <th>N° de tabletas</th>
                     <th>Nivel de fosfina</th>
@@ -597,7 +602,7 @@ function parseConstanciaDate(dateText) {
                   </tr>
                 </thead>
                 <tbody>
-                  ${rows || "<tr><td colspan='13' class='empty'>Sin productos</td></tr>"}
+                  ${rows || "<tr><td colspan='14' class='empty'>Sin productos</td></tr>"}
                 </tbody>
               </table>
             </div>
