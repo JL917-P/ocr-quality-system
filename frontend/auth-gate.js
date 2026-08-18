@@ -133,7 +133,43 @@
   }
 
   async function bootstrap() {
-    const token = window.QCAuth.getToken();
+    // Nueva pestaña (Ver entorno): heredar sesión del admin sin pedir login.
+    try {
+      const raw = localStorage.getItem("qc_env_handoff");
+      if (raw) {
+        const handoff = JSON.parse(raw);
+        localStorage.removeItem("qc_env_handoff");
+        const age = Date.now() - Number(handoff?.ts || 0);
+        if (handoff?.token && handoff?.user && age >= 0 && age < 120000) {
+          window.QCAuth.setSession(handoff.token, handoff.user, true);
+          if (handoff.envOwnerId) {
+            window.QCAuth.setEnvOwnerId(handoff.envOwnerId);
+          }
+        }
+      }
+    } catch (e) {}
+
+    let token = window.QCAuth.getToken();
+    // Si no hay token en storage pero hay cookie de sesión, recupera usuario.
+    if (!token) {
+      try {
+        const res = await fetch("/api/auth/me", { credentials: "include" });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.user) {
+          // Cookie válida: pide un token de continuidad para esta pestaña.
+          const cont = await fetch("/api/auth/continue", {
+            method: "POST",
+            credentials: "include",
+          });
+          const contData = await cont.json().catch(() => ({}));
+          if (cont.ok && contData.token) {
+            window.QCAuth.setSession(contData.token, contData.user || data.user, true);
+            token = contData.token;
+          }
+        }
+      } catch (e) {}
+    }
+
     if (!token) {
       document.body.classList.add("auth-locked");
       showScreen(loginScreen);

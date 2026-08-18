@@ -1171,7 +1171,7 @@
       <div id="ocrBandejaPanel" class="dropdown-panel hidden"></div>
     </div>
 
-    <script src="/static/auth-api.js?v=auth9"></script>
+    <script src="/static/auth-api.js?v=auth10"></script>
     <script>
       const productsBody = document.getElementById("productsBody");
       const addRowBtn = document.getElementById("addRowBtn");
@@ -7699,11 +7699,37 @@ async function savePdf(){
           tr.querySelector(".user-edit-btn")?.addEventListener("click", () => openUserModal(u));
           tr.querySelector(".user-env-btn")?.addEventListener("click", async () => {
             try {
-              const res = await fetch(`/api/users/${u.id}/enter-environment`, { method: "POST" });
+              const res = await fetch(`/api/users/${u.id}/enter-environment`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+              });
               const data = await res.json().catch(() => ({}));
               if (!res.ok) {
                 showErrorModal(data.detail || "No se pudo abrir el entorno.", { title: "Error" });
                 return;
+              }
+              const token = window.QCAuth ? window.QCAuth.getToken() : "";
+              const me = window.QCAuth ? window.QCAuth.getUser() : null;
+              if (token && me) {
+                try {
+                  localStorage.setItem(
+                    "qc_env_handoff",
+                    JSON.stringify({
+                      token,
+                      user: me,
+                      envOwnerId: String(u.id),
+                      ts: Date.now(),
+                    })
+                  );
+                } catch (e) {}
+              }
+              const prepared = data.catalog_prepared;
+              if (prepared && prepared.ok && !prepared.skipped) {
+                showInfoModal(
+                  prepared.message || "Se copió el catálogo al entorno del usuario.",
+                  { title: "Catálogo del entorno" }
+                );
               }
               const url = `${window.location.pathname}?env=${encodeURIComponent(u.id)}`;
               window.open(url, "_blank", "noopener");
@@ -7920,10 +7946,10 @@ async function savePdf(){
         const params = new URLSearchParams(window.location.search || "");
         const envParam = params.get("env");
         if (window.QCAuth) {
-          if (envParam && window.QCAuth.getUser()?.is_admin) {
+          if (envParam) {
+            // La URL manda el entorno; el backend solo lo honra si el usuario es admin.
             window.QCAuth.setEnvOwnerId(envParam);
-          } else if (!envParam) {
-            // En pestaña normal del admin/operador, usar su propio entorno
+          } else {
             window.QCAuth.clearEnvOwnerId();
           }
         }
@@ -8216,6 +8242,6 @@ async function savePdf(){
       void refreshNotifications();
 
     </script>
-    <script src="/static/auth-gate.js?v=auth8"></script>
+    <script src="/static/auth-gate.js?v=auth10"></script>
   </body>
 </html>

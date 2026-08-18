@@ -373,8 +373,16 @@ def print_import_summary(by_tab: dict[str, int]) -> None:
     print(f"TOTAL IMPORTADOS: {sum(by_tab.values())}")
 
 
-def run_import_from_sheets(db_path: Path, *, reset: bool = True) -> dict[str, Any]:
-    """Importa a SQLite solo registros cuyo id no exista aún."""
+def run_import_from_sheets(
+    db_path: Path,
+    *,
+    reset: bool = True,
+    owner_user_id: int | None = None,
+) -> dict[str, Any]:
+    """Importa a SQLite solo registros cuyo id no exista aún.
+
+    Si se pasa owner_user_id, los totales `in_db` se calculan solo de ese entorno.
+    """
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     if reset:
@@ -417,7 +425,13 @@ def run_import_from_sheets(db_path: Path, *, reset: bool = True) -> dict[str, An
     with sqlite3.connect(db_path) as conn:
         for tab, table in table_by_tab.items():
             try:
-                row = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()
+                if owner_user_id is not None:
+                    row = conn.execute(
+                        f"SELECT COUNT(*) FROM {table} WHERE owner_user_id = ?",
+                        (int(owner_user_id),),
+                    ).fetchone()
+                else:
+                    row = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()
                 in_db[tab] = int(row[0] if row else 0)
             except sqlite3.Error:
                 in_db[tab] = 0
@@ -429,6 +443,7 @@ def run_import_from_sheets(db_path: Path, *, reset: bool = True) -> dict[str, An
         "in_db": in_db,
         "total": total,
         "imported": total,
+        "owner_user_id": owner_user_id,
     }
 
 

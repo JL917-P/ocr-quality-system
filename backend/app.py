@@ -1311,6 +1311,35 @@ def auth_me(request: Request, user: dict = Depends(get_current_user)) -> JSONRes
     )
 
 
+@app.post("/api/auth/continue")
+def auth_continue(request: Request) -> JSONResponse:
+    """Continúa sesión desde cookie (p. ej. nueva pestaña 'Ver entorno') sin pedir login."""
+    user = _resolve_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sesión no válida. Inicia sesión.")
+    with sqlite3.connect(DB_PATH) as conn:
+        token = create_session(conn, int(user["id"]))
+        conn.commit()
+    response = JSONResponse(
+        {
+            "ok": True,
+            "token": token,
+            "user": public_user(user),
+            "permission_keys": list(PERMISSION_KEYS),
+        }
+    )
+    max_age = 60 * 60 * 24 * 14
+    response.set_cookie(
+        key="qc_session",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=max_age,
+        path="/",
+    )
+    return response
+
+
 @app.get("/api/environment")
 def get_environment(request: Request, user: dict = Depends(get_current_user)) -> JSONResponse:
     owner_id = _env_owner_from_request(request, user)
@@ -1364,19 +1393,35 @@ def prepare_user_environment(
 @app.post("/api/users/{user_id}/enter-environment")
 def enter_user_environment(
     user_id: int,
+    payload: dict | None = None,
     user: dict = Depends(require_permission("users_manage")),
 ) -> JSONResponse:
-    """Solo admin: obtiene datos para abrir el entorno de otro usuario (sin su contraseña)."""
+    """Solo admin: abre el entorno de otro usuario (sin su contraseña).
+
+    Si el catálogo del operador está vacío (p. ej. usuario creado antes de entornos),
+    copia una vez el catálogo del origen indicado (por defecto el maestro admin).
+    """
     if not user.get("is_admin"):
         raise HTTPException(status_code=403, detail="Solo el administrador puede ver entornos de otros usuarios.")
+    body = payload or {}
     with sqlite3.connect(DB_PATH) as conn:
         target = get_user_by_id(conn, int(user_id))
         if not target or not target.get("active"):
             raise HTTPException(status_code=404, detail="Usuario no encontrado o inactivo.")
-        if target.get("is_admin") and int(target["id"]) == int(user["id"]):
-            # entrar al propio maestro
-            pass
         counts = env_counts(conn, int(target["id"]))
+        catalog_total = counts["clients"] + counts["products"] + counts["transports"]
+        prepared = None
+        if catalog_total == 0 and not target.get("is_admin"):
+            source_raw = body.get("source_owner_id")
+            source_id = int(source_raw) if source_raw not in (None, "") else get_master_admin_id(conn)
+            if source_id is not None:
+                prepared = ensure_user_environment(
+                    conn,
+                    dest_user_id=int(target["id"]),
+                    source_owner_id=int(source_id),
+                    force=False,
+                )
+                counts = env_counts(conn, int(target["id"]))
         write_audit(
             conn,
             user=user,
@@ -1392,6 +1437,7 @@ def enter_user_environment(
             "env_owner_id": int(target["id"]),
             "owner": public_user(target),
             "counts": counts,
+            "catalog_prepared": prepared,
         }
     )
 
@@ -1913,11 +1959,15 @@ def sync_sheets_manual(
 
 
 @app.post("/api/admin/import-from-sheets")
-def import_from_sheets_admin(user: dict = Depends(require_permission("sheets_sync"))) -> JSONResponse:
+def import_from_sheets_admin(
+    request: Request,
+    user: dict = Depends(require_permission("sheets_sync")),
+) -> JSONResponse:
     """Importación manual: Google Sheets → SQLite (solo registros faltantes por id)."""
+    owner_id = _env_owner_from_request(request, user)
     init_db()
     try:
-        result = run_import_from_sheets(DB_PATH)
+        result = run_import_from_sheets(DB_PATH, owner_user_id=owner_id)
     except Exception as exc:
         logging.getLogger(__name__).exception("Error al importar desde Google Sheets")
         msg = str(exc)
@@ -1933,7 +1983,9 @@ def import_from_sheets_admin(user: dict = Depends(require_permission("sheets_syn
                 "imported": 0,
                 "total": 0,
                 "by_tab": {},
+                "in_db": {},
                 "error": msg,
+                "owner_user_id": owner_id,
             },
             status_code=200,
         )
@@ -1962,6 +2014,7 @@ def import_from_sheets_admin(user: dict = Depends(require_permission("sheets_syn
             "in_db": result.get("in_db", {}),
             "error": result.get("error"),
             "users_restored": result.get("users_restored"),
+            "owner_user_id": owner_id,
         }
     )
 
