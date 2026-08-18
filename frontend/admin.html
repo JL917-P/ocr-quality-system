@@ -7073,18 +7073,23 @@
           .join("");
         const fumigacionLastHeader = user01Layout ? "Fecha de Instalaciones" : "Unidad Transporte";
         const fumigacionColspan = 13;
-        // user01: tipografía/padding según cantidad de productos (pocos = más alto; muchos = compacto)
+        // user01: tipografía/alto de filas según cantidad (sin forzar height % en thead)
         const user01ItemCount = Math.max(items.length || 1, 1);
         const user01FontPx = Math.min(11, Math.max(6.2, 12.8 - user01ItemCount * 0.2));
-        const user01PadPx = Math.min(6, Math.max(1.2, user01FontPx * 0.38));
+        const user01PadPx = Math.min(5, Math.max(1.2, user01FontPx * 0.35));
+        // ~125mm útiles para filas de datos (deja encabezado + organoléptica + pie)
+        const user01RowMm = Math.min(
+          user01ItemCount <= 6 ? 16 : user01ItemCount <= 14 ? 10 : 7,
+          Math.max(4.2, 125 / user01ItemCount)
+        );
         const user01FitStyle = user01Layout
-          ? `--u01-n:${user01ItemCount};--u01-fs:${user01FontPx.toFixed(2)}px;--u01-pad:${user01PadPx.toFixed(2)}px;--u01-head:12mm;`
+          ? `--u01-n:${user01ItemCount};--u01-fs:${user01FontPx.toFixed(2)}px;--u01-pad:${user01PadPx.toFixed(2)}px;--u01-row-h:${user01RowMm.toFixed(2)}mm;`
           : "";
         const wrapUser01Table = (tableHtml) =>
           user01Layout ? `<div class="u01-table-slot">${tableHtml}</div>` : tableHtml;
         const user01WideCss = user01Layout
           ? `
-                /* user01: márgenes laterales + tabla que aprovecha alto disponible */
+                /* user01: márgenes laterales + filas de datos con alto adaptativo */
                 body.user01-wide .page { padding: 6mm 4mm 10mm; overflow: hidden; }
                 body.user01-wide .ajiles-quality-page { padding: 5mm 4mm 5mm; }
                 body.user01-wide .box {
@@ -7098,38 +7103,32 @@
                 body.user01-wide .note { font-size: 9px; flex-shrink: 0; }
                 body.user01-wide .title { flex-shrink: 0; }
                 body.user01-wide .u01-table-slot {
-                  flex: 1 1 auto;
+                  flex: 0 1 auto;
                   min-height: 0;
-                  display: flex;
-                  flex-direction: column;
                   margin-top: 2px;
                 }
                 body.user01-wide .u01-table-slot .data {
                   width: 100%;
-                  height: 100%;
                   font-size: var(--u01-fs);
                   table-layout: fixed;
-                }
-                body.user01-wide .u01-table-slot .data th,
-                body.user01-wide .u01-table-slot .data td {
-                  font-size: var(--u01-fs);
-                  padding: var(--u01-pad) 2px;
-                  vertical-align: middle;
-                  line-height: 1.15;
+                  border-collapse: collapse;
                 }
                 body.user01-wide .u01-table-slot .data thead th {
-                  height: auto;
-                  padding-top: 3px;
-                  padding-bottom: 3px;
+                  height: auto !important;
+                  max-height: none !important;
+                  padding: 3px 2px;
+                  vertical-align: middle;
+                  font-size: var(--u01-fs);
+                  line-height: 1.15;
+                  background: #fff;
                 }
-                body.user01-wide .u01-table-slot .data tbody tr {
-                  height: calc((100% - var(--u01-head)) / var(--u01-n));
-                }
-                body.user01-wide .u01-table-slot .data.quality thead {
-                  height: var(--u01-head-q, 16mm);
-                }
-                body.user01-wide .u01-table-slot .data.quality tbody tr {
-                  height: calc((100% - var(--u01-head-q, 16mm)) / var(--u01-n));
+                body.user01-wide .u01-table-slot .data tbody td {
+                  height: var(--u01-row-h);
+                  min-height: var(--u01-row-h);
+                  padding: var(--u01-pad) 2px;
+                  vertical-align: middle;
+                  font-size: var(--u01-fs);
+                  line-height: 1.15;
                 }
                 body.user01-wide .u01-org {
                   flex-shrink: 0;
