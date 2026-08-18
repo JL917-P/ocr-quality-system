@@ -6565,6 +6565,24 @@
         return "/static/firma.png";
       }
 
+      function getActiveConstanciaUsername() {
+        try {
+          if (typeof window !== "undefined" && window.QC_CONSTANCIA_OWNER_USERNAME) {
+            return String(window.QC_CONSTANCIA_OWNER_USERNAME).trim().toLowerCase();
+          }
+          if (typeof isImpersonatingEnv === "function" && isImpersonatingEnv() && envOwnerProfile) {
+            return String(envOwnerProfile.username || "").trim().toLowerCase();
+          }
+          const me = window.QCAuth && window.QCAuth.getUser && window.QCAuth.getUser();
+          if (me && me.username) return String(me.username).trim().toLowerCase();
+        } catch (e) {}
+        return "";
+      }
+
+      function isUser01ConstanciaLayout() {
+        return getActiveConstanciaUsername() === "user01";
+      }
+
       function parseConstanciaDate(dateText) {
         const value = (dateText || "").trim();
         if (!value) return null;
@@ -7016,9 +7034,25 @@
         const instalaciones = formatDateMinusDays(fecha, 0);
         const showFumigacion = constancia.fumigacion !== 0 && constancia.fumigacion !== false;
         const showCalidad = constancia.calidad !== 0 && constancia.calidad !== false;
+        const user01Layout = isUser01ConstanciaLayout();
         const items = constancia.items || [];
         const rows = items
-          .map((item, idx) => `
+          .map((item, idx) => {
+            const fumCell = formatShortDate(
+              itemSnapshotField(item, "f_fumigacion", "fumigacion_date") || fumigacion
+            );
+            const libCell = formatShortDate(
+              itemSnapshotField(item, "f_liberacion", "liberacion_date") || liberacion
+            );
+            const instCell = formatShortDate(
+              itemSnapshotField(item, "f_instalaciones", "instalaciones_date") || instalaciones
+            );
+            const lastCol = user01Layout
+              ? `<td style="text-align:center; vertical-align:middle;">${instCell}</td>`
+              : idx === 0
+                ? `<td rowspan="${Math.max(items.length, 1)}" style="text-align:center; vertical-align:middle;">${transporte}</td>`
+                : "";
+            return `
             <tr>
               <td>${idx + 1}</td>
               <td>${formatShippingDate(fecha)}</td>
@@ -7027,26 +7061,18 @@
               <td>${item.quantity ?? ""}</td>
               <td>${itemSnapshotField(item, "production_date_snapshot", "production_text") || "-"}</td>
               <td>${itemSnapshotField(item, "expiration_date_snapshot", "expiration_text") || "-"}</td>
-            <td>${formatShortDate(
-                itemSnapshotField(item, "f_fumigacion", "fumigacion_date") || fumigacion
-              )}</td>
-            <td>${formatShortDate(
-                itemSnapshotField(item, "f_liberacion", "liberacion_date") || liberacion
-              )}</td>
-            <td>${formatShortDate(
-                itemSnapshotField(item, "f_instalaciones", "instalaciones_date") || instalaciones
-              )}</td>
+              <td>${fumCell}</td>
+              <td>${libCell}</td>
               <td>400</td>
               <td>100</td>
               <td>1800</td>
-              ${
-                idx === 0
-                  ? `<td rowspan="${Math.max(items.length, 1)}" style="text-align:center; vertical-align:middle;">${transporte}</td>`
-                  : ""
-              }
+              ${lastCol}
             </tr>
-          `)
+          `;
+          })
           .join("");
+        const fumigacionLastHeader = user01Layout ? "Fecha de Instalaciones" : "Unidad Transporte";
+        const fumigacionColspan = 13;
         const itemQuality = (item, snapKey, legacyKey) => {
           const key = (itemSnapshotField(item, "product_name_snapshot", "product") || "").trim().toLowerCase();
           const prod = (catalog || []).find((p) => (p.name || "").trim().toLowerCase() === key);
@@ -7116,15 +7142,14 @@
                     <th>Fecha de Vencimiento</th>
                     <th>Fecha de Fumigación</th>
                     <th>Fecha de Liberación</th>
-                    <th>Fecha de Instalaciones</th>
                     <th>Cantidad Fumigada</th>
                     <th>N° de tabletas</th>
                     <th>Nivel de fosfina</th>
-                    <th>Unidad Transporte</th>
+                    <th>${fumigacionLastHeader}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${rows || "<tr><td colspan='14' class='empty'>Sin productos</td></tr>"}
+                  ${rows || `<tr><td colspan='${fumigacionColspan}' class='empty'>Sin productos</td></tr>`}
                 </tbody>
               </table>
             </div>
@@ -7475,6 +7500,7 @@ async function savePdf(){
       globalThis.buildConstanciaHtml = buildConstanciaHtml;
       globalThis.resolveFirmaSrcForUsername = resolveFirmaSrcForUsername;
       globalThis.getConstanciaFirmaSrc = getConstanciaFirmaSrc;
+      globalThis.isUser01ConstanciaLayout = isUser01ConstanciaLayout;
       globalThis.isCencosudCdLimaClient = isCencosudCdLimaClient;
 
       // —— Usuarios, permisos y bitácora ——

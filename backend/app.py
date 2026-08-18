@@ -2155,13 +2155,17 @@ def constancia_view_page(constancia_id: int = Query(..., alias="id")) -> HTMLRes
               try {{
                 const envRes = await fetch("/api/environment", {{ cache: "no-store", credentials: "include" }});
                 const envData = await envRes.json().catch(() => ({{}}));
-                if (envRes.ok && envData.owner && typeof window.resolveFirmaSrcForUsername === "function") {{
-                  window.QC_CONSTANCIA_FIRMA_SRC = window.resolveFirmaSrcForUsername(envData.owner.username);
-                }} else if (envRes.ok && envData.owner) {{
-                  const u = String(envData.owner.username || "").trim().toLowerCase();
-                  window.QC_CONSTANCIA_FIRMA_SRC = u === "user01"
-                    ? "/static/firma-user01.png?v=1"
-                    : "/static/firma.png";
+                if (envRes.ok && envData.owner) {{
+                  const ownerUser = envData.owner.username || "";
+                  window.QC_CONSTANCIA_OWNER_USERNAME = ownerUser;
+                  if (typeof window.resolveFirmaSrcForUsername === "function") {{
+                    window.QC_CONSTANCIA_FIRMA_SRC = window.resolveFirmaSrcForUsername(ownerUser);
+                  }} else {{
+                    const u = String(ownerUser).trim().toLowerCase();
+                    window.QC_CONSTANCIA_FIRMA_SRC = u === "user01"
+                      ? "/static/firma-user01.png?v=1"
+                      : "/static/firma.png";
+                  }}
                 }}
               }} catch (e) {{}}
               const res = await fetch('/api/constancias/{constancia_id}', {{ cache: 'no-store', credentials: 'include' }});
