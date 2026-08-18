@@ -7493,9 +7493,10 @@ async function savePdf(){
                   .actions { display: none; }
                   .page { margin: 0; box-shadow: none; }
                 }
+                ${user01WideCss}
               </style>
             </head>
-            <body>
+            <body class="${user01Layout ? "user01-wide" : ""}">
               <div class="actions">
                 <button class="btn" onclick="printDoc()">Imprimir</button>
                 <button class="btn" onclick="savePdf()">Guardar PDF</button>
