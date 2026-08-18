@@ -175,6 +175,10 @@ function parseConstanciaDate(dateText) {
       }
 
       function resolveAjilesSku(productName) {
+        // SKU 3A exclusivo del entorno user01 (Vladimir)
+        if (typeof isUser01ConstanciaLayout === "function" && !isUser01ConstanciaLayout()) {
+          return "";
+        }
         const key = normalizeSearchText(productName);
         if (!key) return "";
         const keyCompact = key.replace(/\s+/g, "");
