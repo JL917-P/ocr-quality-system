@@ -512,6 +512,8 @@ function parseConstanciaDate(dateText) {
         const user01Layout = isUser01ConstanciaLayout();
         const isAjilesFumigacion = isAjilesPeruClient(cliente);
         const items = constancia.items || [];
+        const productCellHtml = (name) =>
+          `<td class="cell-fit-line">${(name || "").toString()}</td>`;
         const rows = items
           .map((item, idx) => {
             const fumDefault = isAjilesFumigacion ? liberacion : fumigacion;
@@ -530,6 +532,7 @@ function parseConstanciaDate(dateText) {
               itemSnapshotField(item, "fumigacion_sacos", "cant_fumigada") || "400";
             const tabletas = itemSnapshotField(item, "tabletas", "n_tabletas") || "100";
             const fosfina = itemSnapshotField(item, "nivel_fosfina", "fosfina") || "1800";
+            const productName = itemSnapshotField(item, "product_name_snapshot", "product");
             if (isAjilesFumigacion) {
               const plateCell =
                 idx === 0
@@ -539,7 +542,7 @@ function parseConstanciaDate(dateText) {
             <tr>
               <td>${idx + 1}</td>
               <td>${shipCell}</td>
-              <td>${itemSnapshotField(item, "product_name_snapshot", "product")}</td>
+              ${productCellHtml(productName)}
               <td>${itemSnapshotField(item, "lote_snapshot", "lot") || "-"}</td>
               <td>${itemSnapshotField(item, "production_date_snapshot", "production_text") || "-"}</td>
               <td>${itemSnapshotField(item, "expiration_date_snapshot", "expiration_text") || "-"}</td>
@@ -561,7 +564,7 @@ function parseConstanciaDate(dateText) {
             <tr>
               <td>${idx + 1}</td>
               <td>${formatShippingDate(fecha)}</td>
-              <td>${itemSnapshotField(item, "product_name_snapshot", "product")}</td>
+              ${productCellHtml(productName)}
               <td>${itemSnapshotField(item, "lote_snapshot", "lot") || "-"}</td>
               <td>${item.quantity ?? ""}</td>
               <td>${itemSnapshotField(item, "production_date_snapshot", "production_text") || "-"}</td>
@@ -720,7 +723,7 @@ function parseConstanciaDate(dateText) {
             return `
               <tr>
                 <td>${idx + 1}</td>
-                <td>${itemSnapshotField(item, "product_name_snapshot", "product")}</td>
+                ${productCellHtml(itemSnapshotField(item, "product_name_snapshot", "product"))}
                 <td>${itemSnapshotField(item, "lote_snapshot", "lot") || "-"}</td>
                 <td>${item.quantity ?? ""}</td>
                 <td>${itemSnapshotField(item, "production_date_snapshot", "production_text") || "-"}</td>
@@ -906,8 +909,23 @@ function parseConstanciaDate(dateText) {
           '<scr' +
           'ipt>' +
           `const pdfName = ${JSON.stringify(fileName || `Constancia ${numero}`)};
-function printDoc(){window.print();}
+function fitSingleLineCells(){
+  document.querySelectorAll("td.cell-fit-line").forEach((td)=>{
+    td.style.whiteSpace="nowrap";
+    td.style.overflow="hidden";
+    td.style.wordBreak="normal";
+    let size=parseFloat(window.getComputedStyle(td).fontSize)||10;
+    td.style.fontSize=size+"px";
+    let guard=0;
+    while(td.scrollWidth>td.clientWidth+0.5 && size>5.5 && guard++<80){
+      size-=0.2;
+      td.style.fontSize=size+"px";
+    }
+  });
+}
+function printDoc(){fitSingleLineCells();window.print();}
 async function savePdf(){
+  fitSingleLineCells();
   const pages = Array.from(document.querySelectorAll(".page"));
   if (!pages.length || !window.html2canvas || !window.jspdf) return;
   document.body.classList.add("pdf-export");
@@ -920,7 +938,8 @@ async function savePdf(){
   }
   pdf.save(pdfName + ".pdf");
   document.body.classList.remove("pdf-export");
-}` +
+}
+document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeout(fitSingleLineCells,80);});` +
           '</scr' +
           'ipt>';
         return `
@@ -951,6 +970,12 @@ async function savePdf(){
                 .data th, .data td { border: 1px solid #111827; padding: 3px; word-break: break-word; }
                 .data th { text-align: center; font-weight: 600; }
                 .data td { text-align: center; }
+                .data td.cell-fit-line {
+                  white-space: nowrap !important;
+                  overflow: hidden !important;
+                  word-break: normal !important;
+                  text-overflow: clip;
+                }
                 .data td:nth-child(3) { text-align: center; }
                 .data th:nth-child(1) { width: 3%; }
                 .data th:nth-child(2) { width: 6%; }
