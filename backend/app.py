@@ -40,6 +40,7 @@ from tenant_env import (
     env_counts,
     get_master_admin_id,
     migrate_existing_rows_to_admin,
+    repair_operator_constancias_misassigned_to_admin,
     resolve_env_owner_id,
     row_belongs_to_owner,
 )
@@ -307,6 +308,7 @@ def init_db() -> None:
         ensure_auth_tables(conn)
         ensure_owner_columns(conn)
         migrate_existing_rows_to_admin(conn)
+        repair_operator_constancias_misassigned_to_admin(conn)
         conn.commit()
         repair_all_trasiegos_in_sqlite(conn)
         conn.commit()
@@ -460,10 +462,21 @@ def _record_sync_deletions(conn: sqlite3.Connection, entity_table: str, record_i
         )
 
 
-def _purge_duplicate_constancias(constancia_id: int, number: str | None, client_name: str | None) -> None:
+def _purge_duplicate_constancias(
+    constancia_id: int,
+    number: str | None,
+    client_name: str | None,
+    owner_user_id: int | None = None,
+) -> None:
     removed: list[int] = []
     with sqlite3.connect(DB_PATH) as conn:
-        removed = consolidate_constancia_duplicates(conn, constancia_id, number or "", client_name or "")
+        removed = consolidate_constancia_duplicates(
+            conn,
+            constancia_id,
+            number or "",
+            client_name or "",
+            owner_user_id=owner_user_id,
+        )
         _record_sync_deletions(conn, "constancias", removed)
         conn.commit()
     for rid in removed:
@@ -2278,7 +2291,7 @@ async def create_product(
     run_sync_after_create(
         TAB_PRODUCTOS,
         product_id,
-        lambda: sync_product_created(product_id, data, created_at),
+        lambda: sync_product_created(product_id, data, created_at, owner_user_id=owner_id),
     )
     _audit(user, "product_create", "product", product_id, f"Creó producto {data['name']}")
     return JSONResponse({"id": product_id})
@@ -2350,7 +2363,7 @@ async def update_product(
     run_sync_after_create(
         TAB_PRODUCTOS,
         product_id,
-        lambda: sync_product_upsert(product_id, data, created_at),
+        lambda: sync_product_upsert(product_id, data, created_at, owner_user_id=owner_id),
     )
     _audit(user, "product_update", "product", product_id, f"Actualizó producto {data['name']}")
     return JSONResponse({"ok": True})
@@ -2411,7 +2424,7 @@ async def create_client(
     run_sync_after_create(
         TAB_CLIENTES,
         client_id,
-        lambda: sync_client_created(client_id, name, ruc, created_at),
+        lambda: sync_client_created(client_id, name, ruc, created_at, owner_user_id=owner_id),
     )
     _audit(user, "client_create", "client", client_id, f"Creó cliente {name}")
     return JSONResponse({"id": client_id})
@@ -2446,7 +2459,7 @@ async def update_client(
     run_sync_after_create(
         TAB_CLIENTES,
         client_id,
-        lambda: sync_client_upsert(client_id, name, ruc, created_at),
+        lambda: sync_client_upsert(client_id, name, ruc, created_at, owner_user_id=owner_id),
     )
     _audit(user, "client_update", "client", client_id, f"Actualizó cliente {name}")
     return JSONResponse({"ok": True})
@@ -2503,7 +2516,7 @@ async def create_transport(
     run_sync_after_create(
         TAB_TRANSPORTES,
         transport_id,
-        lambda: sync_transport_created(transport_id, plate, created_at),
+        lambda: sync_transport_created(transport_id, plate, created_at, owner_user_id=owner_id),
     )
     _audit(user, "transport_create", "transport", transport_id, f"Creó matrícula {plate}")
     return JSONResponse({"id": transport_id})
@@ -2511,30 +2524,33 @@ async def create_transport(
 
 @app.put("/api/transports/{transport_id}")
 async def update_transport(
+    request: Request,
     transport_id: int,
     payload: dict,
     user: dict = Depends(require_permission("transports_write")),
 ) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
     plate = (payload.get("plate") or "").strip()
     if not plate:
         raise HTTPException(status_code=400, detail="Matrícula es obligatoria.")
     with sqlite3.connect(DB_PATH) as conn:
+        _require_owned_row(conn, "transports", transport_id, owner_id)
         created_row = conn.execute(
-            "SELECT created_at FROM transports WHERE id = ?",
-            (transport_id,),
+            "SELECT created_at FROM transports WHERE id = ? AND owner_user_id = ?",
+            (transport_id, owner_id),
         ).fetchone()
         if not created_row:
             raise HTTPException(status_code=404, detail="Matrícula no encontrada.")
         conn.execute(
-            "UPDATE transports SET plate = ? WHERE id = ?",
-            (plate, transport_id),
+            "UPDATE transports SET plate = ? WHERE id = ? AND owner_user_id = ?",
+            (plate, transport_id, owner_id),
         )
         conn.commit()
         created_at = created_row[0]
     run_sync_after_create(
         TAB_TRANSPORTES,
         transport_id,
-        lambda: sync_transport_upsert(transport_id, plate, created_at),
+        lambda: sync_transport_upsert(transport_id, plate, created_at, owner_user_id=owner_id),
     )
     _audit(user, "transport_update", "transport", transport_id, f"Actualizó matrícula {plate}")
     return JSONResponse({"ok": True})
@@ -2607,7 +2623,8 @@ def _queue_trasiego_sheet_sync(new_ids: list[int], deleted_ids: list[int]) -> No
         for trasiego_id in new_ids:
             row = conn.execute(
                 """
-                SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
+                SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad,
+                       created_at, updated_at, owner_user_id
                 FROM trasiegos WHERE id = ?
                 """,
                 (trasiego_id,),
@@ -2630,6 +2647,7 @@ def _queue_trasiego_sheet_sync(new_ids: list[int], deleted_ids: list[int]) -> No
                     row[9],
                     row[10],
                     row[11],
+                    owner_user_id=row[12],
                 ),
             )
 
@@ -2700,7 +2718,8 @@ async def create_trasiego(
         TAB_TRASIEGOS,
         row_id,
         lambda: sync_trasiego_created(
-            row_id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, now, now
+            row_id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, now, now,
+            owner_user_id=owner_id,
         ),
     )
     return JSONResponse({"id": row_id})
@@ -2724,7 +2743,7 @@ async def update_trasiego(
     cantidad = (payload.get("cantidad") or "").strip() or None
     with sqlite3.connect(DB_PATH) as conn:
         created_row = conn.execute(
-            "SELECT created_at FROM trasiegos WHERE id = ?",
+            "SELECT created_at, owner_user_id FROM trasiegos WHERE id = ?",
             (trasiego_id,),
         ).fetchone()
         if not created_row:
@@ -2751,6 +2770,7 @@ async def update_trasiego(
         )
         conn.commit()
         created_at = created_row[0]
+        owner_for_sync = created_row[1]
     run_sync_after_create(
         TAB_TRASIEGOS,
         trasiego_id,
@@ -2767,6 +2787,7 @@ async def update_trasiego(
             cantidad,
             created_at,
             now,
+            owner_user_id=owner_for_sync,
         ),
     )
     return JSONResponse({"ok": True, "id": trasiego_id, "updated_at": now})
@@ -2857,7 +2878,9 @@ async def create_constancia(
             detail=f"Nueva constancia {header.get('number') or constancia_id} ({header.get('client_name') or ''})",
         )
         conn.commit()
-    _purge_duplicate_constancias(constancia_id, header["number"], header["client_name"])
+    _purge_duplicate_constancias(
+        constancia_id, header["number"], header["client_name"], owner_user_id=owner_id
+    )
     _queue_trasiego_sheet_sync(trasiego_new_ids, trasiego_deleted_ids)
     run_sync_after_create(
         TAB_CONSTANCIAS,
@@ -2873,9 +2896,16 @@ async def create_constancia(
             header["status"],
             items_json,
             created_at,
+            owner_user_id=owner_id,
         ),
     )
-    return JSONResponse({"id": constancia_id, "trasiegos_created": len(trasiego_new_ids)})
+    return JSONResponse(
+        {
+            "id": constancia_id,
+            "owner_user_id": owner_id,
+            "trasiegos_created": len(trasiego_new_ids),
+        }
+    )
 
 
 @app.get("/api/constancias")
@@ -3017,11 +3047,12 @@ async def export_traceability_batch(
 def restore_constancia_items_from_history(constancia_id: int) -> JSONResponse:
     with sqlite3.connect(DB_PATH) as conn:
         row = conn.execute(
-            "SELECT items_json, created_at, number, client_name FROM constancias WHERE id = ?",
+            "SELECT items_json, created_at, number, client_name, owner_user_id FROM constancias WHERE id = ?",
             (constancia_id,),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Constancia no encontrada.")
+        owner_for_sync = row[4]
         if parse_items_json(row[0]):
             return JSONResponse({"ok": True, "restored": 0, "message": "La constancia ya tiene productos."})
         restored = restore_items_from_history(conn, constancia_id)
@@ -3065,6 +3096,7 @@ def restore_constancia_items_from_history(constancia_id: int) -> JSONResponse:
                 normalize_constancia_status(header_row[6]),
                 items_json,
                 created_at,
+                owner_user_id=owner_for_sync,
             ),
         )
     return JSONResponse(
@@ -3089,7 +3121,8 @@ def confirm_constancia(
     with sqlite3.connect(DB_PATH) as conn:
         row = conn.execute(
             """
-            SELECT number, issue_date, client_name, transport_plate, fumigacion, calidad, items_json, created_at
+            SELECT number, issue_date, client_name, transport_plate, fumigacion, calidad,
+                   items_json, created_at, owner_user_id
             FROM constancias WHERE id = ?
             """,
             (constancia_id,),
@@ -3111,6 +3144,7 @@ def confirm_constancia(
         conn.commit()
     items_json = row[6] or "[]"
     created_at = row[7]
+    owner_for_sync = row[8]
     run_sync_after_create(
         TAB_CONSTANCIAS,
         constancia_id,
@@ -3125,6 +3159,7 @@ def confirm_constancia(
             "confirmada",
             items_json,
             created_at,
+            owner_user_id=owner_for_sync,
         ),
     )
     return JSONResponse({"ok": True})
@@ -3230,6 +3265,7 @@ def get_constancia(
                 normalize_constancia_status(header_for_sync[6]),
                 items_json_for_sync,
                 created_at_for_sync,
+                owner_user_id=owner_id,
             ),
         )
     return JSONResponse(
@@ -3358,7 +3394,9 @@ async def update_constancia(
             detail=f"Editó constancia {header.get('number') or constancia_id}",
         )
         conn.commit()
-    _purge_duplicate_constancias(constancia_id, header["number"], header["client_name"])
+    _purge_duplicate_constancias(
+        constancia_id, header["number"], header["client_name"], owner_user_id=owner_id
+    )
     _queue_trasiego_sheet_sync(trasiego_new_ids, trasiego_deleted_ids)
     items_json = json.dumps(items_snap, ensure_ascii=True)
     created_at = created_at_row[0] if created_at_row else datetime.now(timezone.utc).isoformat()
@@ -3376,6 +3414,7 @@ async def update_constancia(
             header["status"],
             items_json,
             created_at,
+            owner_user_id=owner_id,
         ),
     )
     return JSONResponse({"ok": True, "trasiegos_created": len(trasiego_new_ids)})

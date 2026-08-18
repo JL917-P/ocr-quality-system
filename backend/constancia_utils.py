@@ -333,20 +333,27 @@ def consolidate_constancia_duplicates(
     keep_id: int,
     number: str,
     client_name: str,
+    owner_user_id: int | None = None,
 ) -> list[int]:
-    """Elimina otras constancias con el mismo número y cliente."""
+    """Elimina otras constancias con el mismo número y cliente (solo del mismo entorno)."""
     num = _str(number)
     client = _str(client_name).lower()
     if not num:
         return []
+    params: list[Any] = [num, client, keep_id]
+    owner_sql = ""
+    if owner_user_id is not None:
+        owner_sql = " AND owner_user_id = ?"
+        params.append(int(owner_user_id))
     rows = conn.execute(
-        """
+        f"""
         SELECT id FROM constancias
         WHERE trim(coalesce(number, '')) = ?
           AND lower(trim(coalesce(client_name, ''))) = ?
           AND id != ?
+          {owner_sql}
         """,
-        (num, client, keep_id),
+        params,
     ).fetchall()
     removed: list[int] = []
     for (row_id,) in rows:

@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
-from constancia_utils import find_items_json_for_constancia, import_constancia_status, normalize_constancia_status, parse_items_json
+from constancia_utils import find_items_json_for_constancia, import_constancia_status, parse_items_json
 from trasiego_utils import repair_trasiego_in_sqlite
 from google_sheets import (
     HEADERS_CLIENTES,
@@ -36,11 +36,14 @@ from google_sheets import (
     read_trasiegos_sheet_rows,
     reset_connection,
 )
+from tenant_env import get_master_admin_id
 
 logger = logging.getLogger(__name__)
 
 BACKEND_ROOT = Path(__file__).resolve().parent
 DEFAULT_DB = BACKEND_ROOT / "results.db"
+
+Importer = Callable[[sqlite3.Connection, list[dict[str, str]], int], int]
 
 
 def _utc_now() -> str:
@@ -78,11 +81,31 @@ def _float_or_none(value: str) -> Optional[float]:
         return None
 
 
+def _parse_owner_cell(value: str, fallback: int) -> int:
+    text = (value or "").strip()
+    if not text:
+        return int(fallback)
+    try:
+        return int(float(text))
+    except (ValueError, TypeError):
+        return int(fallback)
+
+
 def _existing_ids(conn: sqlite3.Connection, table: str) -> set[int]:
     try:
         return {int(r[0]) for r in conn.execute(f"SELECT id FROM {table}").fetchall()}
     except sqlite3.OperationalError:
         return set()
+
+
+def _owner_by_id(conn: sqlite3.Connection, table: str) -> dict[int, int | None]:
+    try:
+        return {
+            int(r[0]): (int(r[1]) if r[1] is not None else None)
+            for r in conn.execute(f"SELECT id, owner_user_id FROM {table}").fetchall()
+        }
+    except sqlite3.OperationalError:
+        return {}
 
 
 def _deleted_ids(conn: sqlite3.Connection, entity_table: str) -> set[int]:
@@ -106,6 +129,7 @@ def _constancia_id_by_number_client(
     conn: sqlite3.Connection,
     number: Optional[str],
     client_name: Optional[str],
+    owner_user_id: int,
 ) -> Optional[int]:
     num = (number or "").strip()
     client = (client_name or "").strip().lower()
@@ -116,9 +140,10 @@ def _constancia_id_by_number_client(
         SELECT id FROM constancias
         WHERE trim(coalesce(number, '')) = ?
           AND lower(trim(coalesce(client_name, ''))) = ?
+          AND owner_user_id = ?
         LIMIT 1
         """,
-        (num, client),
+        (num, client, owner_user_id),
     ).fetchone()
     return int(row[0]) if row else None
 
@@ -128,21 +153,19 @@ def _merge_constancia_from_sheet(
     target_id: int,
     items_json: str,
 ) -> bool:
-    """Fusiona items desde Sheets. Nunca modifica status (solo el usuario lo cambia)."""
     cur = conn.execute(
         "SELECT items_json, number, client_name FROM constancias WHERE id = ?",
         (target_id,),
     ).fetchone()
     if not cur:
         return False
-    sqlite_items = cur[0] or "[]"
-    if _items_json_is_empty(sqlite_items) and not _items_json_is_empty(items_json):
+    if _items_json_is_empty(cur[0] or "") and not _items_json_is_empty(items_json):
         conn.execute(
             "UPDATE constancias SET items_json = ? WHERE id = ?",
             (items_json, target_id),
         )
         return True
-    if _items_json_is_empty(sqlite_items):
+    if _items_json_is_empty(cur[0] or ""):
         alt_json = find_items_json_for_constancia(conn, cur[1] or "", cur[2] or "", exclude_id=target_id)
         if alt_json:
             conn.execute(
@@ -154,8 +177,8 @@ def _merge_constancia_from_sheet(
 
 
 def _fix_sqlite_sequence(conn: sqlite3.Connection, table: str) -> None:
-    row = conn.execute(f"SELECT COALESCE(MAX(id), 0) FROM {table}").fetchone()
-    max_id = int(row[0]) if row else 0
+    row = conn.execute(f"SELECT MAX(id) FROM {table}").fetchone()
+    max_id = int(row[0] or 0) if row else 0
     conn.execute("DELETE FROM sqlite_sequence WHERE name = ?", (table,))
     if max_id > 0:
         conn.execute(
@@ -164,36 +187,71 @@ def _fix_sqlite_sequence(conn: sqlite3.Connection, table: str) -> None:
         )
 
 
-def _import_clients(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> int:
+def _row_belongs_to_target(
+    conn: sqlite3.Connection,
+    table: str,
+    row_id: int,
+    owners: dict[int, int | None],
+    target_owner: int,
+) -> bool | None:
+    """True=mismo entorno, False=otro entorno, None=no existe."""
+    if row_id not in owners:
+        return None
+    current = owners.get(row_id)
+    if current is None:
+        return True
+    return int(current) == int(target_owner)
+
+
+def _import_clients(conn: sqlite3.Connection, rows: list[dict[str, str]], owner_user_id: int) -> int:
     existing = _existing_ids(conn, "clients")
+    owners = _owner_by_id(conn, "clients")
     deleted = _deleted_ids(conn, "clients")
+    admin_id = get_master_admin_id(conn) or owner_user_id
     imported = 0
     for row in rows:
         row_id = _parse_id_cell(row.get("id", ""))
-        if row_id is None or row_id in existing or row_id in deleted:
+        if row_id is None or row_id in deleted:
+            continue
+        sheet_owner = _parse_owner_cell(row.get("owner_user_id", ""), admin_id)
+        if int(sheet_owner) != int(owner_user_id):
+            continue
+        belongs = _row_belongs_to_target(conn, "clients", row_id, owners, owner_user_id)
+        if belongs is False:
+            continue
+        if belongs is True:
             continue
         name = (row.get("name") or "").strip()
         if not name:
             continue
         created_at = _str_or_none(row.get("created_at", "")) or _utc_now()
         conn.execute(
-            "INSERT INTO clients (id, name, ruc, created_at) VALUES (?, ?, ?, ?)",
-            (row_id, name, _str_or_none(row.get("ruc", "")), created_at),
+            "INSERT INTO clients (id, name, ruc, created_at, owner_user_id) VALUES (?, ?, ?, ?, ?)",
+            (row_id, name, _str_or_none(row.get("ruc", "")), created_at, owner_user_id),
         )
         existing.add(row_id)
+        owners[row_id] = owner_user_id
         imported += 1
     if imported:
         _fix_sqlite_sequence(conn, "clients")
     return imported
 
 
-def _import_products(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> int:
+def _import_products(conn: sqlite3.Connection, rows: list[dict[str, str]], owner_user_id: int) -> int:
     existing = _existing_ids(conn, "products")
+    owners = _owner_by_id(conn, "products")
     deleted = _deleted_ids(conn, "products")
+    admin_id = get_master_admin_id(conn) or owner_user_id
     imported = 0
     for row in rows:
         row_id = _parse_id_cell(row.get("id", ""))
-        if row_id is None or row_id in existing or row_id in deleted:
+        if row_id is None or row_id in deleted:
+            continue
+        sheet_owner = _parse_owner_cell(row.get("owner_user_id", ""), admin_id)
+        if int(sheet_owner) != int(owner_user_id):
+            continue
+        belongs = _row_belongs_to_target(conn, "products", row_id, owners, owner_user_id)
+        if belongs is False or belongs is True:
             continue
         name = (row.get("name") or "").strip()
         if not name:
@@ -203,8 +261,9 @@ def _import_products(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> in
             """
             INSERT INTO products (
                 id, name, code, origin, um, active, lot, production_text, expiration_text,
-                humidity, broken_grains, chalky_1, chalky_2, damaged_grains, whiteness, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                humidity, broken_grains, chalky_1, chalky_2, damaged_grains, whiteness, created_at,
+                owner_user_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 row_id,
@@ -223,64 +282,85 @@ def _import_products(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> in
                 _float_or_none(row.get("damaged_grains", "")),
                 _float_or_none(row.get("whiteness", "")),
                 created_at,
+                owner_user_id,
             ),
         )
         existing.add(row_id)
+        owners[row_id] = owner_user_id
         imported += 1
     if imported:
         _fix_sqlite_sequence(conn, "products")
     return imported
 
 
-def _import_transports(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> int:
+def _import_transports(conn: sqlite3.Connection, rows: list[dict[str, str]], owner_user_id: int) -> int:
     existing = _existing_ids(conn, "transports")
+    owners = _owner_by_id(conn, "transports")
     deleted = _deleted_ids(conn, "transports")
+    admin_id = get_master_admin_id(conn) or owner_user_id
     imported = 0
     for row in rows:
         row_id = _parse_id_cell(row.get("id", ""))
-        if row_id is None or row_id in existing or row_id in deleted:
+        if row_id is None or row_id in deleted:
+            continue
+        sheet_owner = _parse_owner_cell(row.get("owner_user_id", ""), admin_id)
+        if int(sheet_owner) != int(owner_user_id):
+            continue
+        belongs = _row_belongs_to_target(conn, "transports", row_id, owners, owner_user_id)
+        if belongs is False or belongs is True:
             continue
         plate = (row.get("plate") or "").strip()
         if not plate:
             continue
         created_at = _str_or_none(row.get("created_at", "")) or _utc_now()
         conn.execute(
-            "INSERT INTO transports (id, plate, created_at) VALUES (?, ?, ?)",
-            (row_id, plate, created_at),
+            "INSERT INTO transports (id, plate, created_at, owner_user_id) VALUES (?, ?, ?, ?)",
+            (row_id, plate, created_at, owner_user_id),
         )
         existing.add(row_id)
+        owners[row_id] = owner_user_id
         imported += 1
     if imported:
         _fix_sqlite_sequence(conn, "transports")
     return imported
 
 
-def _import_constancias(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> int:
+def _import_constancias(conn: sqlite3.Connection, rows: list[dict[str, str]], owner_user_id: int) -> int:
     existing = _existing_ids(conn, "constancias")
+    owners = _owner_by_id(conn, "constancias")
     deleted = _deleted_ids(conn, "constancias")
+    admin_id = get_master_admin_id(conn) or owner_user_id
     imported = 0
     repaired = 0
     for row in rows:
         sheet_id = _parse_id_cell(row.get("id", ""))
         if sheet_id is None or sheet_id in deleted:
             continue
+        sheet_owner = _parse_owner_cell(row.get("owner_user_id", ""), admin_id)
+        if int(sheet_owner) != int(owner_user_id):
+            continue
+
         status = import_constancia_status(row.get("status"))
         items_json = (row.get("items_json") or "").strip() or "[]"
         number = _str_or_none(row.get("number", ""))
         client_name = _str_or_none(row.get("client_name", ""))
 
+        belongs = _row_belongs_to_target(conn, "constancias", sheet_id, owners, owner_user_id)
+        if belongs is False:
+            continue
+
         target_id: Optional[int] = None
-        if sheet_id in existing:
+        if belongs is True:
             target_id = sheet_id
         elif number:
-            target_id = _constancia_id_by_number_client(conn, number, client_name)
+            target_id = _constancia_id_by_number_client(conn, number, client_name, owner_user_id)
 
         if target_id is not None:
             if _merge_constancia_from_sheet(conn, target_id, items_json):
                 repaired += 1
             continue
 
-        if number and _constancia_id_by_number_client(conn, number, client_name) is not None:
+        if number and _constancia_id_by_number_client(conn, number, client_name, owner_user_id) is not None:
             continue
 
         if sheet_id in existing:
@@ -291,8 +371,8 @@ def _import_constancias(conn: sqlite3.Connection, rows: list[dict[str, str]]) ->
             """
             INSERT INTO constancias (
                 id, number, issue_date, client_name, transport_plate,
-                fumigacion, calidad, status, items_json, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                fumigacion, calidad, status, items_json, created_at, owner_user_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 sheet_id,
@@ -305,25 +385,35 @@ def _import_constancias(conn: sqlite3.Connection, rows: list[dict[str, str]]) ->
                 status,
                 items_json,
                 created_at,
+                owner_user_id,
             ),
         )
         existing.add(sheet_id)
+        owners[sheet_id] = owner_user_id
         imported += 1
     if imported or repaired:
         _fix_sqlite_sequence(conn, "constancias")
     return imported + repaired
 
 
-def _import_trasiegos(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> int:
+def _import_trasiegos(conn: sqlite3.Connection, rows: list[dict[str, str]], owner_user_id: int) -> int:
     existing = _existing_ids(conn, "trasiegos")
+    owners = _owner_by_id(conn, "trasiegos")
     deleted = _deleted_ids(conn, "trasiegos")
+    admin_id = get_master_admin_id(conn) or owner_user_id
     imported = 0
     repaired = 0
     for row in rows:
         row_id = _parse_id_cell(row.get("id", ""))
         if row_id is None or row_id in deleted:
             continue
-        if row_id in existing:
+        sheet_owner = _parse_owner_cell(row.get("owner_user_id", ""), admin_id)
+        if int(sheet_owner) != int(owner_user_id):
+            continue
+        belongs = _row_belongs_to_target(conn, "trasiegos", row_id, owners, owner_user_id)
+        if belongs is False:
+            continue
+        if belongs is True:
             if repair_trasiego_in_sqlite(conn, row_id):
                 repaired += 1
             continue
@@ -333,8 +423,9 @@ def _import_trasiegos(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> i
         conn.execute(
             """
             INSERT INTO trasiegos (
-                id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad,
+                created_at, updated_at, owner_user_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 row_id,
@@ -349,16 +440,18 @@ def _import_trasiegos(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> i
                 _str_or_none(row.get("cantidad", "")),
                 created_at,
                 updated_at,
+                owner_user_id,
             ),
         )
         existing.add(row_id)
+        owners[row_id] = owner_user_id
         imported += 1
     if imported or repaired:
         _fix_sqlite_sequence(conn, "trasiegos")
     return imported + repaired
 
 
-IMPORT_SPECS: list[tuple[str, Sequence[str], Callable[[sqlite3.Connection, list[dict[str, str]]], int]]] = [
+IMPORT_SPECS: list[tuple[str, Sequence[str], Importer]] = [
     (TAB_CLIENTES, HEADERS_CLIENTES, _import_clients),
     (TAB_PRODUCTOS, HEADERS_PRODUCTOS, _import_products),
     (TAB_TRANSPORTES, HEADERS_TRANSPORTES, _import_transports),
@@ -379,10 +472,7 @@ def run_import_from_sheets(
     reset: bool = True,
     owner_user_id: int | None = None,
 ) -> dict[str, Any]:
-    """Importa a SQLite solo registros cuyo id no exista aún.
-
-    Si se pasa owner_user_id, los totales `in_db` se calculan solo de ese entorno.
-    """
+    """Importa a SQLite solo registros del entorno activo (owner_user_id)."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     if reset:
@@ -399,21 +489,21 @@ def run_import_from_sheets(
 
     by_tab: dict[str, int] = {}
     with sqlite3.connect(db_path) as conn:
+        target_owner = int(owner_user_id) if owner_user_id is not None else (get_master_admin_id(conn) or 1)
         for tab, headers, importer in IMPORT_SPECS:
             if tab == TAB_TRASIEGOS:
                 rows = read_trasiegos_sheet_rows()
             else:
                 rows = read_sheet_rows(tab, headers)
-            count = importer(conn, rows)
+            count = importer(conn, rows, target_owner)
             conn.commit()
             by_tab[tab] = count
             print(f"{tab}: {count} importados")
-            logger.info("[IMPORT] %s: %s importados", tab, count)
+            logger.info("[IMPORT] %s: %s importados (owner=%s)", tab, count, target_owner)
 
     total = sum(by_tab.values())
     print(f"TOTAL IMPORTADOS: {total}")
 
-    # Totales actuales en SQLite (para que el usuario vea que los datos están)
     table_by_tab = {
         TAB_CLIENTES: "clients",
         TAB_PRODUCTOS: "products",
@@ -423,22 +513,20 @@ def run_import_from_sheets(
     }
     in_db: dict[str, int] = {}
     with sqlite3.connect(db_path) as conn:
+        target_owner = int(owner_user_id) if owner_user_id is not None else (get_master_admin_id(conn) or 1)
         for tab, table in table_by_tab.items():
             try:
-                if owner_user_id is not None:
-                    row = conn.execute(
-                        f"SELECT COUNT(*) FROM {table} WHERE owner_user_id = ?",
-                        (int(owner_user_id),),
-                    ).fetchone()
-                else:
-                    row = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()
+                row = conn.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE owner_user_id = ?",
+                    (target_owner,),
+                ).fetchone()
                 in_db[tab] = int(row[0] if row else 0)
             except sqlite3.Error:
                 in_db[tab] = 0
 
     return {
         "ok": True,
-        "message": "Importación completada",
+        "message": "Importación completada (solo este entorno)",
         "by_tab": by_tab,
         "in_db": in_db,
         "total": total,
@@ -468,8 +556,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
-    sys.exit(main())
+    raise SystemExit(main())

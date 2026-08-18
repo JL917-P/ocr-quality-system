@@ -363,6 +363,7 @@ def read_trasiegos_sheet_rows() -> list[dict[str, str]]:
             "cantidad": rec.get("cantidad", ""),
             "created_at": rec.get("created_at", ""),
             "updated_at": rec.get("updated_at", ""),
+            "owner_user_id": "",
         }
         records.append(repair_shifted_trasiego(mapped))
     return records
@@ -674,23 +675,45 @@ def run_sync_after_delete(entity: str, record_id: Any, sync_fn: Callable[[], boo
     _enqueue_sheets_sync(entity, record_id, sync_fn, is_delete=True)
 
 
-def sync_client_created(client_id: int, name: str, ruc: str | None, created_at: str) -> bool:
-    return sync_client_upsert(client_id, name, ruc, created_at)
+def sync_client_created(
+    client_id: int,
+    name: str,
+    ruc: str | None,
+    created_at: str,
+    owner_user_id: int | None = None,
+) -> bool:
+    return sync_client_upsert(client_id, name, ruc, created_at, owner_user_id=owner_user_id)
 
 
-def sync_client_upsert(client_id: int, name: str, ruc: str | None, created_at: str) -> bool:
+def sync_client_upsert(
+    client_id: int,
+    name: str,
+    ruc: str | None,
+    created_at: str,
+    owner_user_id: int | None = None,
+) -> bool:
     return upsert_row_by_id(
         TAB_CLIENTES,
         HEADERS_CLIENTES,
-        (client_id, name, ruc, created_at),
+        (client_id, name, ruc, created_at, owner_user_id),
     )
 
 
-def sync_product_created(product_id: int, data: dict[str, Any], created_at: str) -> bool:
-    return sync_product_upsert(product_id, data, created_at)
+def sync_product_created(
+    product_id: int,
+    data: dict[str, Any],
+    created_at: str,
+    owner_user_id: int | None = None,
+) -> bool:
+    return sync_product_upsert(product_id, data, created_at, owner_user_id=owner_user_id)
 
 
-def sync_product_upsert(product_id: int, data: dict[str, Any], created_at: str) -> bool:
+def sync_product_upsert(
+    product_id: int,
+    data: dict[str, Any],
+    created_at: str,
+    owner_user_id: int | None = None,
+) -> bool:
     return upsert_row_by_id(
         TAB_PRODUCTOS,
         HEADERS_PRODUCTOS,
@@ -711,19 +734,30 @@ def sync_product_upsert(product_id: int, data: dict[str, Any], created_at: str) 
             data.get("damaged_grains"),
             data.get("whiteness"),
             created_at,
+            owner_user_id,
         ),
     )
 
 
-def sync_transport_created(transport_id: int, plate: str, created_at: str) -> bool:
-    return sync_transport_upsert(transport_id, plate, created_at)
+def sync_transport_created(
+    transport_id: int,
+    plate: str,
+    created_at: str,
+    owner_user_id: int | None = None,
+) -> bool:
+    return sync_transport_upsert(transport_id, plate, created_at, owner_user_id=owner_user_id)
 
 
-def sync_transport_upsert(transport_id: int, plate: str, created_at: str) -> bool:
+def sync_transport_upsert(
+    transport_id: int,
+    plate: str,
+    created_at: str,
+    owner_user_id: int | None = None,
+) -> bool:
     return upsert_row_by_id(
         TAB_TRANSPORTES,
         HEADERS_TRANSPORTES,
-        (transport_id, plate, created_at),
+        (transport_id, plate, created_at, owner_user_id),
     )
 
 
@@ -740,6 +774,7 @@ def sync_trasiego_created(
     cantidad: str | None,
     created_at: str,
     updated_at: str,
+    owner_user_id: int | None = None,
 ) -> bool:
     return sync_trasiego_upsert(
         trasiego_id,
@@ -754,6 +789,7 @@ def sync_trasiego_created(
         cantidad,
         created_at,
         updated_at,
+        owner_user_id=owner_user_id,
     )
 
 
@@ -770,13 +806,14 @@ def sync_trasiego_upsert(
     cantidad: str | None,
     created_at: str,
     updated_at: str,
+    owner_user_id: int | None = None,
 ) -> bool:
     return upsert_row_by_id(
         TAB_TRASIEGOS,
         HEADERS_TRASIEGOS,
         (
             trasiego_id, fecha, mp, f_ingreso, estado, p_final, lote,
-            f_p, f_v, cantidad, created_at, updated_at,
+            f_p, f_v, cantidad, created_at, updated_at, owner_user_id,
         ),
     )
 
@@ -792,13 +829,14 @@ def sync_constancia_created(
     status: str,
     items_json: str,
     created_at: str,
+    owner_user_id: int | None = None,
 ) -> bool:
     return upsert_row_by_id(
         TAB_CONSTANCIAS,
         HEADERS_CONSTANCIAS,
         (
             constancia_id, number, issue_date, client_name, transport_plate,
-            fumigacion, calidad, status, items_json, created_at,
+            fumigacion, calidad, status, items_json, created_at, owner_user_id,
         ),
     )
 
@@ -814,6 +852,7 @@ def sync_constancia_upsert(
     status: str,
     items_json: str,
     created_at: str,
+    owner_user_id: int | None = None,
 ) -> bool:
     return sync_constancia_created(
         constancia_id,
@@ -826,46 +865,62 @@ def sync_constancia_upsert(
         status,
         items_json,
         created_at,
+        owner_user_id=owner_user_id,
     )
 
 
 # —— Migración / resync por lotes ——
 
-HEADERS_CLIENTES = ("id", "name", "ruc", "created_at")
+HEADERS_CLIENTES = ("id", "name", "ruc", "created_at", "owner_user_id")
 HEADERS_PRODUCTOS = (
     "id", "name", "code", "origin", "um", "active", "lot",
     "production_text", "expiration_text", "humidity", "broken_grains",
     "chalky_1", "chalky_2", "damaged_grains", "whiteness", "created_at",
+    "owner_user_id",
 )
-HEADERS_TRANSPORTES = ("id", "plate", "created_at")
+HEADERS_TRANSPORTES = ("id", "plate", "created_at", "owner_user_id")
 HEADERS_CONSTANCIAS = (
     "id", "number", "issue_date", "client_name", "transport_plate",
     "fumigacion", "calidad", "status", "items_json", "created_at",
+    "owner_user_id",
 )
 HEADERS_TRASIEGOS = (
     "id", "fecha", "mp", "f_ingreso", "estado", "p_final", "lote",
     "f_p", "f_v", "cantidad", "created_at", "updated_at",
+    "owner_user_id",
 )
 
 ENTITY_SPECS: list[tuple[str, str, Sequence[str], str]] = [
-    (TAB_CLIENTES, "clients", HEADERS_CLIENTES, "SELECT id, name, ruc, created_at FROM clients ORDER BY id"),
+    (
+        TAB_CLIENTES,
+        "clients",
+        HEADERS_CLIENTES,
+        "SELECT id, name, ruc, created_at, owner_user_id FROM clients ORDER BY id",
+    ),
     (
         TAB_PRODUCTOS,
         "products",
         HEADERS_PRODUCTOS,
         """
         SELECT id, name, code, origin, um, active, lot, production_text, expiration_text,
-               humidity, broken_grains, chalky_1, chalky_2, damaged_grains, whiteness, created_at
+               humidity, broken_grains, chalky_1, chalky_2, damaged_grains, whiteness, created_at,
+               owner_user_id
         FROM products ORDER BY id
         """,
     ),
-    (TAB_TRANSPORTES, "transports", HEADERS_TRANSPORTES, "SELECT id, plate, created_at FROM transports ORDER BY id"),
+    (
+        TAB_TRANSPORTES,
+        "transports",
+        HEADERS_TRANSPORTES,
+        "SELECT id, plate, created_at, owner_user_id FROM transports ORDER BY id",
+    ),
     (
         TAB_CONSTANCIAS,
         "constancias",
         HEADERS_CONSTANCIAS,
         """
-        SELECT id, number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json, created_at
+        SELECT id, number, issue_date, client_name, transport_plate, fumigacion, calidad, status,
+               items_json, created_at, owner_user_id
         FROM constancias ORDER BY id
         """,
     ),
@@ -874,7 +929,8 @@ ENTITY_SPECS: list[tuple[str, str, Sequence[str], str]] = [
         "trasiegos",
         HEADERS_TRASIEGOS,
         """
-        SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
+        SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad,
+               created_at, updated_at, owner_user_id
         FROM trasiegos ORDER BY id
         """,
     ),
@@ -927,7 +983,7 @@ def entity_specs_for_owner(owner_user_id: int | None = None) -> list[tuple[str, 
             TAB_CLIENTES,
             "clients",
             HEADERS_CLIENTES,
-            f"SELECT id, name, ruc, created_at FROM clients WHERE owner_user_id = {oid} ORDER BY id",
+            f"SELECT id, name, ruc, created_at, owner_user_id FROM clients WHERE owner_user_id = {oid} ORDER BY id",
         ),
         (
             TAB_PRODUCTOS,
@@ -935,7 +991,8 @@ def entity_specs_for_owner(owner_user_id: int | None = None) -> list[tuple[str, 
             HEADERS_PRODUCTOS,
             f"""
         SELECT id, name, code, origin, um, active, lot, production_text, expiration_text,
-               humidity, broken_grains, chalky_1, chalky_2, damaged_grains, whiteness, created_at
+               humidity, broken_grains, chalky_1, chalky_2, damaged_grains, whiteness, created_at,
+               owner_user_id
         FROM products WHERE owner_user_id = {oid} ORDER BY id
         """,
         ),
@@ -943,14 +1000,15 @@ def entity_specs_for_owner(owner_user_id: int | None = None) -> list[tuple[str, 
             TAB_TRANSPORTES,
             "transports",
             HEADERS_TRANSPORTES,
-            f"SELECT id, plate, created_at FROM transports WHERE owner_user_id = {oid} ORDER BY id",
+            f"SELECT id, plate, created_at, owner_user_id FROM transports WHERE owner_user_id = {oid} ORDER BY id",
         ),
         (
             TAB_CONSTANCIAS,
             "constancias",
             HEADERS_CONSTANCIAS,
             f"""
-        SELECT id, number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json, created_at
+        SELECT id, number, issue_date, client_name, transport_plate, fumigacion, calidad, status,
+               items_json, created_at, owner_user_id
         FROM constancias WHERE owner_user_id = {oid} ORDER BY id
         """,
         ),
@@ -959,7 +1017,8 @@ def entity_specs_for_owner(owner_user_id: int | None = None) -> list[tuple[str, 
             "trasiegos",
             HEADERS_TRASIEGOS,
             f"""
-        SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at
+        SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad,
+               created_at, updated_at, owner_user_id
         FROM trasiegos WHERE owner_user_id = {oid} ORDER BY id
         """,
         ),

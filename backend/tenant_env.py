@@ -244,3 +244,61 @@ def row_belongs_to_owner(conn: sqlite3.Connection, table: str, record_id: int, o
         (record_id, owner_user_id),
     ).fetchone()
     return bool(row)
+
+
+def repair_operator_constancias_misassigned_to_admin(conn: sqlite3.Connection) -> int:
+    """Si un operador creó una constancia y quedó en el entorno admin, la devuelve a su dueño.
+
+    Usa la bitácora (constancia_create). No toca creaciones hechas por el admin.
+    """
+    admin_id = get_master_admin_id(conn)
+    if admin_id is None:
+        return 0
+    try:
+        rows = conn.execute(
+            """
+            SELECT a.entity_id, a.user_id
+            FROM audit_log a
+            JOIN app_users u ON u.id = a.user_id
+            WHERE a.action = 'constancia_create'
+              AND a.entity = 'constancia'
+              AND a.user_id IS NOT NULL
+              AND a.entity_id IS NOT NULL
+              AND u.is_admin = 0
+              AND u.active = 1
+            """
+        ).fetchall()
+    except sqlite3.Error:
+        return 0
+
+    fixed = 0
+    for entity_id, user_id in rows:
+        try:
+            cid = int(str(entity_id).strip())
+            uid = int(user_id)
+        except (TypeError, ValueError):
+            continue
+        cur = conn.execute(
+            "SELECT owner_user_id FROM constancias WHERE id = ?",
+            (cid,),
+        ).fetchone()
+        if not cur:
+            continue
+        current = cur[0]
+        if current is not None and int(current) == uid:
+            continue
+        if current is not None and int(current) != int(admin_id):
+            continue
+        conn.execute(
+            "UPDATE constancias SET owner_user_id = ? WHERE id = ?",
+            (uid, cid),
+        )
+        try:
+            conn.execute(
+                "UPDATE trasiegos SET owner_user_id = ? WHERE constancia_id = ?",
+                (uid, cid),
+            )
+        except sqlite3.Error:
+            pass
+        fixed += 1
+    return fixed
