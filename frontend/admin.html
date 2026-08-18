@@ -862,7 +862,7 @@
         <section id="section-users" class="hidden">
           <div class="card">
             <div class="title">Usuarios y permisos</div>
-            <div class="sub" style="margin-top:6px;">Cada usuario tiene su propio entorno de datos. El administrador conserva el entorno maestro y puede ver el de otros sin su contraseña.</div>
+            <div class="sub" style="margin-top:6px;">Cada usuario tiene su propio entorno. Al crear un operador, el admin elige de quién copiar el catálogo (una sola vez). Luego ese catálogo es propio y no afecta a nadie más.</div>
             <div class="actions" style="margin-top:12px;">
               <button class="btn btn-success" id="addUserBtn" type="button">+ Nuevo usuario</button>
               <button class="btn btn-outline" id="refreshUsersBtn" type="button">Actualizar</button>
@@ -937,6 +937,15 @@
               <div class="field" style="display:flex; flex-direction:column; gap:8px; justify-content:center;">
                 <label><input id="userActive" type="checkbox" checked /> Activo</label>
                 <label><input id="userIsAdmin" type="checkbox" /> Administrador (todos los permisos)</label>
+              </div>
+            </div>
+            <div class="field" id="userCatalogSourceWrap" style="margin-top:8px;">
+              <label>Copiar catálogo desde (solo al crear)</label>
+              <select id="userCatalogSource" aria-label="Origen del catálogo">
+                <option value="">Entorno maestro (admin)</option>
+              </select>
+              <div class="tag-muted" style="margin-top:6px;font-size:12px;">
+                Se copia una sola vez clientes, productos y transportes. Después serán propios del nuevo usuario.
               </div>
             </div>
             <div class="section-title" style="margin-top:10px;">Permisos</div>
@@ -7516,6 +7525,39 @@ async function savePdf(){
         }
       }
 
+      async function fillCatalogSourceOptions(excludeUserId = null) {
+        const select = document.getElementById("userCatalogSource");
+        if (!select) return;
+        const res = await fetch("/api/users");
+        const data = await res.json().catch(() => ({}));
+        const users = Array.isArray(data.users) ? data.users : [];
+        const me = window.QCAuth ? window.QCAuth.getUser() : null;
+        const adminId = me && me.is_admin ? me.id : null;
+        select.innerHTML = "";
+        const optAdmin = document.createElement("option");
+        optAdmin.value = adminId ? String(adminId) : "";
+        optAdmin.textContent = "Entorno maestro (admin) — catálogo completo";
+        select.appendChild(optAdmin);
+        users.forEach((u) => {
+          if (!u || !u.id) return;
+          if (excludeUserId && Number(u.id) === Number(excludeUserId)) return;
+          if (u.is_admin) return; // el maestro ya está arriba
+          const opt = document.createElement("option");
+          opt.value = String(u.id);
+          opt.textContent = `${u.display_name || u.username} (${u.username}) — catálogo completo`;
+          select.appendChild(opt);
+        });
+      }
+
+      function syncCatalogSourceVisibility() {
+        const wrap = document.getElementById("userCatalogSourceWrap");
+        const isAdmin = !!document.getElementById("userIsAdmin")?.checked;
+        const isEdit = !!currentEditUserId;
+        if (!wrap) return;
+        // Solo al crear operadores
+        wrap.classList.toggle("hidden", isEdit || isAdmin);
+      }
+
       function openUserModal(user = null) {
         currentEditUserId = user ? user.id : null;
         const modal = document.getElementById("userModal");
@@ -7535,6 +7577,10 @@ async function savePdf(){
         active.checked = user ? !!user.active : true;
         isAdmin.checked = user ? !!user.is_admin : false;
         renderPermissionChecks(user ? user.permissions : null, isAdmin.checked);
+        syncCatalogSourceVisibility();
+        if (!user) {
+          void fillCatalogSourceOptions();
+        }
         modal.classList.remove("hidden");
         modal.classList.add("show");
       }
@@ -7755,6 +7801,7 @@ async function savePdf(){
       });
       document.getElementById("userIsAdmin")?.addEventListener("change", (e) => {
         renderPermissionChecks(readPermissionChecks(), e.target.checked);
+        syncCatalogSourceVisibility();
       });
       document.getElementById("saveUserBtn")?.addEventListener("click", async () => {
         const username = document.getElementById("userUsername")?.value.trim() || "";
@@ -7767,6 +7814,10 @@ async function savePdf(){
         if (!currentEditUserId) {
           payload.username = username;
           payload.password = password;
+          if (!is_admin) {
+            const source = document.getElementById("userCatalogSource")?.value;
+            if (source) payload.catalog_source_owner_id = Number(source);
+          }
         } else if (password) {
           payload.password = password;
         }
@@ -7783,7 +7834,14 @@ async function savePdf(){
           return;
         }
         closeUserModal();
-        showSuccessModal("Usuario guardado correctamente.", { title: "Usuarios" });
+        showSuccessModal(
+          currentEditUserId
+            ? "Usuario guardado correctamente."
+            : is_admin
+              ? "Administrador creado."
+              : "Usuario creado. Se copió el catálogo elegido a su entorno (una sola vez).",
+          { title: "Usuarios" }
+        );
         void loadUsersAdmin();
       });
       document.getElementById("refreshAuditBtn")?.addEventListener("click", () => void loadAuditLog());

@@ -310,22 +310,7 @@ def init_db() -> None:
         conn.commit()
         repair_all_trasiegos_in_sqlite(conn)
         conn.commit()
-        # Preparar entorno de operadores existentes (catálogo copiado del admin, sin constancias).
-        try:
-            admin_id = get_master_admin_id(conn)
-            if admin_id is not None:
-                for row in conn.execute(
-                    "SELECT id, username FROM app_users WHERE is_admin = 0 AND active = 1"
-                ).fetchall():
-                    ensure_user_environment(
-                        conn,
-                        dest_user_id=int(row[0]),
-                        source_owner_id=int(admin_id),
-                        force=False,
-                    )
-                conn.commit()
-        except Exception:
-            logging.getLogger(__name__).exception("No se pudo preparar entornos de operadores")
+        # El catálogo de operadores solo se copia al CREAR el usuario (elección del admin).
 
 
 def _env_owner_from_request(request: Request, user: dict) -> int:
@@ -1392,18 +1377,6 @@ def enter_user_environment(
             # entrar al propio maestro
             pass
         counts = env_counts(conn, int(target["id"]))
-        # Si aún no tiene catálogo, copiar del admin automáticamente
-        if counts["clients"] + counts["products"] + counts["transports"] == 0 and not target.get("is_admin"):
-            admin_id = get_master_admin_id(conn)
-            if admin_id is not None:
-                ensure_user_environment(
-                    conn,
-                    dest_user_id=int(target["id"]),
-                    source_owner_id=int(admin_id),
-                    force=False,
-                )
-                counts = env_counts(conn, int(target["id"]))
-                conn.commit()
         write_audit(
             conn,
             user=user,
@@ -1447,21 +1420,36 @@ async def api_create_user(
                 active=payload.get("active", True) is not False,
             )
             if not created.get("is_admin"):
+                # Copia UNA sola vez al crear: catálogo completo del origen elegido por el admin.
                 source_raw = payload.get("catalog_source_owner_id")
                 source_id = int(source_raw) if source_raw not in (None, "") else get_master_admin_id(conn)
-                ensure_user_environment(
+                if source_id is None:
+                    raise ValueError("No hay un entorno origen para copiar el catálogo.")
+                source_user = get_user_by_id(conn, int(source_id))
+                if not source_user:
+                    raise ValueError("El entorno origen del catálogo no existe.")
+                env_result = ensure_user_environment(
                     conn,
                     dest_user_id=int(created["id"]),
-                    source_owner_id=source_id,
+                    source_owner_id=int(source_id),
                     force=False,
                 )
+                if not env_result.get("ok"):
+                    raise ValueError(env_result.get("error") or "No se pudo copiar el catálogo.")
             write_audit(
                 conn,
                 user=user,
                 action="user_create",
                 entity="user",
                 entity_id=created["id"],
-                detail=f"Alta de usuario {created['username']}",
+                detail=(
+                    f"Alta de usuario {created['username']}"
+                    + (
+                        f" (catálogo desde owner {payload.get('catalog_source_owner_id') or 'admin'})"
+                        if not created.get("is_admin")
+                        else ""
+                    )
+                ),
             )
             conn.commit()
             persist_user_row(conn, DATA_DIR, int(created["id"]))
