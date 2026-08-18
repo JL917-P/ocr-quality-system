@@ -612,20 +612,20 @@ function parseConstanciaDate(dateText) {
                     <th>Nivel de fosfina</th>
                     <th>${fumigacionLastHeader}</th>
           `;
-        // user01 prueba: zoom dinámico proporcional (no Ajiles) en fumigación + calidad
-        // Pocos (2–3): filas un poco más altas sin desproporcionar cabeceras; muchos: compacta para caber
+        // user01: tipografía más visible, proporcional al zoom (cabeceras ≈ datos, sin salir de celda)
         const user01ItemCount = Math.max(items.length || 0, 0);
         const user01DynamicZoom = user01Layout && !isAjilesFumigacion;
         const user01ZoomCount = Math.max(user01ItemCount, 1);
         const user01AvailMm = 128;
         const user01IdealRowMm = user01AvailMm / user01ZoomCount;
         const user01MaxRowMm =
-          user01ZoomCount <= 3 ? 13.5 : user01ZoomCount <= 6 ? 11 : user01ZoomCount <= 12 ? 8.5 : 6.8;
-        const user01RowMm = Math.min(user01MaxRowMm, Math.max(4.0, user01IdealRowMm));
-        const user01FontPx = Math.min(9.2, Math.max(6.5, user01RowMm * 0.7));
-        const user01PadPx = Math.min(3.5, Math.max(1.4, user01FontPx * 0.3));
+          user01ZoomCount <= 3 ? 14 : user01ZoomCount <= 6 ? 11.5 : user01ZoomCount <= 12 ? 9 : 7;
+        const user01RowMm = Math.min(user01MaxRowMm, Math.max(4.2, user01IdealRowMm));
+        const user01FontPx = Math.min(10.5, Math.max(7.4, user01RowMm * 0.88));
+        const user01HeadPx = Math.min(10.8, Math.max(7.6, user01FontPx * 1.05));
+        const user01PadPx = Math.min(2.8, Math.max(1.0, user01FontPx * 0.2));
         const user01FitStyle = user01DynamicZoom
-          ? `--u01-n:${user01ZoomCount};--u01-fs:${user01FontPx.toFixed(2)}px;--u01-pad:${user01PadPx.toFixed(2)}px;--u01-row-h:${user01RowMm.toFixed(2)}mm;`
+          ? `--u01-n:${user01ZoomCount};--u01-fs:${user01FontPx.toFixed(2)}px;--u01-fs-head:${user01HeadPx.toFixed(2)}px;--u01-pad:${user01PadPx.toFixed(2)}px;--u01-row-h:${user01RowMm.toFixed(2)}mm;`
           : "";
         const wrapUser01Table = (tableHtml) =>
           user01Layout && user01DynamicZoom ? `<div class="u01-table-slot">${tableHtml}</div>` : tableHtml;
@@ -637,13 +637,13 @@ function parseConstanciaDate(dateText) {
                 /* user01: márgenes laterales (siempre) */
                 body.user01-wide .page { padding: 6mm 4mm 8mm; }
                 body.user01-wide .ajiles-quality-page { padding: 5mm 4mm 5mm; }
-                body.user01-wide .data { font-size: 7.5px; }
+                body.user01-wide .data { font-size: 8.5px; }
                 body.user01-wide .data th, body.user01-wide .data td { padding: 2px; }
-                body.user01-wide .data.quality th, body.user01-wide .data.quality td { font-size: 7.5px; }
+                body.user01-wide .data.quality th, body.user01-wide .data.quality td { font-size: 8.5px; }
                 body.user01-wide .box { padding: 4px; }
                 body.user01-wide .meta { font-size: 9px; }
                 body.user01-wide .note { font-size: 9px; }
-                /* Zoom proporcional no-Ajiles: cabeceras y datos con la misma tipografía */
+                /* Zoom: letras más grandes, cabeceras y datos proporcionales, dentro de la celda */
                 body.user01-wide.user01-zoom .page { padding: 6mm 4mm 10mm; overflow: hidden; }
                 body.user01-wide.user01-zoom .box {
                   display: flex;
@@ -668,19 +668,30 @@ function parseConstanciaDate(dateText) {
                 body.user01-wide.user01-zoom .u01-table-slot .data:not(.ajiles-fum) thead th {
                   height: auto !important;
                   max-height: none !important;
-                  padding: var(--u01-pad) 2px;
+                  padding: 2px 1px;
                   vertical-align: middle;
-                  font-size: var(--u01-fs) !important;
-                  line-height: 1.15;
+                  font-size: var(--u01-fs-head) !important;
+                  font-weight: 700;
+                  line-height: 1.12;
                   background: #fff;
+                  overflow: hidden;
                 }
                 body.user01-wide.user01-zoom .u01-table-slot .data:not(.ajiles-fum) tbody td {
                   height: var(--u01-row-h);
                   min-height: var(--u01-row-h);
-                  padding: var(--u01-pad) 2px;
+                  max-height: var(--u01-row-h);
+                  padding: var(--u01-pad) 1px;
                   vertical-align: middle;
                   font-size: var(--u01-fs);
-                  line-height: 1.15;
+                  line-height: 1.12;
+                  overflow: hidden;
+                }
+                body.user01-wide.user01-zoom .u01-table-slot .data.quality:not(.ajiles-fum) thead th,
+                body.user01-wide.user01-zoom .u01-table-slot .data.quality:not(.ajiles-fum) tbody td {
+                  font-size: var(--u01-fs) !important;
+                }
+                body.user01-wide.user01-zoom .u01-table-slot .data.quality:not(.ajiles-fum) thead th {
+                  font-size: var(--u01-fs-head) !important;
                 }
                 body.user01-wide.user01-zoom .u01-org {
                   flex-shrink: 0;
