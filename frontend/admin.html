@@ -7099,7 +7099,7 @@
                 body.user01-wide .box { padding: 4px; }
                 body.user01-wide .meta { font-size: 9px; }
                 body.user01-wide .note { font-size: 9px; }
-                /* user01: zoom dinámico solo si hay más de 12 productos */
+                /* user01: zoom dinámico solo si hay más de 12 productos (solo filas de datos; cabeceras fijas) */
                 body.user01-wide.user01-zoom .page { padding: 6mm 4mm 10mm; overflow: hidden; }
                 body.user01-wide.user01-zoom .box {
                   display: flex;
@@ -7117,19 +7117,23 @@
                 }
                 body.user01-wide.user01-zoom .u01-table-slot .data {
                   width: 100%;
-                  font-size: var(--u01-fs);
                   table-layout: fixed;
                   border-collapse: collapse;
                 }
+                /* Cabeceras: mismo tamaño que ≤12 (no zoom) */
                 body.user01-wide.user01-zoom .u01-table-slot .data thead th {
                   height: auto !important;
                   max-height: none !important;
-                  padding: 3px 2px;
+                  padding: 2px;
                   vertical-align: middle;
-                  font-size: var(--u01-fs);
+                  font-size: 7.5px !important;
                   line-height: 1.15;
                   background: #fff;
                 }
+                body.user01-wide.user01-zoom .u01-table-slot .data.quality thead th {
+                  font-size: 7.5px !important;
+                }
+                /* Solo filas de datos se compactan */
                 body.user01-wide.user01-zoom .u01-table-slot .data tbody td {
                   height: var(--u01-row-h);
                   min-height: var(--u01-row-h);
@@ -7137,6 +7141,16 @@
                   vertical-align: middle;
                   font-size: var(--u01-fs);
                   line-height: 1.15;
+                }
+                /* Ajiles: cabeceras fijas; solo compactar alto de filas de productos */
+                body.user01-wide.user01-zoom .ajiles-products th,
+                body.user01-wide.user01-zoom .ajiles-products .aj-head-row th,
+                body.user01-wide.user01-zoom .ajiles-products .aj-bar {
+                  font-size: 6.5pt !important;
+                }
+                body.user01-wide.user01-zoom .ajiles-products tbody td {
+                  height: max(10px, calc(var(--u01-row-h) * 0.55));
+                  font-size: 6.5pt;
                 }
                 body.user01-wide.user01-zoom .u01-org {
                   flex-shrink: 0;
