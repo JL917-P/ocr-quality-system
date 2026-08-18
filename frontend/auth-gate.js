@@ -149,6 +149,15 @@
       }
     } catch (e) {}
 
+    // La URL tiene prioridad para el entorno activo.
+    try {
+      const envParam = new URLSearchParams(window.location.search || "").get("env");
+      if (envParam) window.QCAuth.setEnvOwnerId(envParam);
+      else if (!window.QCAuth.getEnvOwnerId()) {
+        window.QCAuth.clearEnvOwnerId();
+      }
+    } catch (e) {}
+
     let token = window.QCAuth.getToken();
     // Si no hay token en storage pero hay cookie de sesión, recupera usuario.
     if (!token) {

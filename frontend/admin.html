@@ -1171,8 +1171,21 @@
       <div id="ocrBandejaPanel" class="dropdown-panel hidden"></div>
     </div>
 
-    <script src="/static/auth-api.js?v=auth10"></script>
+    <script src="/static/auth-api.js?v=auth11"></script>
     <script>
+      // Activar entorno de la URL ANTES de cualquier carga de datos.
+      (function earlyEnvFromUrl() {
+        try {
+          const params = new URLSearchParams(window.location.search || "");
+          const envParam = params.get("env");
+          if (!window.QCAuth) return;
+          if (envParam) window.QCAuth.setEnvOwnerId(envParam);
+          else window.QCAuth.clearEnvOwnerId();
+        } catch (e) {}
+      })();
+
+      let envOwnerProfile = null; // permisos/menú del usuario impersonado
+
       const productsBody = document.getElementById("productsBody");
       const addRowBtn = document.getElementById("addRowBtn");
       const adminLayout = document.getElementById("adminLayout");
@@ -4808,7 +4821,10 @@
 
       window.closeProductModal = closeProductModal;
 
-      loadProducts();
+      // Sin ?env=, carga inicial. Con entorno impersonado espera qc-panel-ready.
+      if (!(new URLSearchParams(window.location.search || "").get("env"))) {
+        loadProducts();
+      }
 
       function collectConstanciaItems() {
         const items = [];
@@ -6082,7 +6098,9 @@
         }
       });
 
-      loadClients();
+      if (!(new URLSearchParams(window.location.search || "").get("env"))) {
+        loadClients();
+      }
 
       if (clientsPrevBtn) {
         clientsPrevBtn.addEventListener("click", () => {
@@ -6263,9 +6281,11 @@
         }
       });
 
-      loadTransports();
-      loadConstancias();
-      showHomeDashboard();
+      if (!(new URLSearchParams(window.location.search || "").get("env"))) {
+        loadTransports();
+        loadConstancias();
+        showHomeDashboard();
+      }
 
       function openModal(item) {
         const backdrop = document.createElement("div");
@@ -7377,8 +7397,48 @@ async function savePdf(){
       let currentEditUserId = null;
       let permissionKeysCache = Object.keys((window.QCAuth && window.QCAuth.PERMISSION_LABELS) || {});
 
+      function isImpersonatingEnv() {
+        const envId = window.QCAuth ? window.QCAuth.getEnvOwnerId() : "";
+        const me = window.QCAuth ? window.QCAuth.getUser() : null;
+        return !!(envId && me && String(envId) !== String(me.id));
+      }
+
       function can(perm) {
+        // En "Ver entorno", el menú sigue los permisos de ese usuario (no los del admin).
+        if (isImpersonatingEnv()) {
+          if (!envOwnerProfile) return false;
+          if (envOwnerProfile.is_admin) return true;
+          return !!(envOwnerProfile.permissions && envOwnerProfile.permissions[perm]);
+        }
         return !!(window.QCAuth && window.QCAuth.hasPermission(perm));
+      }
+
+      async function refreshEnvOwnerProfile() {
+        envOwnerProfile = null;
+        if (!isImpersonatingEnv()) return null;
+        try {
+          const res = await fetch("/api/environment");
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.owner) {
+            envOwnerProfile = data.owner;
+          }
+        } catch (e) {}
+        return envOwnerProfile;
+      }
+
+      async function reloadActiveEnvironmentData() {
+        const tasks = [];
+        if (typeof loadClients === "function") tasks.push(loadClients());
+        if (typeof loadProducts === "function") tasks.push(loadProducts());
+        if (typeof loadTransports === "function") tasks.push(loadTransports());
+        if (typeof loadConstancias === "function") tasks.push(loadConstancias());
+        if (typeof loadTrasiegos === "function") tasks.push(loadTrasiegos());
+        await Promise.all(tasks.map((p) => Promise.resolve(p).catch(() => null)));
+        if (typeof renderHomeDashboard === "function") {
+          try {
+            renderHomeDashboard();
+          } catch (e) {}
+        }
       }
 
       function isLoggedIn() {
@@ -7416,23 +7476,36 @@ async function savePdf(){
         const nameEl = document.getElementById("sidebarUserName");
         const headerProfile = document.getElementById("headerUserProfile");
         const headerName = document.getElementById("headerUserName");
-        const label = user
-          ? (user.display_name || user.username || "Usuario")
-          : "Usuario";
+        const viewing = isImpersonatingEnv() ? envOwnerProfile : null;
+        const label = viewing
+          ? (viewing.display_name || viewing.username || "Usuario")
+          : user
+            ? (user.display_name || user.username || "Usuario")
+            : "Usuario";
         if (chip && nameEl) {
           if (user) {
             chip.classList.remove("hidden");
-            nameEl.textContent = label;
-            chip.title = user.is_admin ? "Administrador" : "Usuario";
+            nameEl.textContent = viewing
+              ? `${label}`
+              : label;
+            chip.title = viewing
+              ? `Entorno de ${label}`
+              : user.is_admin
+                ? "Administrador"
+                : "Usuario";
           } else {
             chip.classList.add("hidden");
           }
         }
-        if (headerName) headerName.textContent = label;
+        if (headerName) {
+          headerName.textContent = viewing ? label : label;
+        }
         if (headerProfile) {
-          headerProfile.title = user
-            ? (user.is_admin ? `Administrador · ${label}` : label)
-            : "Usuario";
+          headerProfile.title = viewing
+            ? `Viendo entorno de ${label} (sesión admin)`
+            : user
+              ? (user.is_admin ? `Administrador · ${label}` : label)
+              : "Usuario";
           headerProfile.classList.toggle("hidden", !user);
         }
 
@@ -7932,45 +8005,60 @@ async function savePdf(){
           // Cierre de sesión: no validar permisos ni mostrar modales
           return;
         }
-        applyAccessControl();
-        ensureAllowedSection();
-        void refreshNotifications();
+        void (async () => {
+          await refreshEnvOwnerProfile();
+          await refreshEnvImpersonationBanner();
+          applyAccessControl();
+          ensureAllowedSection();
+          await reloadActiveEnvironmentData();
+          void refreshNotifications();
+        })();
       });
       window.addEventListener("qc-panel-ready", () => {
-        applyAccessControl();
-        ensureAllowedSection();
-        void refreshNotifications();
+        void (async () => {
+          await refreshEnvOwnerProfile();
+          await refreshEnvImpersonationBanner();
+          applyAccessControl();
+          ensureAllowedSection();
+          await reloadActiveEnvironmentData();
+          void refreshNotifications();
+        })();
       });
       // No aplicar restricciones hasta tener sesión (evita pantalla vacía al cargar)
+      let refreshEnvImpersonationBanner = async () => {};
       (function initEnvironmentContext() {
         const params = new URLSearchParams(window.location.search || "");
         const envParam = params.get("env");
         if (window.QCAuth) {
           if (envParam) {
-            // La URL manda el entorno; el backend solo lo honra si el usuario es admin.
             window.QCAuth.setEnvOwnerId(envParam);
           } else {
             window.QCAuth.clearEnvOwnerId();
+            envOwnerProfile = null;
           }
         }
         const banner = document.getElementById("envImpersonationBanner");
         const text = document.getElementById("envImpersonationText");
         const exitBtn = document.getElementById("envExitBtn");
-        const refreshBanner = async () => {
+        refreshEnvImpersonationBanner = async () => {
           if (!banner || !window.QCAuth) return;
           const envId = window.QCAuth.getEnvOwnerId();
           const me = window.QCAuth.getUser();
           if (!envId || !me || String(envId) === String(me.id)) {
             banner.classList.add("hidden");
+            if (!envId || (me && String(envId) === String(me.id))) {
+              envOwnerProfile = null;
+            }
             return;
           }
           try {
             const res = await fetch("/api/environment");
             const data = await res.json().catch(() => ({}));
             const owner = data.owner || {};
+            envOwnerProfile = owner;
             const label = owner.display_name || owner.username || `usuario #${envId}`;
             if (text) {
-              text.textContent = `Estás viendo el entorno de ${label} (sin su contraseña). Los cambios afectan solo a ese entorno.`;
+              text.textContent = `Estás viendo el entorno de ${label} (sin su contraseña). Solo catálogo y registros de ese usuario.`;
             }
             banner.classList.remove("hidden");
           } catch (_) {
@@ -7980,11 +8068,12 @@ async function savePdf(){
         };
         exitBtn?.addEventListener("click", () => {
           window.QCAuth?.clearEnvOwnerId();
+          envOwnerProfile = null;
           const url = new URL(window.location.href);
           url.searchParams.delete("env");
           window.location.href = url.pathname + url.hash;
         });
-        void refreshBanner();
+        void refreshEnvImpersonationBanner();
       })();
 
       if (window.QCAuth && window.QCAuth.getUser()) {
@@ -8242,6 +8331,6 @@ async function savePdf(){
       void refreshNotifications();
 
     </script>
-    <script src="/static/auth-gate.js?v=auth10"></script>
+    <script src="/static/auth-gate.js?v=auth11"></script>
   </body>
 </html>
