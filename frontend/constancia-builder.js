@@ -548,47 +548,55 @@ function parseConstanciaDate(dateText) {
           .join("");
         const fumigacionLastHeader = user01Layout ? "Fecha de Instalaciones" : "Unidad Transporte";
         const fumigacionColspan = 13;
-        // user01: tipografía/alto de filas según cantidad (sin forzar height % en thead)
-        const user01ItemCount = Math.max(items.length || 1, 1);
-        const user01FontPx = Math.min(11, Math.max(6.2, 12.8 - user01ItemCount * 0.2));
-        const user01PadPx = Math.min(5, Math.max(1.2, user01FontPx * 0.35));
-        // ~125mm útiles para filas de datos (deja encabezado + organoléptica + pie)
-        const user01RowMm = Math.min(
-          user01ItemCount <= 6 ? 16 : user01ItemCount <= 14 ? 10 : 7,
-          Math.max(4.2, 125 / user01ItemCount)
-        );
-        const user01FitStyle = user01Layout
-          ? `--u01-n:${user01ItemCount};--u01-fs:${user01FontPx.toFixed(2)}px;--u01-pad:${user01PadPx.toFixed(2)}px;--u01-row-h:${user01RowMm.toFixed(2)}mm;`
+        // user01: ≤12 registros = tamaño fijo; >12 = zoom dinámico (fumigación + calidad)
+        const user01ItemCount = Math.max(items.length || 0, 0);
+        const user01DynamicZoom = user01Layout && user01ItemCount > 12;
+        const user01ZoomCount = Math.max(user01ItemCount, 1);
+        const user01FontPx = Math.min(10, Math.max(6.2, 12.8 - user01ZoomCount * 0.2));
+        const user01PadPx = Math.min(4, Math.max(1.2, user01FontPx * 0.32));
+        const user01RowMm = Math.min(7, Math.max(4.0, 125 / user01ZoomCount));
+        const user01FitStyle = user01DynamicZoom
+          ? `--u01-n:${user01ZoomCount};--u01-fs:${user01FontPx.toFixed(2)}px;--u01-pad:${user01PadPx.toFixed(2)}px;--u01-row-h:${user01RowMm.toFixed(2)}mm;`
           : "";
         const wrapUser01Table = (tableHtml) =>
           user01Layout ? `<div class="u01-table-slot">${tableHtml}</div>` : tableHtml;
+        const user01BodyClass = user01Layout
+          ? `user01-wide${user01DynamicZoom ? " user01-zoom" : ""}`
+          : "";
         const user01WideCss = user01Layout
           ? `
-                /* user01: márgenes laterales + filas de datos con alto adaptativo */
-                body.user01-wide .page { padding: 6mm 4mm 10mm; overflow: hidden; }
+                /* user01: márgenes laterales (siempre) */
+                body.user01-wide .page { padding: 6mm 4mm 8mm; }
                 body.user01-wide .ajiles-quality-page { padding: 5mm 4mm 5mm; }
-                body.user01-wide .box {
-                  padding: 4px;
+                body.user01-wide .data { font-size: 7.5px; }
+                body.user01-wide .data th, body.user01-wide .data td { padding: 2px; }
+                body.user01-wide .data.quality th, body.user01-wide .data.quality td { font-size: 7.5px; }
+                body.user01-wide .box { padding: 4px; }
+                body.user01-wide .meta { font-size: 9px; }
+                body.user01-wide .note { font-size: 9px; }
+                /* user01: zoom dinámico solo si hay más de 12 productos */
+                body.user01-wide.user01-zoom .page { padding: 6mm 4mm 10mm; overflow: hidden; }
+                body.user01-wide.user01-zoom .box {
                   display: flex;
                   flex-direction: column;
                   min-height: 0;
                   overflow: hidden;
                 }
-                body.user01-wide .meta { font-size: 9px; flex-shrink: 0; }
-                body.user01-wide .note { font-size: 9px; flex-shrink: 0; }
-                body.user01-wide .title { flex-shrink: 0; }
-                body.user01-wide .u01-table-slot {
+                body.user01-wide.user01-zoom .meta,
+                body.user01-wide.user01-zoom .note,
+                body.user01-wide.user01-zoom .title { flex-shrink: 0; }
+                body.user01-wide.user01-zoom .u01-table-slot {
                   flex: 0 1 auto;
                   min-height: 0;
                   margin-top: 2px;
                 }
-                body.user01-wide .u01-table-slot .data {
+                body.user01-wide.user01-zoom .u01-table-slot .data {
                   width: 100%;
                   font-size: var(--u01-fs);
                   table-layout: fixed;
                   border-collapse: collapse;
                 }
-                body.user01-wide .u01-table-slot .data thead th {
+                body.user01-wide.user01-zoom .u01-table-slot .data thead th {
                   height: auto !important;
                   max-height: none !important;
                   padding: 3px 2px;
@@ -597,7 +605,7 @@ function parseConstanciaDate(dateText) {
                   line-height: 1.15;
                   background: #fff;
                 }
-                body.user01-wide .u01-table-slot .data tbody td {
+                body.user01-wide.user01-zoom .u01-table-slot .data tbody td {
                   height: var(--u01-row-h);
                   min-height: var(--u01-row-h);
                   padding: var(--u01-pad) 2px;
@@ -605,11 +613,11 @@ function parseConstanciaDate(dateText) {
                   font-size: var(--u01-fs);
                   line-height: 1.15;
                 }
-                body.user01-wide .u01-org {
+                body.user01-wide.user01-zoom .u01-org {
                   flex-shrink: 0;
                   margin-top: 6px !important;
                 }
-                body.user01-wide .footer { flex-shrink: 0; }
+                body.user01-wide.user01-zoom .footer { flex-shrink: 0; }
               `
           : "";
         const itemQuality = (item, snapKey, legacyKey) => {
@@ -1026,7 +1034,7 @@ async function savePdf(){
                 ${user01WideCss}
               </style>
             </head>
-            <body class="${user01Layout ? "user01-wide" : ""}" style="${user01FitStyle}">
+            <body class="${user01BodyClass}" style="${user01FitStyle}">
               <div class="actions">
                 <button class="btn" onclick="printDoc()">Imprimir</button>
                 <button class="btn" onclick="savePdf()">Guardar PDF</button>
