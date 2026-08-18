@@ -6811,7 +6811,15 @@
         return `${dd}/${mm}/${yy}`;
       }
 
-      const AJILES_PERU_SKU_MAP = [
+      // SKU Ajiles: mapas independientes (admin/otros vs user01)
+      const AJILES_PERU_SKU_MAP_ADMIN = [
+        { patterns: ["ARROZ EXTRA GRAN CHALAN X 5KG", "GRAN CHALAN X 5KG"], sku: "13010200100586" },
+        { patterns: ["DON CHEF ARROZ SUPERIOR BL 4KG", "ARROZ SUPERIOR BL 4KG"], sku: "130102003001" },
+        { patterns: ["DON CHEF ARROZ EXTRA BL 650GR", "ARROZ EXTRA BL 650GR", "ARROZ EXTRA BL 650 GR"], sku: "130102003002" },
+        { patterns: ["DON CHEF ARROZ EXTRA BL 2KG", "ARROZ EXTRA BL 2KG", "ARROZ EXTRA BL 2 KG"], sku: "13010200112538" },
+        { patterns: ["MI ARROZ SUPERIOR NIR X 25 KG", "ARROZ SUPERIOR NIR X 25 KG"], sku: "130102003003" },
+      ];
+      const AJILES_PERU_SKU_MAP_USER01 = [
         {
           patterns: [
             "DON CHEF ARROZ EXTRA BL 650 GR",
@@ -6857,14 +6865,14 @@
       }
 
       function resolveAjilesSku(productName) {
-        // SKU 3A exclusivo del entorno user01 (Vladimir)
-        if (typeof isUser01ConstanciaLayout === "function" && !isUser01ConstanciaLayout()) {
-          return "";
-        }
         const key = normalizeSearchText(productName);
         if (!key) return "";
         const keyCompact = key.replace(/\s+/g, "");
-        for (const entry of AJILES_PERU_SKU_MAP) {
+        const map =
+          typeof isUser01ConstanciaLayout === "function" && isUser01ConstanciaLayout()
+            ? AJILES_PERU_SKU_MAP_USER01
+            : AJILES_PERU_SKU_MAP_ADMIN;
+        for (const entry of map) {
           for (const pattern of entry.patterns) {
             const normalizedPattern = normalizeSearchText(pattern);
             const patternCompact = normalizedPattern.replace(/\s+/g, "");
