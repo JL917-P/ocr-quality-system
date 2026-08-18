@@ -1569,13 +1569,10 @@
       }
 
       function isOcrHeaderReadyToCollapse() {
-        const ajiles = isActiveAjilesClient();
-        const plateOk = ajiles ? Boolean(constanciaTransporteInput.value.trim()) : true;
         return Boolean(
           constanciaNumero.value.trim() &&
             constanciaFecha.value.trim() &&
             constanciaClienteInput.value.trim() &&
-            plateOk &&
             (constanciaFumigacion.checked || constanciaCalidad.checked)
         );
       }
@@ -1741,13 +1738,13 @@
       }
 
       function syncAjilesTransportVisibility() {
+        // Placa visible para todos los clientes (opcional); mantiene búsqueda/autocomplete
         const group = document.querySelector(".ocr-command-group--transport");
         if (!group) return;
-        const show = isActiveAjilesClient();
-        group.classList.toggle("hidden", !show);
+        group.classList.remove("hidden");
         const prev = group.previousElementSibling;
         if (prev && prev.classList.contains("ocr-command-sep")) {
-          prev.classList.toggle("hidden", !show);
+          prev.classList.remove("hidden");
         }
       }
 
@@ -5136,12 +5133,6 @@
           });
           return;
         }
-        if (isActiveAjilesClient() && !constanciaTransporteInput.value.trim()) {
-          showInfoModal("Para Ajiles debes indicar la placa de transporte.", {
-            title: "Campo requerido",
-          });
-          return;
-        }
         const items = collectConstanciaItems();
         if (!items.length) {
           showInfoModal("Agrega al menos un producto a la constancia antes de guardar.", {
@@ -5153,7 +5144,7 @@
           number: constanciaNumero.value.trim(),
           issue_date: constanciaFecha.value.trim(),
           client_name: constanciaClienteInput.value.trim(),
-          transport_plate: isActiveAjilesClient() ? constanciaTransporteInput.value.trim() : "",
+          transport_plate: constanciaTransporteInput.value.trim(),
           fumigacion: constanciaFumigacion.checked,
           calidad: constanciaCalidad.checked,
           status,
