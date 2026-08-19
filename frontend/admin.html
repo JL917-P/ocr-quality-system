@@ -3212,6 +3212,11 @@
       productsBody.addEventListener("change", (event) => {
         const input = event.target;
         if (!(input instanceof HTMLInputElement)) return;
+        if (input.classList.contains("prod-date-input")) {
+          applyUser01ExpirationFromProduction(input);
+          refreshOcrRowStates();
+          return;
+        }
         if (!input.classList.contains("product-input")) return;
         const row = input.closest("tr");
         if (row) applyProductDetailsForRow(row);
@@ -3220,6 +3225,13 @@
           promptNewProduct(value, input);
         }
       });
+
+      productsBody.addEventListener("blur", (event) => {
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement)) return;
+        if (!input.classList.contains("prod-date-input")) return;
+        applyUser01ExpirationFromProduction(input);
+      }, true);
 
       if (constanciaClienteInput) {
         clientFieldAutocomplete.bindInput(constanciaClienteInput);
@@ -6809,6 +6821,35 @@
         if (!dd || !mm || !yyyy) return dateText || "";
         const yy = yyyy.slice(-2);
         return `${dd}/${mm}/${yy}`;
+      }
+
+      /** user01: suma meses conservando el día (si el mes no lo tiene, usa el último día). */
+      function addMonthsKeepDay(parsed, months) {
+        let monthIndex = parsed.month - 1 + months;
+        let year = parsed.year + Math.floor(monthIndex / 12);
+        monthIndex = ((monthIndex % 12) + 12) % 12;
+        const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+        const day = Math.min(parsed.day, lastDay);
+        return { day, month: monthIndex + 1, year };
+      }
+
+      function formatUser01ProdExpDate(parsed) {
+        const yy = String(parsed.year).slice(-2);
+        return `${parsed.day}/${parsed.month}/${yy}`;
+      }
+
+      /** user01: al editar F. Producción → F. Vencimiento = +8 meses (editable después). */
+      function applyUser01ExpirationFromProduction(prodInput) {
+        if (typeof isUser01ConstanciaLayout !== "function" || !isUser01ConstanciaLayout()) return;
+        if (!(prodInput instanceof HTMLInputElement)) return;
+        if (!prodInput.classList.contains("prod-date-input")) return;
+        const row = prodInput.closest("tr");
+        const expInput = row?.querySelector(".exp-date-input");
+        if (!expInput) return;
+        const parsed = parseConstanciaDate(prodInput.value);
+        if (!parsed) return;
+        const next = addMonthsKeepDay(parsed, 8);
+        expInput.value = formatUser01ProdExpDate(next);
       }
 
       // SKU Ajiles: mapas independientes (admin/otros vs user01)
