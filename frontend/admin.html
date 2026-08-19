@@ -7116,6 +7116,11 @@
         return key.includes("ajiles") && key.includes("peru");
       }
 
+      /** user01: clientes Makro → cabecera PDF de fumigación personalizada. */
+      function isMakroClient(clientName) {
+        return normalizeSearchText(clientName).includes("makro");
+      }
+
       function resolveAjilesSku(productName) {
         const key = normalizeSearchText(productName);
         if (!key) return "";
@@ -7498,6 +7503,8 @@
         const showCalidad = constancia.calidad !== 0 && constancia.calidad !== false;
         const user01Layout = isUser01ConstanciaLayout();
         const isAjilesFumigacion = isAjilesPeruClient(cliente);
+        const isMakroFumigacion =
+          user01Layout && isMakroClient(cliente) && !isAjilesFumigacion;
         const items = constancia.items || [];
         const productCellHtml = (name) =>
           `<td class="cell-fit-line">${(name || "").toString()}</td>`;
@@ -7725,13 +7732,43 @@
             `;
           })
           .join("");
-        const pageContent = `
-          <div class="page first-page">
-            <div class="header">
-              <img class="logo" src="/static/logo.png" alt="Induamerica" />
-            </div>
-            <div class="box">
-              <div class="title">CONSTANCIA DE FUMIGACIÓN N° ${numero}</div>
+        const fumigacionIntroHtml = isMakroFumigacion
+          ? `
+              <table class="meta makro-meta">
+                <tbody>
+                  <tr>
+                    <td class="label">FECHA DE EMISION</td>
+                    <td class="value">${formatEmissionDate(fecha)}</td>
+                    <td class="label">RAZÓN SOCIAL:</td>
+                    <td class="value">INDUAMERICA INTERNACIONAL S.A.C</td>
+                  </tr>
+                  <tr>
+                    <td class="label">PRODUCTO:</td>
+                    <td class="value">ARROZ ELABORADO</td>
+                    <td class="label">RUC:</td>
+                    <td class="value">20602740278</td>
+                  </tr>
+                  <tr>
+                    <td class="value" colspan="4" style="text-align:center;">
+                      Mediante el presente documento dejamos constancia que los lotes producidos detallados han sido tratados
+                      con fosfuro de aluminio (PHOSFIN) en nuestro almacén principal en dosis de 4 a 5 tab/m3.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="label">Plaguicida Usado:</td>
+                    <td class="value" colspan="3">Fosfuro de Aluminio (PHOSFIN)</td>
+                  </tr>
+                  <tr>
+                    <td class="value makro-client-block" colspan="4">
+                      <div>MAKRO SUPERMAYORISTA S.A</div>
+                      <div>${cliente || ""}</div>
+                      ${clientRuc ? `<div>RUC: ${clientRuc}</div>` : ""}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            `
+          : `
               <table class="meta quality-meta">
                 <tbody>
                   <tr>
@@ -7747,8 +7784,17 @@
               <div class="note">
                 Mediante el presente documento dejamos constancia que los lotes de arroz pilado, detallados han sido tratados con Fosfuro de Aluminio (PHOSFIN) en nuestro almacén principal, en dosis de 5 tab/ton.
               </div>
+            `;
+        const pageContent = `
+          <div class="page first-page">
+            <div class="header">
+              <img class="logo" src="/static/logo.png" alt="Induamerica" />
+            </div>
+            <div class="box">
+              <div class="title">CONSTANCIA DE FUMIGACIÓN N° ${numero}</div>
+              ${fumigacionIntroHtml}
               ${wrapUser01Table(`
-              <table class="data${isAjilesFumigacion ? " ajiles-fum" : ""}">
+              <table class="data${isAjilesFumigacion ? " ajiles-fum" : ""}${isMakroFumigacion ? " makro-fum" : ""}">
                 <thead>
                   <tr>
                     ${fumigacionTableHead}
@@ -7953,6 +7999,15 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
                 .quality-meta td { width: 25%; }
                 .quality-meta td.value { white-space: normal; }
                 .note { border: 1px solid #111827; border-top: none; padding: 4px; font-size: 10px; text-align: center; }
+                .makro-meta { table-layout: fixed; margin-bottom: 0; }
+                .makro-meta td { width: 25%; }
+                .makro-meta .makro-client-block {
+                  text-align: center;
+                  font-weight: 700;
+                  line-height: 1.35;
+                  padding: 6px 4px;
+                }
+                .data.makro-fum { margin-top: 4px; }
                 .data { width: 100%; border-collapse: collapse; font-size: 8px; table-layout: fixed; }
                 .data th, .data td { border: 1px solid #111827; padding: 3px; word-break: break-word; }
                 .data th { text-align: center; font-weight: 600; }
@@ -8153,6 +8208,7 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
       globalThis.getConstanciaFirmaSrc = getConstanciaFirmaSrc;
       globalThis.isUser01ConstanciaLayout = isUser01ConstanciaLayout;
       globalThis.isCencosudCdLimaClient = isCencosudCdLimaClient;
+      globalThis.isMakroClient = isMakroClient;
 
       // —— Usuarios, permisos y bitácora ——
       const SECTION_PERM_MAP = {
