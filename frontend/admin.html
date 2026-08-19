@@ -6838,6 +6838,74 @@
         return `${parsed.day}/${parsed.month}/${yy}`;
       }
 
+      const USER01_MONTH_ABBR = [
+        "ene",
+        "feb",
+        "mar",
+        "abr",
+        "may",
+        "jun",
+        "jul",
+        "ago",
+        "sep",
+        "oct",
+        "nov",
+        "dic",
+      ];
+
+      /** Parsea ago-27 / ago27 / AGO27 / ago 27 → { month, year, hasHyphen, monthCase } */
+      function parseUser01MonthYearText(dateText) {
+        const raw = (dateText || "").trim();
+        if (!raw) return null;
+        const match = raw.match(/^([A-Za-zÁÉÍÓÚáéíóúüÜ]{3})\s*([-./]?)\s*(\d{2}|\d{4})$/);
+        if (!match) return null;
+        const monthToken = match[1];
+        const sep = match[2] || "";
+        let year = parseInt(match[3], 10);
+        if (match[3].length === 2) year += year < 50 ? 2000 : 1900;
+        const monthKey = monthToken
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+        const aliases = { set: "sep", sept: "sep" };
+        const normalized = aliases[monthKey] || monthKey;
+        const monthIndex = USER01_MONTH_ABBR.indexOf(normalized);
+        if (monthIndex < 0) return null;
+        const hasHyphen = sep === "-";
+        let monthCase = "lower";
+        if (monthToken === monthToken.toUpperCase()) monthCase = "upper";
+        else if (monthToken[0] === monthToken[0].toUpperCase()) monthCase = "title";
+        return {
+          month: monthIndex + 1,
+          year,
+          hasHyphen,
+          monthCase,
+        };
+      }
+
+      function formatUser01MonthYearText(parsed) {
+        const abbr = USER01_MONTH_ABBR[parsed.month - 1] || "";
+        let monthOut = abbr;
+        if (parsed.monthCase === "upper") monthOut = abbr.toUpperCase();
+        else if (parsed.monthCase === "title") {
+          monthOut = abbr.charAt(0).toUpperCase() + abbr.slice(1);
+        }
+        const yy = String(parsed.year).slice(-2);
+        return parsed.hasHyphen ? `${monthOut}-${yy}` : `${monthOut}${yy}`;
+      }
+
+      function addMonthsMonthYear(parsed, months) {
+        let monthIndex = parsed.month - 1 + months;
+        let year = parsed.year + Math.floor(monthIndex / 12);
+        monthIndex = ((monthIndex % 12) + 12) % 12;
+        return {
+          month: monthIndex + 1,
+          year,
+          hasHyphen: parsed.hasHyphen,
+          monthCase: parsed.monthCase,
+        };
+      }
+
       /** user01: al editar F. Producción → F. Vencimiento = +8 meses (editable después). */
       function applyUser01ExpirationFromProduction(prodInput) {
         if (typeof isUser01ConstanciaLayout !== "function" || !isUser01ConstanciaLayout()) return;
@@ -6846,10 +6914,23 @@
         const row = prodInput.closest("tr");
         const expInput = row?.querySelector(".exp-date-input");
         if (!expInput) return;
-        const parsed = parseConstanciaDate(prodInput.value);
-        if (!parsed) return;
-        const next = addMonthsKeepDay(parsed, 8);
-        expInput.value = formatUser01ProdExpDate(next);
+        const value = (prodInput.value || "").trim();
+        if (!value) return;
+
+        // 1) Fecha numérica: 14/8/26 → 14/4/27
+        const numeric = parseConstanciaDate(value);
+        if (numeric) {
+          const next = addMonthsKeepDay(numeric, 8);
+          expInput.value = formatUser01ProdExpDate(next);
+          return;
+        }
+
+        // 2) Mes-año texto: ago-27 / ago27 → abr-27 / abr27
+        const monthYear = parseUser01MonthYearText(value);
+        if (monthYear) {
+          const next = addMonthsMonthYear(monthYear, 8);
+          expInput.value = formatUser01MonthYearText(next);
+        }
       }
 
       // SKU Ajiles: mapas independientes (admin/otros vs user01)
