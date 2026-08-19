@@ -3220,6 +3220,11 @@
         if (!input.classList.contains("product-input")) return;
         const row = input.closest("tr");
         if (row) applyProductDetailsForRow(row);
+        // Si ya hay F. Producción, recalcular vencimiento según si el producto es integral (+6) o no (+8)
+        const prodDateInput = row?.querySelector(".prod-date-input");
+        if (prodDateInput && (prodDateInput.value || "").trim()) {
+          applyUser01ExpirationFromProduction(prodDateInput);
+        }
         const value = input.value || "";
         if (value.trim() && !isKnownProduct(value)) {
           promptNewProduct(value, input);
@@ -6906,7 +6911,7 @@
         };
       }
 
-      /** user01: al editar F. Producción → F. Vencimiento = +8 meses (editable después). */
+      /** user01: al editar F. Producción → F. Vencimiento = +8 meses (o +6 si el producto es integral). */
       function applyUser01ExpirationFromProduction(prodInput) {
         if (typeof isUser01ConstanciaLayout !== "function" || !isUser01ConstanciaLayout()) return;
         if (!(prodInput instanceof HTMLInputElement)) return;
@@ -6917,18 +6922,26 @@
         const value = (prodInput.value || "").trim();
         if (!value) return;
 
-        // 1) Fecha numérica: 14/8/26 → 14/4/27
+        const productName = (row.querySelector(".product-input")?.value || "").toString();
+        const isIntegral = productName
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .includes("integral");
+        const monthsAhead = isIntegral ? 6 : 8;
+
+        // 1) Fecha numérica: 19/8/26 → 19/2/27 (integral) o +8 meses (resto)
         const numeric = parseConstanciaDate(value);
         if (numeric) {
-          const next = addMonthsKeepDay(numeric, 8);
+          const next = addMonthsKeepDay(numeric, monthsAhead);
           expInput.value = formatUser01ProdExpDate(next);
           return;
         }
 
-        // 2) Mes-año texto: ago-27 / ago27 → abr-27 / abr27
+        // 2) Mes-año texto: ago-26 / AGO26 → feb-27 / FEB27 (integral) o +8 meses
         const monthYear = parseUser01MonthYearText(value);
         if (monthYear) {
-          const next = addMonthsMonthYear(monthYear, 8);
+          const next = addMonthsMonthYear(monthYear, monthsAhead);
           expInput.value = formatUser01MonthYearText(next);
         }
       }
