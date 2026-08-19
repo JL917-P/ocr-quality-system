@@ -6766,6 +6766,9 @@
             day: parseInt(match[3], 10),
             month: parseInt(match[2], 10),
             year: parseInt(match[1], 10),
+            dayPadded: true,
+            monthPadded: true,
+            yearDigits: 4,
           };
         }
         match = value.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{4})$/);
@@ -6774,6 +6777,9 @@
             day: parseInt(match[1], 10),
             month: parseInt(match[2], 10),
             year: parseInt(match[3], 10),
+            dayPadded: match[1].length >= 2,
+            monthPadded: match[2].length >= 2,
+            yearDigits: 4,
           };
         }
         match = value.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{2})$/);
@@ -6784,6 +6790,9 @@
             day: parseInt(match[1], 10),
             month: parseInt(match[2], 10),
             year,
+            dayPadded: match[1].length >= 2,
+            monthPadded: match[2].length >= 2,
+            yearDigits: 2,
           };
         }
         return null;
@@ -6835,12 +6844,32 @@
         monthIndex = ((monthIndex % 12) + 12) % 12;
         const lastDay = new Date(year, monthIndex + 1, 0).getDate();
         const day = Math.min(parsed.day, lastDay);
-        return { day, month: monthIndex + 1, year };
+        return {
+          day,
+          month: monthIndex + 1,
+          year,
+          dayPadded: parsed.dayPadded,
+          monthPadded: parsed.monthPadded,
+          yearDigits: parsed.yearDigits,
+          monthCase: parsed.monthCase,
+        };
       }
 
+      /** Conserva el estilo de F. Prod: 03/08/2026, 3/8/26, 3/08/2026, etc. */
       function formatUser01ProdExpDate(parsed) {
-        const yy = String(parsed.year).slice(-2);
-        return `${parsed.day}/${parsed.month}/${yy}`;
+        const dd =
+          parsed.dayPadded === true
+            ? String(parsed.day).padStart(2, "0")
+            : String(parsed.day);
+        const mm =
+          parsed.monthPadded === true
+            ? String(parsed.month).padStart(2, "0")
+            : String(parsed.month);
+        const yy =
+          parsed.yearDigits === 4
+            ? String(parsed.year)
+            : String(parsed.year).slice(-2);
+        return `${dd}/${mm}/${yy}`;
       }
 
       const USER01_MONTH_ABBR = [
