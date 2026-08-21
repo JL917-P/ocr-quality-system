@@ -2947,6 +2947,8 @@ async def create_constancia(
             "id": constancia_id,
             "owner_user_id": owner_id,
             "trasiegos_created": len(trasiego_new_ids),
+            "mobile_number": header.get("mobile_number") or "",
+            "pallets": header.get("pallets") or "",
         }
     )
 
@@ -3403,6 +3405,8 @@ async def update_constancia(
             client_key = (_str(header.get("client_name")) or "").lower()
             if "tottus" in client_key and "hipermercado" in client_key:
                 pallets_to_save = old_header.get("pallets")
+        header["mobile_number"] = mobile_to_save
+        header["pallets"] = pallets_to_save
         conn.execute(
             """
             UPDATE constancias
@@ -3480,7 +3484,12 @@ async def update_constancia(
             owner_user_id=owner_id,
         ),
     )
-    return JSONResponse({"ok": True, "trasiegos_created": len(trasiego_new_ids)})
+    return JSONResponse({
+        "ok": True,
+        "trasiegos_created": len(trasiego_new_ids),
+        "mobile_number": header.get("mobile_number") or "",
+        "pallets": header.get("pallets") or "",
+    })
 
 
 if __name__ == "__main__":

@@ -5250,6 +5250,16 @@
           });
           return;
         }
+        const mobileToSave = (constanciaMobileNumber?.value || "")
+          .trim()
+          .toUpperCase()
+          .replace(/\s+/g, "")
+          .slice(0, 2);
+        const palletsToSave = (constanciaPallets?.value || "")
+          .trim()
+          .replace(/\s+/g, "")
+          .slice(0, 2);
+        // Guardar siempre el valor de los inputs (no depender de isActiveTottusClient al guardar)
         const payload = {
           number: constanciaNumero.value.trim(),
           issue_date: constanciaFecha.value.trim(),
@@ -5257,12 +5267,8 @@
           transport_plate: constanciaTransporteInput.value.trim(),
           fumigacion: constanciaFumigacion.checked,
           calidad: constanciaCalidad.checked,
-          mobile_number: isActiveTottusClient()
-            ? (constanciaMobileNumber?.value || "").trim().toUpperCase().slice(0, 2)
-            : "",
-          pallets: isActiveTottusClient()
-            ? (constanciaPallets?.value || "").trim().slice(0, 2)
-            : "",
+          mobile_number: mobileToSave,
+          pallets: palletsToSave,
           status,
           items,
           usuario: (window.QCAuth && window.QCAuth.getUser()
@@ -5361,9 +5367,13 @@
         applyOcrLayoutForClient({ force: true });
         syncAjilesTransportVisibility();
         syncTottusExtraVisibility();
-        // Restaurar después del layout para que no se pierdan al reabrir/importar
+        // Restaurar después del layout (y un tick más) para no perderlos al importar
         setTottusExtraFields(mobileSaved, palletsSaved);
         tottusExtraWasActive = isActiveTottusClient();
+        setTimeout(() => {
+          setTottusExtraFields(mobileSaved, palletsSaved);
+          tottusExtraWasActive = isActiveTottusClient();
+        }, 0);
         updateRestoreConstanciaButton(data.items || []);
         if (data.repaired_from_duplicate) {
           showSuccessModal(
