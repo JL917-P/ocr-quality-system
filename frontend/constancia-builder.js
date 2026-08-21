@@ -610,9 +610,30 @@ function parseConstanciaDate(dateText) {
           .join("");
       }
 
-      function buildTottusDesinsectacionPage(constancia, items, fecha, numero, cliente, transporte) {
+      function computeUser01TableZoomStyle(rowCount, availMm = 128) {
+        const n = Math.max(Number(rowCount) || 0, 1);
+        const idealRowMm = availMm / n;
+        const maxRowMm = n <= 3 ? 14 : n <= 6 ? 11.5 : n <= 12 ? 9 : 7;
+        const rowMm = Math.min(maxRowMm, Math.max(4.2, idealRowMm));
+        const fontPx = Math.min(11.5, Math.max(7.4, rowMm * 0.9));
+        const headPx = Math.min(11.8, Math.max(7.6, fontPx * 1.05));
+        const padPx = Math.min(3.2, Math.max(1.0, fontPx * 0.22));
+        return `--u01-n:${n};--u01-fs:${fontPx.toFixed(2)}px;--u01-fs-head:${headPx.toFixed(2)}px;--u01-pad:${padPx.toFixed(2)}px;--u01-row-h:${rowMm.toFixed(2)}mm;`;
+      }
+
+      function buildTottusDesinsectacionPage(
+        constancia,
+        items,
+        fecha,
+        numero,
+        cliente,
+        transporte,
+        options = {}
+      ) {
         const mobileNumber = constancia.mobile_number || constancia.mobile || "";
         const pallets = constancia.pallets || constancia.palets || "";
+        const enableUser01Zoom = !!options.enableUser01Zoom;
+        const consolidated = consolidateTottusProducts(items);
         const rowsHtml = buildTottusDesinsectacionRows(
           items,
           fecha,
@@ -620,6 +641,25 @@ function parseConstanciaDate(dateText) {
           mobileNumber,
           pallets
         );
+        const tableHtml = `
+              <table class="data tottus-desinsectacion">
+                <colgroup>
+                  <col style="width:6%" />
+                  <col style="width:10%" />
+                  <col style="width:22%" />
+                  <col style="width:10%" />
+                  <col style="width:34%" />
+                  <col style="width:10%" />
+                  <col style="width:8%" />
+                </colgroup>
+                <tbody>
+                  ${rowsHtml}
+                </tbody>
+              </table>
+            `;
+        const tableBlock = enableUser01Zoom
+          ? `<div class="u01-table-slot" style="${computeUser01TableZoomStyle(consolidated.length, 155)}">${tableHtml}</div>`
+          : tableHtml;
         return `
           <div class="page tottus-desinsectacion-page last-page">
             <div class="header">
@@ -649,20 +689,7 @@ function parseConstanciaDate(dateText) {
                   </tr>
                 </tbody>
               </table>
-              <table class="data tottus-desinsectacion">
-                <colgroup>
-                  <col style="width:6%" />
-                  <col style="width:10%" />
-                  <col style="width:22%" />
-                  <col style="width:10%" />
-                  <col style="width:34%" />
-                  <col style="width:10%" />
-                  <col style="width:8%" />
-                </colgroup>
-                <tbody>
-                  ${rowsHtml}
-                </tbody>
-              </table>
+              ${tableBlock}
             </div>
             <div class="footer">
               <div class="firma-wrap">
@@ -938,6 +965,22 @@ function parseConstanciaDate(dateText) {
                 body.user01-wide.user01-zoom .u01-table-slot .data.quality:not(.ajiles-fum) thead th {
                   font-size: var(--u01-fs-head) !important;
                 }
+                body.user01-wide.user01-zoom .u01-table-slot .data.tottus-desinsectacion {
+                  font-size: var(--u01-fs) !important;
+                }
+                body.user01-wide.user01-zoom .u01-table-slot .data.tottus-desinsectacion tbody td {
+                  height: var(--u01-row-h);
+                  min-height: var(--u01-row-h);
+                  max-height: var(--u01-row-h);
+                  padding: var(--u01-pad) 3px;
+                  font-size: var(--u01-fs) !important;
+                  line-height: 1.15;
+                  overflow: hidden;
+                }
+                body.user01-wide.user01-zoom .u01-table-slot .data.tottus-desinsectacion .td-palets {
+                  font-size: calc(var(--u01-fs) * 1.85) !important;
+                  font-weight: 700;
+                }
                 body.user01-wide.user01-zoom .u01-org {
                   flex-shrink: 0;
                   margin-top: 6px !important;
@@ -1194,7 +1237,9 @@ function parseConstanciaDate(dateText) {
           </div>
         `;
         const pageQuality = isTottusDesinsectacion
-          ? buildTottusDesinsectacionPage(constancia, items, fecha, numero, cliente, transporte)
+          ? buildTottusDesinsectacionPage(constancia, items, fecha, numero, cliente, transporte, {
+              enableUser01Zoom: user01DynamicZoom,
+            })
           : isAjilesQuality
             ? buildAjilesQualityPage(constancia, clientMatch, items, fecha)
             : pageQualityStandard;
@@ -1482,7 +1527,7 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
                   width: 100%;
                   border-collapse: collapse;
                   margin-top: 6px;
-                  font-size: 9px;
+                  font-size: 10px;
                 }
                 .data.tottus-desinsectacion td {
                   border: 1px solid #111827;
