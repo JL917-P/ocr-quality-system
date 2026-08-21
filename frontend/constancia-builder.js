@@ -537,7 +537,8 @@ function parseConstanciaDate(dateText) {
         `;
       }
 
-      const TOTTUS_DESINSECTACION_EMPRESA = "Induamerica Servicios Logísticos S.A.C.";
+      const TOTTUS_DESINSECTACION_EMPRESA =
+        "Induamerica Servicios<br>Logísticos S.A.C.";
 
       /** Consolida productos repetidos sumando cantidades (nombre una sola vez). */
       function consolidateTottusProducts(items) {
@@ -1545,6 +1546,11 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
                 }
                 .data.tottus-desinsectacion .td-mobile {
                   font-weight: 600;
+                }
+                .data.tottus-desinsectacion .td-empresa {
+                  line-height: 1.2;
+                  white-space: normal;
+                  word-break: normal;
                 }
                 @media print {
                   body { background: #fff; }
