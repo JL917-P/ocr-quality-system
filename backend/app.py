@@ -282,6 +282,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE constancias ADD COLUMN fumigacion INTEGER NOT NULL DEFAULT 1")
         if "calidad" not in columns:
             conn.execute("ALTER TABLE constancias ADD COLUMN calidad INTEGER NOT NULL DEFAULT 1")
+        if "mobile_number" not in columns:
+            conn.execute("ALTER TABLE constancias ADD COLUMN mobile_number TEXT")
+        if "pallets" not in columns:
+            conn.execute("ALTER TABLE constancias ADD COLUMN pallets TEXT")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS constancia_history (
@@ -2870,8 +2874,9 @@ async def create_constancia(
         cursor = conn.execute(
             """
             INSERT INTO constancias (
-                number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json, created_at, owner_user_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                number, issue_date, client_name, transport_plate, fumigacion, calidad,
+                mobile_number, pallets, status, items_json, created_at, owner_user_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 header["number"],
@@ -2880,6 +2885,8 @@ async def create_constancia(
                 header["transport_plate"],
                 header["fumigacion"],
                 header["calidad"],
+                header.get("mobile_number"),
+                header.get("pallets"),
                 header["status"],
                 items_json,
                 created_at,
@@ -3264,7 +3271,8 @@ def get_constancia(
         _require_owned_row(conn, "constancias", constancia_id, owner_id)
         row = conn.execute(
             """
-            SELECT id, number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json, created_at
+            SELECT id, number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json, created_at,
+                   mobile_number, pallets
             FROM constancias
             WHERE id = ? AND owner_user_id = ?
             """,
@@ -3316,6 +3324,8 @@ def get_constancia(
             "status": normalize_constancia_status(row[7]),
             "items": items,
             "created_at": row[9],
+            "mobile_number": row[10] or "",
+            "pallets": row[11] or "",
             "repaired_from_duplicate": repaired,
         }
     )
@@ -3361,7 +3371,8 @@ async def update_constancia(
         _require_owned_row(conn, "constancias", constancia_id, owner_id)
         row = conn.execute(
             """
-            SELECT number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json
+            SELECT number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json,
+                   mobile_number, pallets
             FROM constancias WHERE id = ? AND owner_user_id = ?
             """,
             (constancia_id, owner_id),
@@ -3376,6 +3387,8 @@ async def update_constancia(
             "fumigacion": row[4],
             "calidad": row[5],
             "status": row[6],
+            "mobile_number": row[8],
+            "pallets": row[9],
         }
         old_items = parse_items_json(row[7])
         items_snap = normalize_items_for_save(conn, items, old_items, owner_user_id=owner_id)
@@ -3383,7 +3396,8 @@ async def update_constancia(
             """
             UPDATE constancias
             SET number = ?, issue_date = ?, client_name = ?, transport_plate = ?,
-                fumigacion = ?, calidad = ?, status = ?, items_json = ?
+                fumigacion = ?, calidad = ?, status = ?, items_json = ?,
+                mobile_number = ?, pallets = ?
             WHERE id = ? AND owner_user_id = ?
             """,
             (
@@ -3395,6 +3409,8 @@ async def update_constancia(
                 header["calidad"],
                 header["status"],
                 json.dumps(items_snap, ensure_ascii=True),
+                header.get("mobile_number"),
+                header.get("pallets"),
                 constancia_id,
                 owner_id,
             ),

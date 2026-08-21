@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home86" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home87" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -375,8 +375,33 @@
                     <span class="ocr-command-label">Emitir</span>
                     <div class="ocr-command-checks">
                       <label><input id="constanciaFumigacion" type="checkbox" checked /> Fum.</label>
-                      <label><input id="constanciaCalidad" type="checkbox" checked /> Cal.</label>
+                      <label><input id="constanciaCalidad" type="checkbox" checked /> <span id="constanciaCalidadText">Cal.</span></label>
                     </div>
+                  </div>
+                  <div class="ocr-command-sep hidden" id="ocrTottusExtraSep" aria-hidden="true"></div>
+                  <div class="ocr-command-group ocr-command-group--tottus-extra hidden" id="ocrTottusExtraGroup">
+                    <span class="ocr-command-label" title="Número de móvil">N° móvil</span>
+                    <input
+                      id="constanciaMobileNumber"
+                      type="text"
+                      maxlength="2"
+                      inputmode="text"
+                      placeholder="M2"
+                      autocomplete="off"
+                      spellcheck="false"
+                      title="Número de móvil (2 caracteres)"
+                    />
+                    <span class="ocr-command-label" title="Palets">Palets</span>
+                    <input
+                      id="constanciaPallets"
+                      type="text"
+                      maxlength="2"
+                      inputmode="numeric"
+                      placeholder="35"
+                      autocomplete="off"
+                      spellcheck="false"
+                      title="Palets (2 dígitos)"
+                    />
                   </div>
                   <div class="ocr-command-sep" aria-hidden="true"></div>
                   <div class="ocr-command-group ocr-command-group--more">
@@ -1431,6 +1456,11 @@
       const constanciaTransporteInput = document.getElementById("constanciaTransporteInput");
       const constanciaFumigacion = document.getElementById("constanciaFumigacion");
       const constanciaCalidad = document.getElementById("constanciaCalidad");
+      const constanciaCalidadText = document.getElementById("constanciaCalidadText");
+      const constanciaMobileNumber = document.getElementById("constanciaMobileNumber");
+      const constanciaPallets = document.getElementById("constanciaPallets");
+      const ocrTottusExtraGroup = document.getElementById("ocrTottusExtraGroup");
+      const ocrTottusExtraSep = document.getElementById("ocrTottusExtraSep");
       const ocrMoreMenu = document.getElementById("ocrMoreMenu");
       const ocrMoreOptionsBtn = document.getElementById("ocrMoreOptionsBtn");
       const ocrMoreOptionsPanel = document.getElementById("ocrMoreOptionsPanel");
@@ -1563,7 +1593,7 @@
         if (plate) parts.push(plate);
         const types = [];
         if (constanciaFumigacion.checked) types.push("Fumigación");
-        if (constanciaCalidad.checked) types.push("Calidad");
+        if (constanciaCalidad.checked) types.push(isActiveTottusClient() ? "Desinsectación" : "Calidad");
         if (types.length) parts.push(types.join(" + "));
         return parts.join(" · ") || "Datos de constancia";
       }
@@ -1676,6 +1706,46 @@
           : false;
       }
 
+      function isActiveTottusClient() {
+        if (typeof isUser01ConstanciaLayout === "function" && !isUser01ConstanciaLayout()) {
+          return false;
+        }
+        if (typeof isHipermercadosTottusClient !== "function") return false;
+        return isHipermercadosTottusClient(constanciaClienteInput?.value || "");
+      }
+
+      function getOcrClientLayoutMode() {
+        if (isActiveAjilesClient()) return "ajiles";
+        if (isActiveTottusClient()) return "tottus";
+        return "standard";
+      }
+
+      function syncTottusExtraVisibility() {
+        const show = isActiveTottusClient();
+        if (ocrTottusExtraGroup) ocrTottusExtraGroup.classList.toggle("hidden", !show);
+        if (ocrTottusExtraSep) ocrTottusExtraSep.classList.toggle("hidden", !show);
+        if (constanciaCalidadText) {
+          constanciaCalidadText.textContent = show ? "Des." : "Cal.";
+          constanciaCalidadText.title = show
+            ? "Constancia de desinsectación"
+            : "Constancia de calidad";
+        }
+        if (!show) {
+          if (constanciaMobileNumber) constanciaMobileNumber.value = "";
+          if (constanciaPallets) constanciaPallets.value = "";
+        }
+      }
+
+      function clampTottusMiniField(input) {
+        if (!(input instanceof HTMLInputElement)) return;
+        input.addEventListener("input", () => {
+          const raw = (input.value || "").toUpperCase().replace(/\s+/g, "");
+          input.value = raw.slice(0, 2);
+        });
+      }
+      clampTottusMiniField(constanciaMobileNumber);
+      clampTottusMiniField(constanciaPallets);
+
       function formatEmissionDateForInput() {
         const base = (constanciaFecha && constanciaFecha.value) || formatToday();
         if (typeof formatShortDate === "function") return formatShortDate(base) || "";
@@ -1749,15 +1819,17 @@
       }
 
       function applyOcrLayoutForClient({ force = false } = {}) {
-        const ajiles = isActiveAjilesClient();
-        if (!force && applyOcrLayoutForClient._lastMode === ajiles) {
+        const mode = getOcrClientLayoutMode();
+        if (!force && applyOcrLayoutForClient._lastMode === mode) {
           syncAjilesTransportVisibility();
+          syncTottusExtraVisibility();
           updateOcrHeaderCollapseUi();
           return;
         }
-        applyOcrLayoutForClient._lastMode = ajiles;
+        applyOcrLayoutForClient._lastMode = mode;
         renderOcrProductsHeader();
         syncAjilesTransportVisibility();
+        syncTottusExtraVisibility();
         if (!productsBody) return;
         const items = collectConstanciaItems();
         fillConstanciaItems(items);
@@ -1765,6 +1837,7 @@
       }
       applyOcrLayoutForClient._lastMode = null;
       syncAjilesTransportVisibility();
+      syncTottusExtraVisibility();
       renderOcrProductsHeader();
 
       function buildProductRowHtml(productValue = "") {
@@ -3008,7 +3081,7 @@
       function fillConstanciaItems(items) {
         renderOcrProductsHeader();
         syncAjilesTransportVisibility();
-        applyOcrLayoutForClient._lastMode = isActiveAjilesClient();
+        applyOcrLayoutForClient._lastMode = getOcrClientLayoutMode();
         productsBody.innerHTML = "";
         (items || []).forEach((itm) => {
           const name = itemSnapshotField(itm, "product_name_snapshot", "product");
@@ -5113,9 +5186,12 @@
         constanciaTransporteInput.value = "";
         constanciaFumigacion.checked = true;
         constanciaCalidad.checked = true;
+        if (constanciaMobileNumber) constanciaMobileNumber.value = "";
+        if (constanciaPallets) constanciaPallets.value = "";
         applyOcrLayoutForClient._lastMode = null;
         renderOcrProductsHeader();
         syncAjilesTransportVisibility();
+        syncTottusExtraVisibility();
         productsBody.innerHTML = "";
         addRow();
         currentConstanciaId = null;
@@ -5164,6 +5240,8 @@
           transport_plate: constanciaTransporteInput.value.trim(),
           fumigacion: constanciaFumigacion.checked,
           calidad: constanciaCalidad.checked,
+          mobile_number: (constanciaMobileNumber?.value || "").trim().toUpperCase().slice(0, 2),
+          pallets: (constanciaPallets?.value || "").trim().slice(0, 2),
           status,
           items,
           usuario: (window.QCAuth && window.QCAuth.getUser()
@@ -5255,10 +5333,13 @@
         constanciaTransporteInput.value = data.transport_plate || "";
         constanciaFumigacion.checked = data.fumigacion !== 0 && data.fumigacion !== false;
         constanciaCalidad.checked = data.calidad !== 0 && data.calidad !== false;
+        if (constanciaMobileNumber) constanciaMobileNumber.value = (data.mobile_number || "").toString().slice(0, 2);
+        if (constanciaPallets) constanciaPallets.value = (data.pallets || "").toString().slice(0, 2);
         applyOcrLayoutForClient._lastMode = null;
         fillConstanciaItems(data.items || []);
-        applyOcrLayoutForClient._lastMode = isActiveAjilesClient();
+        applyOcrLayoutForClient({ force: true });
         syncAjilesTransportVisibility();
+        syncTottusExtraVisibility();
         updateRestoreConstanciaButton(data.items || []);
         if (data.repaired_from_duplicate) {
           showSuccessModal(
@@ -7471,6 +7552,146 @@
         `;
       }
 
+      const TOTTUS_DESINSECTACION_EMPRESA = "Induamerica Servicios Logísticos S.A.C.";
+
+      /** Consolida productos repetidos sumando cantidades (nombre una sola vez). */
+      function consolidateTottusProducts(items) {
+        const ordered = [];
+        const indexByKey = new Map();
+        (items || []).forEach((item) => {
+          const productName = (itemSnapshotField(item, "product_name_snapshot", "product") || "")
+            .toString()
+            .trim();
+          if (!productName) return;
+          const key = normalizeSearchText(productName);
+          const qtyRaw = item?.quantity;
+          const qty = qtyRaw === "" || qtyRaw === null || qtyRaw === undefined ? 0 : Number(qtyRaw);
+          const addQty = Number.isFinite(qty) ? qty : 0;
+          if (indexByKey.has(key)) {
+            const entry = ordered[indexByKey.get(key)];
+            entry.quantity = (Number(entry.quantity) || 0) + addQty;
+          } else {
+            indexByKey.set(key, ordered.length);
+            ordered.push({ product: productName, quantity: addQty });
+          }
+        });
+        return ordered;
+      }
+
+      function buildTottusDesinsectacionRows(items, fecha, transporte, mobileNumber, pallets) {
+        const consolidated = consolidateTottusProducts(items);
+        const rowCount = Math.max(consolidated.length, 1);
+        const envio = formatEmissionDate(fecha);
+        const mobile = (mobileNumber || "").toString().trim().toUpperCase().slice(0, 2) || "";
+        const palets = (pallets || "").toString().trim().slice(0, 2) || "";
+        const plate = (transporte || "").toString().trim();
+        if (!consolidated.length) {
+          return `
+            <tr>
+              <td class="td-mobile" rowspan="1">${mobile}</td>
+              <td class="td-fecha" rowspan="1">${envio}</td>
+              <td class="td-empresa" rowspan="1">${TOTTUS_DESINSECTACION_EMPRESA}</td>
+              <td class="td-placa" rowspan="1">${plate}</td>
+              <td class="td-producto"></td>
+              <td class="td-cant"></td>
+              <td class="td-palets" rowspan="1">${palets}</td>
+            </tr>
+          `;
+        }
+        return consolidated
+          .map((entry, idx) => {
+            const merged =
+              idx === 0
+                ? `
+              <td class="td-mobile" rowspan="${rowCount}">${mobile}</td>
+              <td class="td-fecha" rowspan="${rowCount}">${envio}</td>
+              <td class="td-empresa" rowspan="${rowCount}">${TOTTUS_DESINSECTACION_EMPRESA}</td>
+              <td class="td-placa" rowspan="${rowCount}">${plate}</td>
+            `
+                : "";
+            const paletsCell =
+              idx === 0 ? `<td class="td-palets" rowspan="${rowCount}">${palets}</td>` : "";
+            const qtyShow =
+              entry.quantity === 0 || entry.quantity === "" ? "" : entry.quantity;
+            return `
+            <tr>
+              ${merged}
+              <td class="td-producto">${entry.product}</td>
+              <td class="td-cant">${qtyShow}</td>
+              ${paletsCell}
+            </tr>
+          `;
+          })
+          .join("");
+      }
+
+      function buildTottusDesinsectacionPage(constancia, items, fecha, numero, cliente, transporte) {
+        const mobileNumber = constancia.mobile_number || constancia.mobile || "";
+        const pallets = constancia.pallets || constancia.palets || "";
+        const rowsHtml = buildTottusDesinsectacionRows(
+          items,
+          fecha,
+          transporte,
+          mobileNumber,
+          pallets
+        );
+        return `
+          <div class="page tottus-desinsectacion-page last-page">
+            <div class="header">
+              <img class="logo" src="/static/logo.png" alt="Induamerica" />
+            </div>
+            <div class="box">
+              <div class="title">CONSTANCIA DE DESINSECTACIÓN N° ${numero}</div>
+              <table class="meta tottus-meta">
+                <tbody>
+                  <tr>
+                    <td class="label">FECHA DE EMISION</td>
+                    <td class="value">${formatEmissionDate(fecha)}</td>
+                  </tr>
+                  <tr>
+                    <td class="label">CLIENTE</td>
+                    <td class="value">${cliente || ""}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <table class="meta tottus-pest" style="margin-top:0;">
+                <tbody>
+                  <tr>
+                    <td class="label">Plaguicida Usado:</td>
+                    <td class="value">S-DELTA 50 SC</td>
+                    <td class="label">Proveedor:</td>
+                    <td class="value">INDUAMERICA INTERNACIONAL S.A.C.</td>
+                  </tr>
+                </tbody>
+              </table>
+              <table class="data tottus-desinsectacion">
+                <colgroup>
+                  <col style="width:6%" />
+                  <col style="width:10%" />
+                  <col style="width:22%" />
+                  <col style="width:10%" />
+                  <col style="width:34%" />
+                  <col style="width:10%" />
+                  <col style="width:8%" />
+                </colgroup>
+                <tbody>
+                  ${rowsHtml}
+                </tbody>
+              </table>
+            </div>
+            <div class="footer">
+              <div class="firma-wrap">
+                <img class="firma" src="${getConstanciaFirmaSrc()}" alt="Firma" />
+              </div>
+              <div class="footer-text">
+                <div>Av. Camino Real N° 931 Dpto. 201 San Isidro - Lima.</div>
+                <div class="email">induamerica@induamerica.com.pe</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
       function applyConstanciaPageBreaks(pageHtmlList) {
         return pageHtmlList
           .map((html, index) => {
@@ -7888,6 +8109,8 @@
           </div>
         `;
         const isAjilesQuality = isAjilesPeruClient(cliente);
+        const isTottusDesinsectacion =
+          user01Layout && isHipermercadosTottusClient(cliente) && !isAjilesQuality;
         const pageQualityStandard = `
           <div class="page last-page">
             <div class="header">
@@ -7985,9 +8208,11 @@
             </div>
           </div>
         `;
-        const pageQuality = isAjilesQuality
-          ? buildAjilesQualityPage(constancia, clientMatch, items, fecha)
-          : pageQualityStandard;
+        const pageQuality = isTottusDesinsectacion
+          ? buildTottusDesinsectacionPage(constancia, items, fecha, numero, cliente, transporte)
+          : isAjilesQuality
+            ? buildAjilesQualityPage(constancia, clientMatch, items, fecha)
+            : pageQualityStandard;
         const showTransport = isCencosudCdLimaClient(cliente, clientMatch);
         const pageTransport = showTransport
           ? buildCencosudTransportPage(constancia, items, fecha, numero, cliente, transporte)
@@ -8267,6 +8492,30 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
                 .data.ct-transport td.ct-col-producto { width: 56% !important; max-width: 56% !important; }
                 .data.ct-transport th.ct-col-cant,
                 .data.ct-transport td.ct-col-cant { width: 9% !important; max-width: 9% !important; }
+                .data.tottus-desinsectacion {
+                  table-layout: fixed;
+                  width: 100%;
+                  border-collapse: collapse;
+                  margin-top: 6px;
+                  font-size: 9px;
+                }
+                .data.tottus-desinsectacion td {
+                  border: 1px solid #111827;
+                  padding: 4px 3px;
+                  text-align: center;
+                  vertical-align: middle;
+                }
+                .data.tottus-desinsectacion .td-producto {
+                  text-align: left;
+                  padding-left: 6px;
+                }
+                .data.tottus-desinsectacion .td-palets {
+                  font-size: 18px;
+                  font-weight: 700;
+                }
+                .data.tottus-desinsectacion .td-mobile {
+                  font-weight: 600;
+                }
                 @media print {
                   body { background: #fff; }
                   .actions { display: none; }
@@ -8297,6 +8546,8 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
       globalThis.isCencosudCdLimaClient = isCencosudCdLimaClient;
       globalThis.isMakroClient = isMakroClient;
       globalThis.isHipermercadosTottusClient = isHipermercadosTottusClient;
+      globalThis.consolidateTottusProducts = consolidateTottusProducts;
+      globalThis.buildTottusDesinsectacionPage = buildTottusDesinsectacionPage;
 
       // —— Usuarios, permisos y bitácora ——
       const SECTION_PERM_MAP = {

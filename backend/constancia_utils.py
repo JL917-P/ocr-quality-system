@@ -234,6 +234,12 @@ def normalize_items_for_save(
 
 
 def constancia_header_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
+    mobile = _str(payload.get("mobile_number") or payload.get("mobile")) or None
+    pallets = _str(payload.get("pallets") or payload.get("palets")) or None
+    if mobile:
+        mobile = mobile.upper()[:2]
+    if pallets:
+        pallets = pallets[:2]
     return {
         "number": _str(payload.get("number")) or None,
         "issue_date": _str(payload.get("issue_date")) or None,
@@ -241,6 +247,8 @@ def constancia_header_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
         "transport_plate": _str(payload.get("transport_plate")) or None,
         "fumigacion": 1 if payload.get("fumigacion", True) else 0,
         "calidad": 1 if payload.get("calidad", True) else 0,
+        "mobile_number": mobile,
+        "pallets": pallets,
         "status": payload.get("status") or "confirmada",
     }
 
@@ -252,6 +260,8 @@ HEADER_HISTORY_FIELDS = (
     ("transport_plate", "transporte"),
     ("fumigacion", "fumigación"),
     ("calidad", "calidad"),
+    ("mobile_number", "número_móvil"),
+    ("pallets", "palets"),
     ("status", "estado"),
 )
 

@@ -537,6 +537,146 @@ function parseConstanciaDate(dateText) {
         `;
       }
 
+      const TOTTUS_DESINSECTACION_EMPRESA = "Induamerica Servicios Logísticos S.A.C.";
+
+      /** Consolida productos repetidos sumando cantidades (nombre una sola vez). */
+      function consolidateTottusProducts(items) {
+        const ordered = [];
+        const indexByKey = new Map();
+        (items || []).forEach((item) => {
+          const productName = (itemSnapshotField(item, "product_name_snapshot", "product") || "")
+            .toString()
+            .trim();
+          if (!productName) return;
+          const key = normalizeSearchText(productName);
+          const qtyRaw = item?.quantity;
+          const qty = qtyRaw === "" || qtyRaw === null || qtyRaw === undefined ? 0 : Number(qtyRaw);
+          const addQty = Number.isFinite(qty) ? qty : 0;
+          if (indexByKey.has(key)) {
+            const entry = ordered[indexByKey.get(key)];
+            entry.quantity = (Number(entry.quantity) || 0) + addQty;
+          } else {
+            indexByKey.set(key, ordered.length);
+            ordered.push({ product: productName, quantity: addQty });
+          }
+        });
+        return ordered;
+      }
+
+      function buildTottusDesinsectacionRows(items, fecha, transporte, mobileNumber, pallets) {
+        const consolidated = consolidateTottusProducts(items);
+        const rowCount = Math.max(consolidated.length, 1);
+        const envio = formatEmissionDate(fecha);
+        const mobile = (mobileNumber || "").toString().trim().toUpperCase().slice(0, 2) || "";
+        const palets = (pallets || "").toString().trim().slice(0, 2) || "";
+        const plate = (transporte || "").toString().trim();
+        if (!consolidated.length) {
+          return `
+            <tr>
+              <td class="td-mobile" rowspan="1">${mobile}</td>
+              <td class="td-fecha" rowspan="1">${envio}</td>
+              <td class="td-empresa" rowspan="1">${TOTTUS_DESINSECTACION_EMPRESA}</td>
+              <td class="td-placa" rowspan="1">${plate}</td>
+              <td class="td-producto"></td>
+              <td class="td-cant"></td>
+              <td class="td-palets" rowspan="1">${palets}</td>
+            </tr>
+          `;
+        }
+        return consolidated
+          .map((entry, idx) => {
+            const merged =
+              idx === 0
+                ? `
+              <td class="td-mobile" rowspan="${rowCount}">${mobile}</td>
+              <td class="td-fecha" rowspan="${rowCount}">${envio}</td>
+              <td class="td-empresa" rowspan="${rowCount}">${TOTTUS_DESINSECTACION_EMPRESA}</td>
+              <td class="td-placa" rowspan="${rowCount}">${plate}</td>
+            `
+                : "";
+            const paletsCell =
+              idx === 0 ? `<td class="td-palets" rowspan="${rowCount}">${palets}</td>` : "";
+            const qtyShow =
+              entry.quantity === 0 || entry.quantity === "" ? "" : entry.quantity;
+            return `
+            <tr>
+              ${merged}
+              <td class="td-producto">${entry.product}</td>
+              <td class="td-cant">${qtyShow}</td>
+              ${paletsCell}
+            </tr>
+          `;
+          })
+          .join("");
+      }
+
+      function buildTottusDesinsectacionPage(constancia, items, fecha, numero, cliente, transporte) {
+        const mobileNumber = constancia.mobile_number || constancia.mobile || "";
+        const pallets = constancia.pallets || constancia.palets || "";
+        const rowsHtml = buildTottusDesinsectacionRows(
+          items,
+          fecha,
+          transporte,
+          mobileNumber,
+          pallets
+        );
+        return `
+          <div class="page tottus-desinsectacion-page last-page">
+            <div class="header">
+              <img class="logo" src="/static/logo.png" alt="Induamerica" />
+            </div>
+            <div class="box">
+              <div class="title">CONSTANCIA DE DESINSECTACIÓN N° ${numero}</div>
+              <table class="meta tottus-meta">
+                <tbody>
+                  <tr>
+                    <td class="label">FECHA DE EMISION</td>
+                    <td class="value">${formatEmissionDate(fecha)}</td>
+                  </tr>
+                  <tr>
+                    <td class="label">CLIENTE</td>
+                    <td class="value">${cliente || ""}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <table class="meta tottus-pest" style="margin-top:0;">
+                <tbody>
+                  <tr>
+                    <td class="label">Plaguicida Usado:</td>
+                    <td class="value">S-DELTA 50 SC</td>
+                    <td class="label">Proveedor:</td>
+                    <td class="value">INDUAMERICA INTERNACIONAL S.A.C.</td>
+                  </tr>
+                </tbody>
+              </table>
+              <table class="data tottus-desinsectacion">
+                <colgroup>
+                  <col style="width:6%" />
+                  <col style="width:10%" />
+                  <col style="width:22%" />
+                  <col style="width:10%" />
+                  <col style="width:34%" />
+                  <col style="width:10%" />
+                  <col style="width:8%" />
+                </colgroup>
+                <tbody>
+                  ${rowsHtml}
+                </tbody>
+              </table>
+            </div>
+            <div class="footer">
+              <div class="firma-wrap">
+                <img class="firma" src="${getConstanciaFirmaSrc()}" alt="Firma" />
+              </div>
+              <div class="footer-text">
+                <div>Av. Camino Real N° 931 Dpto. 201 San Isidro - Lima.</div>
+                <div class="email">induamerica@induamerica.com.pe</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
       function applyConstanciaPageBreaks(pageHtmlList) {
         return pageHtmlList
           .map((html, index) => {
@@ -954,6 +1094,8 @@ function parseConstanciaDate(dateText) {
           </div>
         `;
         const isAjilesQuality = isAjilesPeruClient(cliente);
+        const isTottusDesinsectacion =
+          user01Layout && isHipermercadosTottusClient(cliente) && !isAjilesQuality;
         const pageQualityStandard = `
           <div class="page last-page">
             <div class="header">
@@ -1051,9 +1193,11 @@ function parseConstanciaDate(dateText) {
             </div>
           </div>
         `;
-        const pageQuality = isAjilesQuality
-          ? buildAjilesQualityPage(constancia, clientMatch, items, fecha)
-          : pageQualityStandard;
+        const pageQuality = isTottusDesinsectacion
+          ? buildTottusDesinsectacionPage(constancia, items, fecha, numero, cliente, transporte)
+          : isAjilesQuality
+            ? buildAjilesQualityPage(constancia, clientMatch, items, fecha)
+            : pageQualityStandard;
         const showTransport = isCencosudCdLimaClient(cliente, clientMatch);
         const pageTransport = showTransport
           ? buildCencosudTransportPage(constancia, items, fecha, numero, cliente, transporte)
@@ -1333,6 +1477,30 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
                 .data.ct-transport td.ct-col-producto { width: 56% !important; max-width: 56% !important; }
                 .data.ct-transport th.ct-col-cant,
                 .data.ct-transport td.ct-col-cant { width: 9% !important; max-width: 9% !important; }
+                .data.tottus-desinsectacion {
+                  table-layout: fixed;
+                  width: 100%;
+                  border-collapse: collapse;
+                  margin-top: 6px;
+                  font-size: 9px;
+                }
+                .data.tottus-desinsectacion td {
+                  border: 1px solid #111827;
+                  padding: 4px 3px;
+                  text-align: center;
+                  vertical-align: middle;
+                }
+                .data.tottus-desinsectacion .td-producto {
+                  text-align: left;
+                  padding-left: 6px;
+                }
+                .data.tottus-desinsectacion .td-palets {
+                  font-size: 18px;
+                  font-weight: 700;
+                }
+                .data.tottus-desinsectacion .td-mobile {
+                  font-weight: 600;
+                }
                 @media print {
                   body { background: #fff; }
                   .actions { display: none; }
@@ -1362,5 +1530,7 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
       globalThis.isUser01ConstanciaLayout = isUser01ConstanciaLayout;
       globalThis.isMakroClient = isMakroClient;
       globalThis.isHipermercadosTottusClient = isHipermercadosTottusClient;
+      globalThis.consolidateTottusProducts = consolidateTottusProducts;
+      globalThis.buildTottusDesinsectacionPage = buildTottusDesinsectacionPage;
 
 })();

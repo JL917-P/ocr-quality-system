@@ -2095,6 +2095,20 @@ th {
   padding-right: 4px;
 }
 
+#section-ocr .ocr-command-group--tottus-extra {
+  gap: 4px;
+  padding: 0 4px;
+}
+
+#section-ocr .ocr-command-group--tottus-extra input {
+  width: 36px;
+  flex: 0 0 36px;
+  max-width: 36px;
+  text-align: center;
+  padding: 2px 2px;
+  text-transform: uppercase;
+}
+
 #section-ocr .ocr-command-group input:not([type="checkbox"]) {
   margin: 0;
   padding: 2px 6px;
@@ -2183,6 +2197,7 @@ th {
 #section-ocr .ocr-command-group--more {
   padding-left: 2px;
   padding-right: 2px;
+  margin-left: auto;
 }
 
 #section-ocr .ocr-more-menu {
