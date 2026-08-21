@@ -1720,6 +1720,22 @@
         return "standard";
       }
 
+      let tottusExtraWasActive = false;
+
+      function clearTottusExtraFields() {
+        if (constanciaMobileNumber) constanciaMobileNumber.value = "";
+        if (constanciaPallets) constanciaPallets.value = "";
+      }
+
+      function setTottusExtraFields(mobileValue, palletsValue) {
+        if (constanciaMobileNumber) {
+          constanciaMobileNumber.value = (mobileValue || "").toString().toUpperCase().replace(/\s+/g, "").slice(0, 2);
+        }
+        if (constanciaPallets) {
+          constanciaPallets.value = (palletsValue || "").toString().replace(/\s+/g, "").slice(0, 2);
+        }
+      }
+
       function syncTottusExtraVisibility() {
         const show = isActiveTottusClient();
         if (ocrTottusExtraGroup) ocrTottusExtraGroup.classList.toggle("hidden", !show);
@@ -1730,10 +1746,11 @@
             ? "Constancia de desinsectación"
             : "Constancia de calidad";
         }
-        if (!show) {
-          if (constanciaMobileNumber) constanciaMobileNumber.value = "";
-          if (constanciaPallets) constanciaPallets.value = "";
+        // Solo limpiar al salir de Tottus (no en cada refresh del layout)
+        if (tottusExtraWasActive && !show) {
+          clearTottusExtraFields();
         }
+        tottusExtraWasActive = show;
       }
 
       function clampTottusMiniField(input) {
@@ -5186,8 +5203,8 @@
         constanciaTransporteInput.value = "";
         constanciaFumigacion.checked = true;
         constanciaCalidad.checked = true;
-        if (constanciaMobileNumber) constanciaMobileNumber.value = "";
-        if (constanciaPallets) constanciaPallets.value = "";
+        clearTottusExtraFields();
+        tottusExtraWasActive = false;
         applyOcrLayoutForClient._lastMode = null;
         renderOcrProductsHeader();
         syncAjilesTransportVisibility();
@@ -5240,8 +5257,12 @@
           transport_plate: constanciaTransporteInput.value.trim(),
           fumigacion: constanciaFumigacion.checked,
           calidad: constanciaCalidad.checked,
-          mobile_number: (constanciaMobileNumber?.value || "").trim().toUpperCase().slice(0, 2),
-          pallets: (constanciaPallets?.value || "").trim().slice(0, 2),
+          mobile_number: isActiveTottusClient()
+            ? (constanciaMobileNumber?.value || "").trim().toUpperCase().slice(0, 2)
+            : "",
+          pallets: isActiveTottusClient()
+            ? (constanciaPallets?.value || "").trim().slice(0, 2)
+            : "",
           status,
           items,
           usuario: (window.QCAuth && window.QCAuth.getUser()
@@ -5333,13 +5354,16 @@
         constanciaTransporteInput.value = data.transport_plate || "";
         constanciaFumigacion.checked = data.fumigacion !== 0 && data.fumigacion !== false;
         constanciaCalidad.checked = data.calidad !== 0 && data.calidad !== false;
-        if (constanciaMobileNumber) constanciaMobileNumber.value = (data.mobile_number || "").toString().slice(0, 2);
-        if (constanciaPallets) constanciaPallets.value = (data.pallets || "").toString().slice(0, 2);
+        const mobileSaved = (data.mobile_number || data.mobile || "").toString();
+        const palletsSaved = (data.pallets || data.palets || "").toString();
         applyOcrLayoutForClient._lastMode = null;
         fillConstanciaItems(data.items || []);
         applyOcrLayoutForClient({ force: true });
         syncAjilesTransportVisibility();
         syncTottusExtraVisibility();
+        // Restaurar después del layout para que no se pierdan al reabrir/importar
+        setTottusExtraFields(mobileSaved, palletsSaved);
+        tottusExtraWasActive = isActiveTottusClient();
         updateRestoreConstanciaButton(data.items || []);
         if (data.repaired_from_duplicate) {
           showSuccessModal(

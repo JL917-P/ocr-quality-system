@@ -3392,6 +3392,17 @@ async def update_constancia(
         }
         old_items = parse_items_json(row[7])
         items_snap = normalize_items_for_save(conn, items, old_items, owner_user_id=owner_id)
+        # Evitar borrar móvil/palets si el front envió vacío por un refresh de layout
+        mobile_to_save = header.get("mobile_number")
+        pallets_to_save = header.get("pallets")
+        if not mobile_to_save and old_header.get("mobile_number"):
+            client_key = (_str(header.get("client_name")) or "").lower()
+            if "tottus" in client_key and "hipermercado" in client_key:
+                mobile_to_save = old_header.get("mobile_number")
+        if not pallets_to_save and old_header.get("pallets"):
+            client_key = (_str(header.get("client_name")) or "").lower()
+            if "tottus" in client_key and "hipermercado" in client_key:
+                pallets_to_save = old_header.get("pallets")
         conn.execute(
             """
             UPDATE constancias
@@ -3409,8 +3420,8 @@ async def update_constancia(
                 header["calidad"],
                 header["status"],
                 json.dumps(items_snap, ensure_ascii=True),
-                header.get("mobile_number"),
-                header.get("pallets"),
+                mobile_to_save,
+                pallets_to_save,
                 constancia_id,
                 owner_id,
             ),
