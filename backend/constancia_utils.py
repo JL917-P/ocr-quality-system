@@ -352,21 +352,66 @@ def parse_items_json(raw: str) -> list[dict[str, Any]]:
     return []
 
 
-def parse_constancia_extras(raw: str) -> dict[str, str]:
-    """Lee mobile_number/pallets embebidos en items_json (formato objeto)."""
+def _normalize_cencosud_dual_header(raw: Any) -> dict[str, str] | None:
+    if not isinstance(raw, dict):
+        return None
+    mobile = _str(raw.get("mobile_number") or raw.get("mobile"))
+    pallets = _str(raw.get("pallets") or raw.get("palets"))
+    if mobile:
+        mobile = mobile.upper()[:2]
+    if pallets:
+        pallets = pallets[:2]
+    return {
+        "number": _str(raw.get("number")),
+        "issue_date": _str(raw.get("issue_date")),
+        "client_name": _str(raw.get("client_name")),
+        "transport_plate": _str(raw.get("transport_plate")),
+        "mobile_number": mobile,
+        "pallets": pallets,
+    }
+
+
+def normalize_cencosud_dual(raw: Any) -> dict[str, dict[str, str]] | None:
+    """Normaliza bloque cencosud_dual (Internacional + Comercial) si viene en el payload."""
+    if not isinstance(raw, dict):
+        return None
+    internacional = _normalize_cencosud_dual_header(raw.get("internacional"))
+    comercial = _normalize_cencosud_dual_header(raw.get("comercial"))
+    if not internacional and not comercial:
+        return None
+    empty = {
+        "number": "",
+        "issue_date": "",
+        "client_name": "",
+        "transport_plate": "",
+        "mobile_number": "",
+        "pallets": "",
+    }
+    return {
+        "internacional": internacional or dict(empty),
+        "comercial": comercial or dict(empty),
+    }
+
+
+def parse_constancia_extras(raw: str) -> dict[str, Any]:
+    """Lee mobile_number/pallets/cencosud_dual embebidos en items_json (formato objeto)."""
     try:
         data = json.loads(raw or "[]")
     except json.JSONDecodeError:
-        return {"mobile_number": "", "pallets": ""}
+        return {"mobile_number": "", "pallets": "", "cencosud_dual": None}
     if not isinstance(data, dict):
-        return {"mobile_number": "", "pallets": ""}
+        return {"mobile_number": "", "pallets": "", "cencosud_dual": None}
     mobile = _str(data.get("mobile_number") or data.get("mobile"))
     pallets = _str(data.get("pallets") or data.get("palets"))
     if mobile:
         mobile = mobile.upper()[:2]
     if pallets:
         pallets = pallets[:2]
-    return {"mobile_number": mobile, "pallets": pallets}
+    return {
+        "mobile_number": mobile,
+        "pallets": pallets,
+        "cencosud_dual": normalize_cencosud_dual(data.get("cencosud_dual")),
+    }
 
 
 def encode_items_json(
@@ -374,22 +419,24 @@ def encode_items_json(
     *,
     mobile_number: Any = None,
     pallets: Any = None,
+    cencosud_dual: Any = None,
 ) -> str:
-    """Serializa ítems + extras Tottus (doble guardado junto a columnas SQL)."""
+    """Serializa ítems + extras Tottus/Cencosud (doble guardado junto a columnas SQL)."""
     mobile = _str(mobile_number)
     palets = _str(pallets)
     if mobile:
         mobile = mobile.upper()[:2]
     if palets:
         palets = palets[:2]
-    return json.dumps(
-        {
-            "items": items,
-            "mobile_number": mobile or None,
-            "pallets": palets or None,
-        },
-        ensure_ascii=True,
-    )
+    payload: dict[str, Any] = {
+        "items": items,
+        "mobile_number": mobile or None,
+        "pallets": palets or None,
+    }
+    dual = normalize_cencosud_dual(cencosud_dual)
+    if dual:
+        payload["cencosud_dual"] = dual
+    return json.dumps(payload, ensure_ascii=True)
 
 
 def items_json_is_empty(raw: str) -> bool:

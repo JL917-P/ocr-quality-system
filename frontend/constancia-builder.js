@@ -633,6 +633,79 @@ function parseConstanciaDate(dateText) {
         return `--u01-n:${n};--u01-fs:${fontPx.toFixed(2)}px;--u01-fs-head:${headPx.toFixed(2)}px;--u01-pad:${padPx.toFixed(2)}px;--u01-row-h:${rowMm.toFixed(2)}mm;`;
       }
 
+      function buildTottusFumigacionPage({
+        numero,
+        fecha,
+        cliente,
+        issuerCompany,
+        tableHeadHtml,
+        rowsHtml,
+        colspan,
+        wrapTable,
+      }) {
+        const issuer = issuerCompany || "INDUAMERICA INTERNACIONAL S.A.C.";
+        const introHtml = `
+              <table class="meta tottus-meta">
+                <tbody>
+                  <tr>
+                    <td class="label">FECHA DE EMISIÓN</td>
+                    <td class="value">${formatEmissionDate(fecha)}</td>
+                  </tr>
+                  <tr>
+                    <td class="label">CLIENTE</td>
+                    <td class="value">${cliente || ""}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="note">
+                Mediante el presente documento dejamos constancia que los lotes de arroz pilado, detallados han sido tratados con fosfuro de aluminio (PHOSFIN) en nuestro almacén principal, en dosis de 5 tab/ton.
+              </div>
+              <table class="meta tottus-pest">
+                <tbody>
+                  <tr>
+                    <td class="label">Plaguicida Usado:</td>
+                    <td class="value">FOSFURO DE ALUMINIO (PHOSFIN)</td>
+                    <td class="label">Proveedor:</td>
+                    <td class="value">${issuer}</td>
+                  </tr>
+                </tbody>
+              </table>
+            `;
+        const wrap = typeof wrapTable === "function" ? wrapTable : (html) => html;
+        return `
+          <div class="page first-page">
+            <div class="header">
+              <img class="logo" src="/static/logo.png" alt="Induamerica" />
+            </div>
+            <div class="box">
+              <div class="title">CONSTANCIA DE FUMIGACIÓN N° ${numero}</div>
+              ${introHtml}
+              ${wrap(`
+              <table class="data tottus-fum">
+                <thead>
+                  <tr>
+                    ${tableHeadHtml}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rowsHtml || `<tr><td colspan='${colspan}' class='empty'>Sin productos</td></tr>`}
+                </tbody>
+              </table>
+              `)}
+            </div>
+            <div class="footer">
+              <div class="firma-wrap">
+                <img class="firma" src="${getConstanciaFirmaSrc()}" alt="Firma" />
+              </div>
+              <div class="footer-text">
+                <div>Av. Camino Real N° 931 Dpto. 201 San Isidro - Lima.</div>
+                <div class="email">induamerica@induamerica.com.pe</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
       function buildTottusDesinsectacionPage(
         constancia,
         items,
@@ -645,6 +718,7 @@ function parseConstanciaDate(dateText) {
         const mobileNumber = constancia.mobile_number || constancia.mobile || "";
         const pallets = constancia.pallets || constancia.palets || "";
         const enableUser01Zoom = !!options.enableUser01Zoom;
+        const issuerCompany = options.issuerCompany || "INDUAMERICA INTERNACIONAL S.A.C.";
         const consolidated = consolidateTottusProducts(items);
         const rowsHtml = buildTottusDesinsectacionRows(
           items,
@@ -697,7 +771,7 @@ function parseConstanciaDate(dateText) {
                     <td class="label">Plaguicida Usado:</td>
                     <td class="value">S-DELTA 50 SC</td>
                     <td class="label">Proveedor:</td>
-                    <td class="value">INDUAMERICA INTERNACIONAL S.A.C.</td>
+                    <td class="value">${issuerCompany}</td>
                   </tr>
                 </tbody>
               </table>
@@ -1259,9 +1333,83 @@ function parseConstanciaDate(dateText) {
         const pageTransport = showTransport
           ? buildCencosudTransportPage(constancia, items, fecha, numero, cliente, transporte)
           : "";
-        const pageList = [showFumigacion ? pageContent : "", showCalidad ? pageQuality : "", showTransport ? pageTransport : ""].filter(
-          (page) => page
-        );
+        const isCencosudDualPdf =
+          user01Layout &&
+          isCencosudCdPrincipalClient(cliente) &&
+          isTottusFumigacion &&
+          !isAjilesQuality;
+        let pageList;
+        if (isCencosudDualPdf) {
+          const dual = constancia.cencosud_dual || {};
+          const intl = dual.internacional || {};
+          const com = dual.comercial || {};
+          const bumpNumber = (value) => {
+            const s = String(value || "").trim();
+            const match = s.match(/^(.*?)(\d+)(\D*)$/);
+            if (!match) return s;
+            return `${match[1]}${String(parseInt(match[2], 10) + 1).padStart(match[2].length, "0")}${match[3]}`;
+          };
+          const dualBlocks = [
+            {
+              number: intl.number || numero,
+              fecha: intl.issue_date || fecha,
+              cliente: intl.client_name || cliente,
+              transporte: intl.transport_plate || transporte,
+              mobile_number: intl.mobile_number || constancia.mobile_number || constancia.mobile || "",
+              pallets: intl.pallets || constancia.pallets || constancia.palets || "",
+              issuer: "INDUAMERICA INTERNACIONAL S.A.C.",
+            },
+            {
+              number: com.number || bumpNumber(intl.number || numero),
+              fecha: com.issue_date || fecha,
+              cliente: com.client_name || cliente,
+              transporte: com.transport_plate || transporte,
+              mobile_number: com.mobile_number || constancia.mobile_number || constancia.mobile || "",
+              pallets: com.pallets || constancia.pallets || constancia.palets || "",
+              issuer: "INDUAMERICA COMERCIAL S.A.C.",
+            },
+          ];
+          pageList = [];
+          dualBlocks.forEach((block) => {
+            if (showFumigacion) {
+              pageList.push(
+                buildTottusFumigacionPage({
+                  numero: block.number,
+                  fecha: block.fecha,
+                  cliente: block.cliente,
+                  issuerCompany: block.issuer,
+                  tableHeadHtml: fumigacionTableHead,
+                  rowsHtml: rows,
+                  colspan: fumigacionColspan,
+                  wrapTable: wrapUser01Table,
+                })
+              );
+            }
+            if (showCalidad) {
+              pageList.push(
+                buildTottusDesinsectacionPage(
+                  {
+                    mobile_number: block.mobile_number,
+                    pallets: block.pallets,
+                  },
+                  items,
+                  block.fecha,
+                  block.number,
+                  block.cliente,
+                  block.transporte,
+                  {
+                    enableUser01Zoom: user01DynamicZoom,
+                    issuerCompany: block.issuer,
+                  }
+                )
+              );
+            }
+          });
+        } else {
+          pageList = [showFumigacion ? pageContent : "", showCalidad ? pageQuality : "", showTransport ? pageTransport : ""].filter(
+            (page) => page
+          );
+        }
         const selectedPages = applyConstanciaPageBreaks(pageList);
         const emptyMessage = `
           <div style="font-family: Arial, sans-serif; padding: 16px;">
@@ -1603,6 +1751,7 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
       globalThis.isCencosudCdPrincipalClient = isCencosudCdPrincipalClient;
       globalThis.isTottusStyleConstanciaClient = isTottusStyleConstanciaClient;
       globalThis.consolidateTottusProducts = consolidateTottusProducts;
+      globalThis.buildTottusFumigacionPage = buildTottusFumigacionPage;
       globalThis.buildTottusDesinsectacionPage = buildTottusDesinsectacionPage;
 
 })();

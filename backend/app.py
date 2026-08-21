@@ -10,7 +10,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import cv2
 import numpy as np
@@ -80,6 +80,7 @@ from constancia_utils import (
     sort_constancia_rows_by_issue_date,
     encode_items_json,
     find_items_json_for_constancia,
+    normalize_cencosud_dual,
     normalize_constancia_status,
     normalize_items_for_save,
     parse_constancia_extras,
@@ -2084,7 +2085,10 @@ def capture_page() -> HTMLResponse:
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page() -> HTMLResponse:
     html = _inject_panel_config(_read_frontend_html("admin.html"))
-    return HTMLResponse(content=html)
+    return HTMLResponse(
+        content=html,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
 
 
 @app.get("/constancia-view", response_class=HTMLResponse)
@@ -2868,6 +2872,7 @@ async def create_constancia(
     if fumigacion == 0 and calidad == 0:
         raise HTTPException(status_code=400, detail="Selecciona al menos una constancia.")
     header = constancia_header_snapshot(payload)
+    cencosud_dual = normalize_cencosud_dual(payload.get("cencosud_dual"))
     actor = _actor_label(user)
     created_at = datetime.now(timezone.utc).isoformat()
     with sqlite3.connect(DB_PATH) as conn:
@@ -2876,6 +2881,7 @@ async def create_constancia(
             items_snap,
             mobile_number=header.get("mobile_number"),
             pallets=header.get("pallets"),
+            cencosud_dual=cencosud_dual,
         )
         cursor = conn.execute(
             """
@@ -3121,6 +3127,7 @@ def restore_constancia_items_from_history(constancia_id: int) -> JSONResponse:
             items_snap,
             mobile_number=extras.get("mobile_number"),
             pallets=extras.get("pallets"),
+            cencosud_dual=extras.get("cencosud_dual"),
         )
         conn.execute(
             "UPDATE constancias SET items_json = ? WHERE id = ?",
@@ -3310,6 +3317,7 @@ def get_constancia(
         extras = parse_constancia_extras(row[8] or "")
         mobile_number = (row[10] or extras.get("mobile_number") or "").strip()
         pallets = (row[11] or extras.get("pallets") or "").strip()
+        cencosud_dual = extras.get("cencosud_dual")
     if repaired and items_json_for_sync and header_for_sync is not None and created_at_for_sync:
         run_sync_after_create(
             TAB_CONSTANCIAS,
@@ -3328,23 +3336,24 @@ def get_constancia(
                 owner_user_id=owner_id,
             ),
         )
-    return JSONResponse(
-        {
-            "id": row[0],
-            "number": row[1],
-            "issue_date": row[2],
-            "client_name": row[3],
-            "transport_plate": row[4],
-            "fumigacion": bool(row[5]),
-            "calidad": bool(row[6]),
-            "status": normalize_constancia_status(row[7]),
-            "items": items,
-            "created_at": row[9],
-            "mobile_number": mobile_number,
-            "pallets": pallets,
-            "repaired_from_duplicate": repaired,
-        }
-    )
+    response_body: dict[str, Any] = {
+        "id": row[0],
+        "number": row[1],
+        "issue_date": row[2],
+        "client_name": row[3],
+        "transport_plate": row[4],
+        "fumigacion": bool(row[5]),
+        "calidad": bool(row[6]),
+        "status": normalize_constancia_status(row[7]),
+        "items": items,
+        "created_at": row[9],
+        "mobile_number": mobile_number,
+        "pallets": pallets,
+        "repaired_from_duplicate": repaired,
+    }
+    if cencosud_dual:
+        response_body["cencosud_dual"] = cencosud_dual
+    return JSONResponse(response_body)
 
 
 @app.put("/api/constancias/{constancia_id}")
@@ -3427,10 +3436,16 @@ async def update_constancia(
             pallets_to_save = header.get("pallets")
         header["mobile_number"] = mobile_to_save
         header["pallets"] = pallets_to_save
+        cencosud_dual = normalize_cencosud_dual(payload.get("cencosud_dual"))
+        if cencosud_dual is None and "cencosud" in client_key and "cd" in client_key and "principal" in client_key:
+            cencosud_dual = old_extras.get("cencosud_dual")
+        if not ("cencosud" in client_key and "cd" in client_key and "principal" in client_key):
+            cencosud_dual = None
         items_json = encode_items_json(
             items_snap,
             mobile_number=mobile_to_save,
             pallets=pallets_to_save,
+            cencosud_dual=cencosud_dual,
         )
         conn.execute(
             """
