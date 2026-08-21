@@ -602,7 +602,7 @@ function parseConstanciaDate(dateText) {
             return `
             <tr>
               ${merged}
-              <td class="td-producto">${entry.product}</td>
+              <td class="td-producto cell-fit-line">${entry.product}</td>
               <td class="td-cant">${qtyShow}</td>
               ${paletsCell}
             </tr>
@@ -645,11 +645,11 @@ function parseConstanciaDate(dateText) {
         const tableHtml = `
               <table class="data tottus-desinsectacion">
                 <colgroup>
-                  <col style="width:6%" />
-                  <col style="width:10%" />
-                  <col style="width:22%" />
-                  <col style="width:10%" />
-                  <col style="width:34%" />
+                  <col style="width:5%" />
+                  <col style="width:9%" />
+                  <col style="width:12%" />
+                  <col style="width:9%" />
+                  <col style="width:47%" />
                   <col style="width:10%" />
                   <col style="width:8%" />
                 </colgroup>
@@ -1539,6 +1539,9 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
                 .data.tottus-desinsectacion .td-producto {
                   text-align: left;
                   padding-left: 6px;
+                  white-space: nowrap !important;
+                  overflow: hidden !important;
+                  word-break: normal !important;
                 }
                 .data.tottus-desinsectacion .td-palets {
                   font-size: 18px;
@@ -1548,9 +1551,14 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
                   font-weight: 600;
                 }
                 .data.tottus-desinsectacion .td-empresa {
-                  line-height: 1.2;
+                  width: 12%;
+                  max-width: 12%;
+                  line-height: 1.15;
+                  font-size: 0.92em;
                   white-space: normal;
                   word-break: normal;
+                  padding-left: 2px;
+                  padding-right: 2px;
                 }
                 @media print {
                   body { background: #fff; }
