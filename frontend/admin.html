@@ -5259,6 +5259,16 @@
           .trim()
           .replace(/\s+/g, "")
           .slice(0, 2);
+        if (
+          typeof isHipermercadosTottusClient === "function" &&
+          isHipermercadosTottusClient(constanciaClienteInput.value.trim()) &&
+          (!mobileToSave || !palletsToSave)
+        ) {
+          showInfoModal("Completa N° móvil y Palets antes de guardar (cliente Hipermercados Tottus).", {
+            title: "Campos requeridos",
+          });
+          return;
+        }
         // Guardar siempre el valor de los inputs (no depender de isActiveTottusClient al guardar)
         const payload = {
           number: constanciaNumero.value.trim(),

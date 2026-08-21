@@ -344,7 +344,52 @@ def parse_items_json(raw: str) -> list[dict[str, Any]]:
         data = json.loads(raw or "[]")
     except json.JSONDecodeError:
         return []
-    return data if isinstance(data, list) else []
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        items = data.get("items")
+        return items if isinstance(items, list) else []
+    return []
+
+
+def parse_constancia_extras(raw: str) -> dict[str, str]:
+    """Lee mobile_number/pallets embebidos en items_json (formato objeto)."""
+    try:
+        data = json.loads(raw or "[]")
+    except json.JSONDecodeError:
+        return {"mobile_number": "", "pallets": ""}
+    if not isinstance(data, dict):
+        return {"mobile_number": "", "pallets": ""}
+    mobile = _str(data.get("mobile_number") or data.get("mobile"))
+    pallets = _str(data.get("pallets") or data.get("palets"))
+    if mobile:
+        mobile = mobile.upper()[:2]
+    if pallets:
+        pallets = pallets[:2]
+    return {"mobile_number": mobile, "pallets": pallets}
+
+
+def encode_items_json(
+    items: list[dict[str, Any]],
+    *,
+    mobile_number: Any = None,
+    pallets: Any = None,
+) -> str:
+    """Serializa ítems + extras Tottus (doble guardado junto a columnas SQL)."""
+    mobile = _str(mobile_number)
+    palets = _str(pallets)
+    if mobile:
+        mobile = mobile.upper()[:2]
+    if palets:
+        palets = palets[:2]
+    return json.dumps(
+        {
+            "items": items,
+            "mobile_number": mobile or None,
+            "pallets": palets or None,
+        },
+        ensure_ascii=True,
+    )
 
 
 def items_json_is_empty(raw: str) -> bool:

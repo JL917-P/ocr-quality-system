@@ -78,9 +78,11 @@ from constancia_utils import (
     constancia_header_snapshot,
     dedupe_constancia_rows,
     sort_constancia_rows_by_issue_date,
+    encode_items_json,
     find_items_json_for_constancia,
     normalize_constancia_status,
     normalize_items_for_save,
+    parse_constancia_extras,
     parse_items_json,
     record_constancia_history,
     restore_items_from_history,
@@ -2870,7 +2872,11 @@ async def create_constancia(
     created_at = datetime.now(timezone.utc).isoformat()
     with sqlite3.connect(DB_PATH) as conn:
         items_snap = normalize_items_for_save(conn, items, owner_user_id=owner_id)
-        items_json = json.dumps(items_snap, ensure_ascii=True)
+        items_json = encode_items_json(
+            items_snap,
+            mobile_number=header.get("mobile_number"),
+            pallets=header.get("pallets"),
+        )
         cursor = conn.execute(
             """
             INSERT INTO constancias (
@@ -3110,7 +3116,12 @@ def restore_constancia_items_from_history(constancia_id: int) -> JSONResponse:
         if not restored:
             return JSONResponse({"ok": False, "restored": 0, "message": "No hay historial de productos para restaurar."})
         items_snap = normalize_items_for_save(conn, restored)
-        items_json = json.dumps(items_snap, ensure_ascii=True)
+        extras = parse_constancia_extras(row[0] or "")
+        items_json = encode_items_json(
+            items_snap,
+            mobile_number=extras.get("mobile_number"),
+            pallets=extras.get("pallets"),
+        )
         conn.execute(
             "UPDATE constancias SET items_json = ? WHERE id = ?",
             (items_json, constancia_id),
@@ -3296,6 +3307,9 @@ def get_constancia(
                 items_json_for_sync = alt_json
                 created_at_for_sync = row[9]
                 header_for_sync = row[1:8]
+        extras = parse_constancia_extras(row[8] or "")
+        mobile_number = (row[10] or extras.get("mobile_number") or "").strip()
+        pallets = (row[11] or extras.get("pallets") or "").strip()
     if repaired and items_json_for_sync and header_for_sync is not None and created_at_for_sync:
         run_sync_after_create(
             TAB_CONSTANCIAS,
@@ -3326,8 +3340,8 @@ def get_constancia(
             "status": normalize_constancia_status(row[7]),
             "items": items,
             "created_at": row[9],
-            "mobile_number": row[10] or "",
-            "pallets": row[11] or "",
+            "mobile_number": mobile_number,
+            "pallets": pallets,
             "repaired_from_duplicate": repaired,
         }
     )
@@ -3393,20 +3407,28 @@ async def update_constancia(
             "pallets": row[9],
         }
         old_items = parse_items_json(row[7])
+        old_extras = parse_constancia_extras(row[7] or "")
         items_snap = normalize_items_for_save(conn, items, old_items, owner_user_id=owner_id)
         # Evitar borrar móvil/palets si el front envió vacío por un refresh de layout
-        mobile_to_save = header.get("mobile_number")
-        pallets_to_save = header.get("pallets")
-        if not mobile_to_save and old_header.get("mobile_number"):
-            client_key = (_str(header.get("client_name")) or "").lower()
-            if "tottus" in client_key and "hipermercado" in client_key:
-                mobile_to_save = old_header.get("mobile_number")
-        if not pallets_to_save and old_header.get("pallets"):
-            client_key = (_str(header.get("client_name")) or "").lower()
-            if "tottus" in client_key and "hipermercado" in client_key:
-                pallets_to_save = old_header.get("pallets")
+        mobile_to_save = header.get("mobile_number") or None
+        pallets_to_save = header.get("pallets") or None
+        if not mobile_to_save:
+            mobile_to_save = old_header.get("mobile_number") or old_extras.get("mobile_number") or None
+        if not pallets_to_save:
+            pallets_to_save = old_header.get("pallets") or old_extras.get("pallets") or None
+        # Si el cliente ya no es Tottus, permitir limpiar
+        client_key = str(header.get("client_name") or "").strip().lower()
+        is_tottus = "tottus" in client_key and "hipermercado" in client_key
+        if not is_tottus:
+            mobile_to_save = header.get("mobile_number")
+            pallets_to_save = header.get("pallets")
         header["mobile_number"] = mobile_to_save
         header["pallets"] = pallets_to_save
+        items_json = encode_items_json(
+            items_snap,
+            mobile_number=mobile_to_save,
+            pallets=pallets_to_save,
+        )
         conn.execute(
             """
             UPDATE constancias
@@ -3423,7 +3445,7 @@ async def update_constancia(
                 header["fumigacion"],
                 header["calidad"],
                 header["status"],
-                json.dumps(items_snap, ensure_ascii=True),
+                items_json,
                 mobile_to_save,
                 pallets_to_save,
                 constancia_id,
@@ -3465,7 +3487,6 @@ async def update_constancia(
         constancia_id, header["number"], header["client_name"], owner_user_id=owner_id
     )
     _queue_trasiego_sheet_sync(trasiego_new_ids, trasiego_deleted_ids)
-    items_json = json.dumps(items_snap, ensure_ascii=True)
     created_at = created_at_row[0] if created_at_row else datetime.now(timezone.utc).isoformat()
     run_sync_after_create(
         TAB_CONSTANCIAS,
