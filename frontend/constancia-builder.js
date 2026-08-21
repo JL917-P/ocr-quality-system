@@ -187,6 +187,12 @@ function parseConstanciaDate(dateText) {
         return normalizeSearchText(clientName).includes("makro");
       }
 
+      /** user01: HIPERMERCADOS TOTTUS S.A. → PDF fumigación personalizado. */
+      function isHipermercadosTottusClient(clientName) {
+        const key = normalizeSearchText(clientName);
+        return key.includes("tottus") && key.includes("hipermercado");
+      }
+
       function resolveAjilesSku(productName) {
         const key = normalizeSearchText(productName);
         if (!key) return "";
@@ -571,6 +577,11 @@ function parseConstanciaDate(dateText) {
         const isAjilesFumigacion = isAjilesPeruClient(cliente);
         const isMakroFumigacion =
           user01Layout && isMakroClient(cliente) && !isAjilesFumigacion;
+        const isTottusFumigacion =
+          user01Layout &&
+          isHipermercadosTottusClient(cliente) &&
+          !isAjilesFumigacion &&
+          !isMakroFumigacion;
         const items = constancia.items || [];
         const productCellHtml = (name) =>
           `<td class="cell-fit-line">${(name || "").toString()}</td>`;
@@ -615,6 +626,23 @@ function parseConstanciaDate(dateText) {
             </tr>
           `;
             }
+            if (isTottusFumigacion) {
+              return `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>${shipCell}</td>
+              ${productCellHtml(productName)}
+              <td>${itemSnapshotField(item, "lote_snapshot", "lot") || "-"}</td>
+              <td>${item.quantity ?? ""}</td>
+              <td>${itemSnapshotField(item, "production_date_snapshot", "production_text") || "-"}</td>
+              <td>${itemSnapshotField(item, "expiration_date_snapshot", "expiration_text") || "-"}</td>
+              <td>${fumCell}</td>
+              <td>${sacos}</td>
+              <td>${tabletas}</td>
+              <td>${fosfina}</td>
+            </tr>
+          `;
+            }
             const lastCol = user01Layout
               ? `<td style="text-align:center; vertical-align:middle;">${instCell}</td>`
               : idx === 0
@@ -644,7 +672,7 @@ function parseConstanciaDate(dateText) {
           : user01Layout
             ? "Fecha de Instalaciones"
             : "Unidad Transporte";
-        const fumigacionColspan = isAjilesFumigacion ? 12 : 13;
+        const fumigacionColspan = isAjilesFumigacion ? 12 : isTottusFumigacion ? 11 : 13;
         const fumigacionTableHead = isAjilesFumigacion
           ? `
                     <th>Item</th>
@@ -659,6 +687,20 @@ function parseConstanciaDate(dateText) {
                     <th>Tabletas</th>
                     <th>Nivel de fosfina</th>
                     <th>${fumigacionLastHeader}</th>
+          `
+          : isTottusFumigacion
+            ? `
+                    <th>Item</th>
+                    <th>Fecha de Envío</th>
+                    <th>Producto</th>
+                    <th>Lote</th>
+                    <th>Cantidad</th>
+                    <th>Fecha de Producción</th>
+                    <th>Fecha de Vencimiento</th>
+                    <th>Fecha de Fumigación</th>
+                    <th>Cantidad de sacos</th>
+                    <th>N° de tabletas</th>
+                    <th>Nivel de fosfina</th>
           `
           : `
                     <th>Item</th>
@@ -834,6 +876,34 @@ function parseConstanciaDate(dateText) {
                 </tbody>
               </table>
             `
+          : isTottusFumigacion
+            ? `
+              <table class="meta tottus-meta">
+                <tbody>
+                  <tr>
+                    <td class="label">FECHA DE EMISIÓN</td>
+                    <td class="value">${formatEmissionDate(fecha)}</td>
+                  </tr>
+                  <tr>
+                    <td class="label">CLIENTE</td>
+                    <td class="value">${cliente || ""}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="note">
+                Mediante el presente documento dejamos constancia que los lotes de arroz pilado, detallados han sido tratados con fosfuro de aluminio (PHOSFIN) en nuestro almacén principal, en dosis de 5 tab/ton.
+              </div>
+              <table class="meta tottus-pest">
+                <tbody>
+                  <tr>
+                    <td class="label">Plaguicida Usado:</td>
+                    <td class="value">FOSFURO DE ALUMINIO (PHOSFIN)</td>
+                    <td class="label">Proveedor:</td>
+                    <td class="value">INDUAMERICA INTERNACIONAL S.A.C.</td>
+                  </tr>
+                </tbody>
+              </table>
+            `
           : `
               <table class="meta quality-meta">
                 <tbody>
@@ -860,7 +930,7 @@ function parseConstanciaDate(dateText) {
               <div class="title">CONSTANCIA DE FUMIGACIÓN N° ${numero}</div>
               ${fumigacionIntroHtml}
               ${wrapUser01Table(`
-              <table class="data${isAjilesFumigacion ? " ajiles-fum" : ""}${isMakroFumigacion ? " makro-fum" : ""}">
+              <table class="data${isAjilesFumigacion ? " ajiles-fum" : ""}${isMakroFumigacion ? " makro-fum" : ""}${isTottusFumigacion ? " tottus-fum" : ""}">
                 <thead>
                   <tr>
                     ${fumigacionTableHead}
@@ -1074,6 +1144,23 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
                   padding: 6px 4px;
                 }
                 .data.makro-fum { margin-top: 4px; }
+                .tottus-meta { table-layout: fixed; }
+                .tottus-meta td.label { width: 28%; }
+                .tottus-meta td.value { width: 72%; }
+                .tottus-pest { table-layout: fixed; margin-top: 0; border-top: none; }
+                .tottus-pest td { width: 25%; }
+                .data.tottus-fum { margin-top: 4px; }
+                .data.tottus-fum th:nth-child(1) { width: 4%; }
+                .data.tottus-fum th:nth-child(2) { width: 8%; }
+                .data.tottus-fum th:nth-child(3) { width: 28%; }
+                .data.tottus-fum th:nth-child(4) { width: 8%; }
+                .data.tottus-fum th:nth-child(5) { width: 7%; }
+                .data.tottus-fum th:nth-child(6) { width: 9%; }
+                .data.tottus-fum th:nth-child(7) { width: 9%; }
+                .data.tottus-fum th:nth-child(8) { width: 9%; }
+                .data.tottus-fum th:nth-child(9) { width: 7%; }
+                .data.tottus-fum th:nth-child(10) { width: 6%; }
+                .data.tottus-fum th:nth-child(11) { width: 5%; }
                 .data { width: 100%; border-collapse: collapse; font-size: 8px; table-layout: fixed; }
                 .data th, .data td { border: 1px solid #111827; padding: 3px; word-break: break-word; }
                 .data th { text-align: center; font-weight: 400; }
@@ -1274,5 +1361,6 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
       globalThis.getConstanciaFirmaSrc = getConstanciaFirmaSrc;
       globalThis.isUser01ConstanciaLayout = isUser01ConstanciaLayout;
       globalThis.isMakroClient = isMakroClient;
+      globalThis.isHipermercadosTottusClient = isHipermercadosTottusClient;
 
 })();
