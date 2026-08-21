@@ -3418,8 +3418,11 @@ async def update_constancia(
             pallets_to_save = old_header.get("pallets") or old_extras.get("pallets") or None
         # Si el cliente ya no es Tottus, permitir limpiar
         client_key = str(header.get("client_name") or "").strip().lower()
-        is_tottus = "tottus" in client_key and "hipermercado" in client_key
-        if not is_tottus:
+        is_tottus_style = (
+            ("tottus" in client_key and "hipermercado" in client_key)
+            or ("cencosud" in client_key and "cd" in client_key and "principal" in client_key)
+        )
+        if not is_tottus_style:
             mobile_to_save = header.get("mobile_number")
             pallets_to_save = header.get("pallets")
         header["mobile_number"] = mobile_to_save

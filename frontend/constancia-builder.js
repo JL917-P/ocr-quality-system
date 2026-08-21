@@ -187,10 +187,21 @@ function parseConstanciaDate(dateText) {
         return normalizeSearchText(clientName).includes("makro");
       }
 
-      /** user01: HIPERMERCADOS TOTTUS S.A. → PDF fumigación personalizado. */
+      /** user01: HIPERMERCADOS TOTTUS S.A. → PDF fumigación/desinsectación personalizado. */
       function isHipermercadosTottusClient(clientName) {
         const key = normalizeSearchText(clientName);
         return key.includes("tottus") && key.includes("hipermercado");
+      }
+
+      /** user01: CENCOSUD CD PRINCIPAL → mismo formato que Tottus. */
+      function isCencosudCdPrincipalClient(clientName) {
+        const key = normalizeSearchText(clientName);
+        return key.includes("cencosud") && key.includes("cd") && key.includes("principal");
+      }
+
+      /** Tottus o Cencosud CD Principal: mismo layout fumigación + desinsectación (solo user01). */
+      function isTottusStyleConstanciaClient(clientName) {
+        return isHipermercadosTottusClient(clientName) || isCencosudCdPrincipalClient(clientName);
       }
 
       function resolveAjilesSku(productName) {
@@ -747,7 +758,7 @@ function parseConstanciaDate(dateText) {
           user01Layout && isMakroClient(cliente) && !isAjilesFumigacion;
         const isTottusFumigacion =
           user01Layout &&
-          isHipermercadosTottusClient(cliente) &&
+          isTottusStyleConstanciaClient(cliente) &&
           !isAjilesFumigacion &&
           !isMakroFumigacion;
         const items = constancia.items || [];
@@ -1139,7 +1150,7 @@ function parseConstanciaDate(dateText) {
         `;
         const isAjilesQuality = isAjilesPeruClient(cliente);
         const isTottusDesinsectacion =
-          user01Layout && isHipermercadosTottusClient(cliente) && !isAjilesQuality;
+          user01Layout && isTottusStyleConstanciaClient(cliente) && !isAjilesQuality;
         const pageQualityStandard = `
           <div class="page last-page">
             <div class="header">
@@ -1589,6 +1600,8 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
       globalThis.isUser01ConstanciaLayout = isUser01ConstanciaLayout;
       globalThis.isMakroClient = isMakroClient;
       globalThis.isHipermercadosTottusClient = isHipermercadosTottusClient;
+      globalThis.isCencosudCdPrincipalClient = isCencosudCdPrincipalClient;
+      globalThis.isTottusStyleConstanciaClient = isTottusStyleConstanciaClient;
       globalThis.consolidateTottusProducts = consolidateTottusProducts;
       globalThis.buildTottusDesinsectacionPage = buildTottusDesinsectacionPage;
 
