@@ -371,12 +371,23 @@ def _normalize_cencosud_dual_header(raw: Any) -> dict[str, str] | None:
     }
 
 
-def normalize_cencosud_dual(raw: Any) -> dict[str, dict[str, str]] | None:
+def _normalize_cencosud_dual_side(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    header = _normalize_cencosud_dual_header(raw)
+    if not header:
+        return None
+    items = raw.get("items")
+    header["items"] = items if isinstance(items, list) else []
+    return header
+
+
+def normalize_cencosud_dual(raw: Any) -> dict[str, dict[str, Any]] | None:
     """Normaliza bloque cencosud_dual (Internacional + Comercial) si viene en el payload."""
     if not isinstance(raw, dict):
         return None
-    internacional = _normalize_cencosud_dual_header(raw.get("internacional"))
-    comercial = _normalize_cencosud_dual_header(raw.get("comercial"))
+    internacional = _normalize_cencosud_dual_side(raw.get("internacional"))
+    comercial = _normalize_cencosud_dual_side(raw.get("comercial"))
     if not internacional and not comercial:
         return None
     empty = {
@@ -386,6 +397,7 @@ def normalize_cencosud_dual(raw: Any) -> dict[str, dict[str, str]] | None:
         "transport_plate": "",
         "mobile_number": "",
         "pallets": "",
+        "items": [],
     }
     return {
         "internacional": internacional or dict(empty),

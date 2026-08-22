@@ -20,44 +20,6 @@
         return "";
       }
 
-      /** Firma por entorno: solo user01 (Vladimir) usa firma propia; admin y resto conservan firma.png */
-      const FIRMA_BY_USERNAME = {
-        user01: "/static/firma-user01.png?v=1",
-      };
-
-      function resolveFirmaSrcForUsername(username) {
-        const key = String(username || "")
-          .trim()
-          .toLowerCase();
-        return FIRMA_BY_USERNAME[key] || "/static/firma.png";
-      }
-
-      function getConstanciaFirmaSrc() {
-        if (typeof window !== "undefined" && window.QC_CONSTANCIA_FIRMA_SRC) {
-          return String(window.QC_CONSTANCIA_FIRMA_SRC);
-        }
-        try {
-          const me = window.QCAuth && window.QCAuth.getUser && window.QCAuth.getUser();
-          if (me && me.username) return resolveFirmaSrcForUsername(me.username);
-        } catch (e) {}
-        return "/static/firma.png";
-      }
-
-      function getActiveConstanciaUsername() {
-        try {
-          if (typeof window !== "undefined" && window.QC_CONSTANCIA_OWNER_USERNAME) {
-            return String(window.QC_CONSTANCIA_OWNER_USERNAME).trim().toLowerCase();
-          }
-          const me = window.QCAuth && window.QCAuth.getUser && window.QCAuth.getUser();
-          if (me && me.username) return String(me.username).trim().toLowerCase();
-        } catch (e) {}
-        return "";
-      }
-
-      function isUser01ConstanciaLayout() {
-        return getActiveConstanciaUsername() === "user01";
-      }
-
 function parseConstanciaDate(dateText) {
         const value = (dateText || "").trim();
         if (!value) return null;
@@ -67,6 +29,9 @@ function parseConstanciaDate(dateText) {
             day: parseInt(match[3], 10),
             month: parseInt(match[2], 10),
             year: parseInt(match[1], 10),
+            dayPadded: true,
+            monthPadded: true,
+            yearDigits: 4,
           };
         }
         match = value.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{4})$/);
@@ -75,6 +40,9 @@ function parseConstanciaDate(dateText) {
             day: parseInt(match[1], 10),
             month: parseInt(match[2], 10),
             year: parseInt(match[3], 10),
+            dayPadded: match[1].length >= 2,
+            monthPadded: match[2].length >= 2,
+            yearDigits: 4,
           };
         }
         match = value.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{2})$/);
@@ -85,6 +53,9 @@ function parseConstanciaDate(dateText) {
             day: parseInt(match[1], 10),
             month: parseInt(match[2], 10),
             year,
+            dayPadded: match[1].length >= 2,
+            monthPadded: match[2].length >= 2,
+            yearDigits: 2,
           };
         }
         return null;
@@ -128,6 +99,232 @@ function parseConstanciaDate(dateText) {
         const yy = yyyy.slice(-2);
         return `${dd}/${mm}/${yy}`;
       }
+
+      /** user01: suma meses conservando el día (si el mes no lo tiene, usa el último día). */
+      function addMonthsKeepDay(parsed, months) {
+        let monthIndex = parsed.month - 1 + months;
+        let year = parsed.year + Math.floor(monthIndex / 12);
+        monthIndex = ((monthIndex % 12) + 12) % 12;
+        const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+        const day = Math.min(parsed.day, lastDay);
+        return {
+          day,
+          month: monthIndex + 1,
+          year,
+          dayPadded: parsed.dayPadded,
+          monthPadded: parsed.monthPadded,
+          yearDigits: parsed.yearDigits,
+          monthCase: parsed.monthCase,
+        };
+      }
+
+      /** Conserva el estilo de F. Prod: 03/08/2026, 3/8/26, 3/08/2026, etc. */
+      function formatUser01ProdExpDate(parsed) {
+        const dd =
+          parsed.dayPadded === true
+            ? String(parsed.day).padStart(2, "0")
+            : String(parsed.day);
+        const mm =
+          parsed.monthPadded === true
+            ? String(parsed.month).padStart(2, "0")
+            : String(parsed.month);
+        const yy =
+          parsed.yearDigits === 4
+            ? String(parsed.year)
+            : String(parsed.year).slice(-2);
+        return `${dd}/${mm}/${yy}`;
+      }
+
+      const USER01_MONTH_ABBR = [
+        "ene",
+        "feb",
+        "mar",
+        "abr",
+        "may",
+        "jun",
+        "jul",
+        "ago",
+        "sep",
+        "oct",
+        "nov",
+        "dic",
+      ];
+
+      /** Parsea ago-27 / ago27 / AGO27 / ago 27 → { month, year, hasHyphen, monthCase } */
+      function parseUser01MonthYearText(dateText) {
+        const raw = (dateText || "").trim();
+        if (!raw) return null;
+        const match = raw.match(/^([A-Za-zÁÉÍÓÚáéíóúüÜ]{3})\s*([-./]?)\s*(\d{2}|\d{4})$/);
+        if (!match) return null;
+        const monthToken = match[1];
+        const sep = match[2] || "";
+        let year = parseInt(match[3], 10);
+        if (match[3].length === 2) year += year < 50 ? 2000 : 1900;
+        const monthKey = monthToken
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+        const aliases = { set: "sep", sept: "sep" };
+        const normalized = aliases[monthKey] || monthKey;
+        const monthIndex = USER01_MONTH_ABBR.indexOf(normalized);
+        if (monthIndex < 0) return null;
+        const hasHyphen = sep === "-";
+        let monthCase = "lower";
+        if (monthToken === monthToken.toUpperCase()) monthCase = "upper";
+        else if (monthToken[0] === monthToken[0].toUpperCase()) monthCase = "title";
+        return {
+          month: monthIndex + 1,
+          year,
+          hasHyphen,
+          monthCase,
+        };
+      }
+
+      function formatUser01MonthYearText(parsed) {
+        const abbr = USER01_MONTH_ABBR[parsed.month - 1] || "";
+        let monthOut = abbr;
+        if (parsed.monthCase === "upper") monthOut = abbr.toUpperCase();
+        else if (parsed.monthCase === "title") {
+          monthOut = abbr.charAt(0).toUpperCase() + abbr.slice(1);
+        }
+        const yy = String(parsed.year).slice(-2);
+        return parsed.hasHyphen ? `${monthOut}-${yy}` : `${monthOut}${yy}`;
+      }
+
+      function addMonthsMonthYear(parsed, months) {
+        let monthIndex = parsed.month - 1 + months;
+        let year = parsed.year + Math.floor(monthIndex / 12);
+        monthIndex = ((monthIndex % 12) + 12) % 12;
+        return {
+          month: monthIndex + 1,
+          year,
+          hasHyphen: parsed.hasHyphen,
+          monthCase: parsed.monthCase,
+        };
+      }
+
+      /** Parsea 01DIC25 / 1ago26 → día + mes texto + año */
+      function parseUser01DayMonthYearText(dateText) {
+        const raw = (dateText || "").trim();
+        if (!raw) return null;
+        const match = raw.match(/^(\d{1,2})\s*([A-Za-zÁÉÍÓÚáéíóúüÜ]{3})\s*(\d{2}|\d{4})$/);
+        if (!match) return null;
+        const day = parseInt(match[1], 10);
+        const monthToken = match[2];
+        let year = parseInt(match[3], 10);
+        if (match[3].length === 2) year += year < 50 ? 2000 : 1900;
+        const monthKey = monthToken
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+        const aliases = { set: "sep", sept: "sep" };
+        const normalized = aliases[monthKey] || monthKey;
+        const monthIndex = USER01_MONTH_ABBR.indexOf(normalized);
+        if (monthIndex < 0 || day < 1 || day > 31) return null;
+        let monthCase = "lower";
+        if (monthToken === monthToken.toUpperCase()) monthCase = "upper";
+        else if (monthToken[0] === monthToken[0].toUpperCase()) monthCase = "title";
+        return {
+          day,
+          month: monthIndex + 1,
+          year,
+          monthCase,
+          dayPadded: match[1].length >= 2,
+        };
+      }
+
+      function formatUser01DayMonthYearText(parsed) {
+        const abbr = USER01_MONTH_ABBR[parsed.month - 1] || "";
+        let monthOut = abbr;
+        if (parsed.monthCase === "upper") monthOut = abbr.toUpperCase();
+        else if (parsed.monthCase === "title") {
+          monthOut = abbr.charAt(0).toUpperCase() + abbr.slice(1);
+        }
+        const dd = parsed.dayPadded
+          ? String(parsed.day).padStart(2, "0")
+          : String(parsed.day);
+        const yy = String(parsed.year).slice(-2);
+        return `${dd}${monthOut}${yy}`;
+      }
+
+      function user01ProductIsIntegral(productName) {
+        return (productName || "")
+          .toString()
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .includes("integral");
+      }
+
+      /** Devuelve F. Vencimiento (+6 integral / +8 resto) o null si no reconoce el formato. */
+      function computeUser01ExpirationFromProduction(productionText, productName) {
+        if (typeof isUser01ConstanciaLayout !== "function" || !isUser01ConstanciaLayout()) {
+          return null;
+        }
+        const value = (productionText || "").trim();
+        if (!value) return null;
+        const monthsAhead = user01ProductIsIntegral(productName) ? 6 : 8;
+
+        const numeric = parseConstanciaDate(value);
+        if (numeric) {
+          return formatUser01ProdExpDate(addMonthsKeepDay(numeric, monthsAhead));
+        }
+
+        const monthYear = parseUser01MonthYearText(value);
+        if (monthYear) {
+          return formatUser01MonthYearText(addMonthsMonthYear(monthYear, monthsAhead));
+        }
+
+        const dayMonthYear = parseUser01DayMonthYearText(value);
+        if (dayMonthYear) {
+          const next = addMonthsKeepDay(dayMonthYear, monthsAhead);
+          return formatUser01DayMonthYearText({
+            ...next,
+            monthCase: dayMonthYear.monthCase,
+            dayPadded: dayMonthYear.dayPadded,
+          });
+        }
+
+        return null;
+      }
+
+      /** user01 (constancia): al editar F. Producción → F. Vencimiento. */
+      function applyUser01ExpirationFromProduction(prodInput) {
+        if (!(prodInput instanceof HTMLInputElement)) return;
+        if (!prodInput.classList.contains("prod-date-input")) return;
+        const row = prodInput.closest("tr");
+        const expInput = row?.querySelector(".exp-date-input");
+        if (!expInput) return;
+        const productName = row.querySelector(".product-input")?.value || "";
+        const computed = computeUser01ExpirationFromProduction(prodInput.value, productName);
+        if (computed != null) expInput.value = computed;
+      }
+
+      /** user01 (catálogo): al editar Fecha Producción → Fecha Vencimiento. */
+      function applyUser01CatalogExpirationFromProduction() {
+        if (!prodProduction || !prodExpiration) return;
+        const computed = computeUser01ExpirationFromProduction(
+          prodProduction.value,
+          prodName?.value || ""
+        );
+        if (computed != null) prodExpiration.value = computed;
+      }
+
+      function bindUser01CatalogExpirationCalc() {
+        if (!prodProduction || !prodExpiration) return;
+        const run = () => applyUser01CatalogExpirationFromProduction();
+        prodProduction.addEventListener("change", run);
+        prodProduction.addEventListener("blur", run);
+        if (prodName) {
+          prodName.addEventListener("change", () => {
+            if ((prodProduction.value || "").trim()) run();
+          });
+          prodName.addEventListener("blur", () => {
+            if ((prodProduction.value || "").trim()) run();
+          });
+        }
+      }
+      bindUser01CatalogExpirationCalc();
 
       // SKU Ajiles: mapas independientes (admin/otros vs user01)
       const AJILES_PERU_SKU_MAP_ADMIN = [
@@ -743,6 +940,7 @@ function parseConstanciaDate(dateText) {
                 </tbody>
               </table>
             `;
+        // Zoom propio según filas consolidadas (no según ítems crudos de fumigación)
         const tableBlock = enableUser01Zoom
           ? `<div class="u01-table-slot" style="${computeUser01TableZoomStyle(consolidated.length, 155)}">${tableHtml}</div>`
           : tableHtml;
@@ -838,8 +1036,11 @@ function parseConstanciaDate(dateText) {
         const items = constancia.items || [];
         const productCellHtml = (name) =>
           `<td class="cell-fit-line">${(name || "").toString()}</td>`;
-        const rows = items
-          .map((item, idx) => {
+        function buildFumigacionRowsHtml(sourceItems, plateValue) {
+          const list = sourceItems || [];
+          const plate = plateValue ?? transporte;
+          return list
+            .map((item, idx) => {
             const fumDefault = isAjilesFumigacion ? liberacion : fumigacion;
             const fumCell = formatShortDate(
               itemSnapshotField(item, "f_fumigacion", "fumigacion_date") || fumDefault
@@ -860,7 +1061,7 @@ function parseConstanciaDate(dateText) {
             if (isAjilesFumigacion) {
               const plateCell =
                 idx === 0
-                  ? `<td rowspan="${Math.max(items.length, 1)}" style="text-align:center; vertical-align:middle;">${transporte || "-"}</td>`
+                  ? `<td rowspan="${Math.max(list.length, 1)}" style="text-align:center; vertical-align:middle;">${plate || "-"}</td>`
                   : "";
               return `
             <tr>
@@ -899,7 +1100,7 @@ function parseConstanciaDate(dateText) {
             const lastCol = user01Layout
               ? `<td style="text-align:center; vertical-align:middle;">${instCell}</td>`
               : idx === 0
-                ? `<td rowspan="${Math.max(items.length, 1)}" style="text-align:center; vertical-align:middle;">${transporte}</td>`
+                ? `<td rowspan="${Math.max(list.length, 1)}" style="text-align:center; vertical-align:middle;">${plate}</td>`
                 : "";
             return `
             <tr>
@@ -920,6 +1121,8 @@ function parseConstanciaDate(dateText) {
           `;
           })
           .join("");
+        }
+        const rows = buildFumigacionRowsHtml(items, transporte);
         const fumigacionLastHeader = isAjilesFumigacion
           ? "Placa transporte"
           : user01Layout
@@ -1358,6 +1561,7 @@ function parseConstanciaDate(dateText) {
               mobile_number: intl.mobile_number || constancia.mobile_number || constancia.mobile || "",
               pallets: intl.pallets || constancia.pallets || constancia.palets || "",
               issuer: "INDUAMERICA INTERNACIONAL S.A.C.",
+              items: Array.isArray(intl.items) && intl.items.length ? intl.items : items,
             },
             {
               number: com.number || bumpNumber(intl.number || numero),
@@ -1367,10 +1571,13 @@ function parseConstanciaDate(dateText) {
               mobile_number: com.mobile_number || constancia.mobile_number || constancia.mobile || "",
               pallets: com.pallets || constancia.pallets || constancia.palets || "",
               issuer: "INDUAMERICA COMERCIAL S.A.C.",
+              items: Array.isArray(com.items) && com.items.length ? com.items : items,
             },
           ];
           pageList = [];
           dualBlocks.forEach((block) => {
+            const blockItems = block.items || items;
+            const blockRows = buildFumigacionRowsHtml(blockItems, block.transporte);
             if (showFumigacion) {
               pageList.push(
                 buildTottusFumigacionPage({
@@ -1379,7 +1586,7 @@ function parseConstanciaDate(dateText) {
                   cliente: block.cliente,
                   issuerCompany: block.issuer,
                   tableHeadHtml: fumigacionTableHead,
-                  rowsHtml: rows,
+                  rowsHtml: blockRows,
                   colspan: fumigacionColspan,
                   wrapTable: wrapUser01Table,
                 })
@@ -1392,7 +1599,7 @@ function parseConstanciaDate(dateText) {
                     mobile_number: block.mobile_number,
                     pallets: block.pallets,
                   },
-                  items,
+                  blockItems,
                   block.fecha,
                   block.number,
                   block.cliente,
@@ -1743,15 +1950,5 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
       }
       globalThis.buildConstanciaHtml = buildConstanciaHtml;
       globalThis.isCencosudCdLimaClient = isCencosudCdLimaClient;
-      globalThis.resolveFirmaSrcForUsername = resolveFirmaSrcForUsername;
-      globalThis.getConstanciaFirmaSrc = getConstanciaFirmaSrc;
-      globalThis.isUser01ConstanciaLayout = isUser01ConstanciaLayout;
-      globalThis.isMakroClient = isMakroClient;
-      globalThis.isHipermercadosTottusClient = isHipermercadosTottusClient;
-      globalThis.isCencosudCdPrincipalClient = isCencosudCdPrincipalClient;
-      globalThis.isTottusStyleConstanciaClient = isTottusStyleConstanciaClient;
-      globalThis.consolidateTottusProducts = consolidateTottusProducts;
-      globalThis.buildTottusFumigacionPage = buildTottusFumigacionPage;
-      globalThis.buildTottusDesinsectacionPage = buildTottusDesinsectacionPage;
 
 })();

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home88" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home89" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -429,6 +429,16 @@
                     <button type="button" class="ocr-header-collapse-btn hidden" id="ocrHeaderCollapseBtn">Contraer</button>
                   </div>
                 </div>
+                <div class="ocr-cencosud-products-wrap hidden" id="ocrIntlProductsWrap">
+                  <div class="ocr-products-scroll ocr-products-scroll--section">
+                    <table class="ocr-products-table">
+                      <thead>
+                        <tr id="productsHeadRowIntl"></tr>
+                      </thead>
+                      <tbody id="productsBodyIntl"></tbody>
+                    </table>
+                  </div>
+                </div>
                 <div class="ocr-cencosud-comercial-block hidden" id="ocrCencosudComercialBlock">
                   <div class="ocr-cencosud-razon-label" id="ocrCencosudComercialLabel">Induamerica Comercial</div>
                   <div class="ocr-command-bar ocr-header-form ocr-header-form--comercial" id="ocrHeaderFormComercial">
@@ -474,7 +484,16 @@
                         autocomplete="off"
                         spellcheck="false"
                         title="Palets (2 dígitos)"
-                      />
+                    />
+                  </div>
+                  <div class="ocr-cencosud-products-wrap" id="ocrComercialProductsWrap">
+                    <div class="ocr-products-scroll ocr-products-scroll--section">
+                      <table class="ocr-products-table">
+                        <thead>
+                          <tr id="productsHeadRowComercial"></tr>
+                        </thead>
+                        <tbody id="productsBodyComercial"></tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
@@ -490,7 +509,8 @@
                 </button>
               </div>
 
-              <div class="ocr-products-scroll" id="ocrProductsScroll">
+              <div class="ocr-products-scroll" id="ocrStandardProductsWrap">
+                <div class="ocr-products-scroll" id="ocrProductsScroll">
                 <table class="ocr-products-table" id="ocrProductsTable">
                   <thead>
                     <tr id="productsHeadRow">
@@ -508,6 +528,7 @@
                   </thead>
                   <tbody id="productsBody"></tbody>
                 </table>
+                </div>
               </div>
             </div>
             <aside class="ocr-side-dock" id="ocrSideDock" aria-label="Acciones de constancia">
@@ -1265,6 +1286,12 @@
       let envOwnerProfile = null; // permisos/menú del usuario impersonado
 
       const productsBody = document.getElementById("productsBody");
+      const productsBodyIntl = document.getElementById("productsBodyIntl");
+      const productsBodyComercial = document.getElementById("productsBodyComercial");
+      const ocrIntlProductsWrap = document.getElementById("ocrIntlProductsWrap");
+      const ocrStandardProductsWrap = document.getElementById("ocrStandardProductsWrap");
+      const CENCOSUD_DUAL_DEFAULT_ROWS = 5;
+      let lastFocusedProductsBody = null;
       const addRowBtn = document.getElementById("addRowBtn");
       const adminLayout = document.getElementById("adminLayout");
       const sidebarToggle = document.getElementById("sidebarToggle");
@@ -1679,6 +1706,9 @@
 
       function setOcrHeaderCollapsed(collapsed) {
         if (!ocrHeaderCard || !sectionOcr) return;
+        if (isActiveCencosudDualClient()) {
+          collapsed = false;
+        }
         const ready = isOcrHeaderReadyToCollapse();
         const shouldCollapse = Boolean(collapsed && ready);
         ocrHeaderCard.classList.toggle("is-collapsed", shouldCollapse);
@@ -1756,10 +1786,13 @@
         if (ocrHeaderSummary) {
           ocrHeaderSummary.addEventListener("click", expandOcrHeader);
         }
-        if (productsBody) {
-          productsBody.addEventListener("focusin", (event) => {
+        const ocrWorkspaceCard = document.querySelector("#section-ocr .ocr-workspace-card");
+        if (ocrWorkspaceCard) {
+          ocrWorkspaceCard.addEventListener("focusin", (event) => {
+            const body = event.target?.closest?.("#productsBody, #productsBodyIntl, #productsBodyComercial");
+            if (body) lastFocusedProductsBody = body;
             if (!(event.target instanceof HTMLInputElement)) return;
-            tryAutoCollapseOcrHeader();
+            if (!isActiveCencosudDualClient()) tryAutoCollapseOcrHeader();
           });
         }
       }
@@ -1876,6 +1909,7 @@
             transport_plate: (constanciaTransporteInput?.value || "").trim(),
             mobile_number: (constanciaMobileNumber?.value || "").trim().toUpperCase().replace(/\s+/g, "").slice(0, 2),
             pallets: (constanciaPallets?.value || "").trim().replace(/\s+/g, "").slice(0, 2),
+            items: collectConstanciaItemsFromBody(productsBodyIntl),
           },
           comercial: {
             number: (constanciaNumeroComercial?.value || "").trim(),
@@ -1884,6 +1918,7 @@
             transport_plate: (constanciaTransporteComercial?.value || "").trim(),
             mobile_number: (constanciaMobileComercial?.value || "").trim().toUpperCase().replace(/\s+/g, "").slice(0, 2),
             pallets: (constanciaPalletsComercial?.value || "").trim().replace(/\s+/g, "").slice(0, 2),
+            items: collectConstanciaItemsFromBody(productsBodyComercial),
           },
         };
       }
@@ -1969,12 +2004,36 @@
               .replace(/\s+/g, "")
               .slice(0, 2);
           }
-          if (constanciaPalletsComercial) {
-            constanciaPalletsComercial.value = (com.pallets || "").toString().replace(/\s+/g, "").slice(0, 2);
-          }
+        if (constanciaPalletsComercial) {
+          constanciaPalletsComercial.value = (com.pallets || "").toString().replace(/\s+/g, "").slice(0, 2);
+        }
+        const intlItems = Array.isArray(intl.items) ? intl.items : [];
+        const comItems = Array.isArray(com.items) ? com.items : [];
+        fillProductsBody(productsBodyIntl, intlItems, { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
+        fillProductsBody(productsBodyComercial, comItems, { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
         } finally {
           cencosudDualSyncing = false;
         }
+      }
+
+      function getActiveProductBodies() {
+        if (isActiveCencosudDualClient()) {
+          return [productsBodyIntl, productsBodyComercial].filter(Boolean);
+        }
+        return [productsBody].filter(Boolean);
+      }
+
+      function getDefaultProductsBodyForAdd() {
+        return isActiveCencosudDualClient() ? productsBodyIntl : productsBody;
+      }
+
+      function getPrimaryProductsBody() {
+        return isActiveCencosudDualClient() ? productsBodyIntl : productsBody;
+      }
+
+      function isProductTableBody(el) {
+        if (!el) return false;
+        return el === productsBody || el === productsBodyIntl || el === productsBodyComercial;
       }
 
       function syncCencosudDualVisibility() {
@@ -1984,9 +2043,35 @@
         }
         if (ocrCencosudComercialBlock) {
           ocrCencosudComercialBlock.classList.toggle("hidden", !show);
-          // Refuerzo por si algún CSS deja display:none
-          ocrCencosudComercialBlock.style.display = show ? "" : "none";
+          ocrCencosudComercialBlock.style.display = show ? "block" : "none";
         }
+        if (ocrIntlProductsWrap) {
+          ocrIntlProductsWrap.classList.toggle("hidden", !show);
+        }
+        if (ocrStandardProductsWrap) {
+          ocrStandardProductsWrap.classList.toggle("hidden", show);
+        }
+        if (show && !cencosudDualWasActive) {
+          const existing = collectConstanciaItemsFromBody(productsBody);
+          fillProductsBody(productsBodyIntl, existing, { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
+          fillProductsBody(productsBodyComercial, [], { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
+          if (productsBody) productsBody.innerHTML = "";
+        } else if (!show && cencosudDualWasActive) {
+          const intlItems = collectConstanciaItemsFromBody(productsBodyIntl);
+          fillProductsBody(productsBody, intlItems, { minRows: 1 });
+          if (productsBodyIntl) productsBodyIntl.innerHTML = "";
+          if (productsBodyComercial) productsBodyComercial.innerHTML = "";
+        } else if (show) {
+          ensureMinProductRows(productsBodyIntl, CENCOSUD_DUAL_DEFAULT_ROWS);
+          ensureMinProductRows(productsBodyComercial, CENCOSUD_DUAL_DEFAULT_ROWS);
+        }
+        if (show) {
+          setOcrHeaderCollapsed(false);
+          if (ocrHeaderCollapseBtn) ocrHeaderCollapseBtn.classList.add("hidden");
+        } else if (ocrHeaderCollapseBtn) {
+          updateOcrHeaderCollapseUi();
+        }
+        renderOcrProductsHeader();
         if (cencosudDualWasActive && !show) {
           clearCencosudComercialFields();
           cencosudDualSynced = false;
@@ -2066,8 +2151,9 @@
       function renderOcrProductsHeader() {
         const head = document.getElementById("productsHeadRow");
         if (!head) return;
+        let headHtml;
         if (isActiveAjilesClient()) {
-          head.innerHTML = `
+          headHtml = `
             <th style="width:45px;">Item</th>
             <th style="width:95px;">Fecha envío</th>
             <th style="width:22%;">Producto *</th>
@@ -2082,7 +2168,7 @@
             <th style="width:55px;">Eliminar</th>
           `;
         } else {
-          head.innerHTML = `
+          headHtml = `
             <th style="width:50px;">Item</th>
             <th style="width:28%;">Producto *</th>
             <th style="width:90px;">Lote</th>
@@ -2095,6 +2181,11 @@
             <th style="width:60px;">Eliminar</th>
           `;
         }
+        head.innerHTML = headHtml;
+        const headIntl = document.getElementById("productsHeadRowIntl");
+        const headCom = document.getElementById("productsHeadRowComercial");
+        if (headIntl) headIntl.innerHTML = headHtml;
+        if (headCom) headCom.innerHTML = headHtml;
       }
 
       function syncAjilesTransportVisibility() {
@@ -2166,57 +2257,138 @@
         `;
       }
 
-      function wireProductRow(row) {
+      function wireProductRow(row, bodyEl) {
         const itemCell = row.querySelector(".itemCell");
         itemCell.innerHTML = `<span class="row-number"></span> <button class="btn btn-success btn-mini" type="button">+</button>`;
         itemCell.querySelector(".btn-mini").addEventListener("click", () => {
-          insertRowAfter(row);
+          insertRowAfter(row, bodyEl);
         });
         const deleteBtn = row.querySelector(".btn-danger");
         deleteBtn.addEventListener("click", () => {
           row.remove();
-          reindexRows();
+          reindexProductBody(bodyEl);
+          refreshOcrRowStates();
         });
       }
 
-      function addRow(productValue = "") {
-        const row = document.createElement("tr");
-        row.className = "ocr-product-row";
-        row.innerHTML = buildProductRowHtml(productValue);
-        wireProductRow(row);
-        productsBody.appendChild(row);
-        reindexRows();
-        return row;
-      }
-
-      function insertRowAfter(targetRow) {
-        const newRow = document.createElement("tr");
-        newRow.className = "ocr-product-row";
-        newRow.innerHTML = buildProductRowHtml("");
-        wireProductRow(newRow);
-        targetRow.insertAdjacentElement("afterend", newRow);
-        reindexRows();
+      function reindexProductBody(bodyEl) {
+        if (!bodyEl) return;
+        [...bodyEl.querySelectorAll("tr")].forEach((tr, idx) => {
+          const num = tr.querySelector(".row-number");
+          if (num) num.textContent = String(idx + 1);
+        });
       }
 
       function reindexRows() {
-        [...productsBody.querySelectorAll("tr")].forEach((tr, idx) => {
-          tr.querySelector(".row-number").textContent = String(idx + 1);
-        });
+        getActiveProductBodies().forEach(reindexProductBody);
         refreshOcrRowStates();
       }
 
+      function addRowToBody(bodyEl, productValue = "") {
+        if (!bodyEl) return null;
+        const row = document.createElement("tr");
+        row.className = "ocr-product-row";
+        row.innerHTML = buildProductRowHtml(productValue);
+        wireProductRow(row, bodyEl);
+        bodyEl.appendChild(row);
+        reindexProductBody(bodyEl);
+        refreshOcrRowStates();
+        return row;
+      }
+
+      function addRow(productValue = "", bodyEl = null) {
+        const body = bodyEl || lastFocusedProductsBody || getDefaultProductsBodyForAdd();
+        return addRowToBody(body, productValue);
+      }
+
+      function insertRowAfter(targetRow, bodyEl = null) {
+        const body = bodyEl || targetRow?.closest("tbody");
+        if (!body || !targetRow) return;
+        const newRow = document.createElement("tr");
+        newRow.className = "ocr-product-row";
+        newRow.innerHTML = buildProductRowHtml("");
+        wireProductRow(newRow, body);
+        targetRow.insertAdjacentElement("afterend", newRow);
+        reindexProductBody(body);
+        refreshOcrRowStates();
+      }
+
+      function ensureMinProductRows(bodyEl, minRows) {
+        if (!bodyEl || minRows <= 0) return;
+        while (bodyEl.querySelectorAll("tr").length < minRows) {
+          addRowToBody(bodyEl, "");
+        }
+      }
+
+      function populateProductRowFromItem(row, itm) {
+        const shipInput = row.querySelector(".shipping-date-input");
+        const lotInput = row.querySelector(".lot-input");
+        const prodInput = row.querySelector(".prod-date-input");
+        const expInput = row.querySelector(".exp-date-input");
+        const qtyInput = row.querySelector(".qty-input");
+        const fumInput = row.querySelector(".fumigacion-date-input");
+        const libInput = row.querySelector(".liberacion-date-input");
+        const instInput = row.querySelector(".instalaciones-date-input");
+        const sacosInput = row.querySelector(".fum-sacos-input");
+        const tabletasInput = row.querySelector(".tabletas-input");
+        const fosfinaInput = row.querySelector(".fosfina-input");
+        if (shipInput) {
+          shipInput.value =
+            itemSnapshotField(itm, "fecha_envio", "shipping_date") || formatEmissionDateForInput();
+        }
+        if (lotInput) lotInput.value = itemSnapshotField(itm, "lote_snapshot", "lot");
+        if (prodInput) prodInput.value = itemSnapshotField(itm, "production_date_snapshot", "production_text");
+        if (expInput) expInput.value = itemSnapshotField(itm, "expiration_date_snapshot", "expiration_text");
+        if (qtyInput && itm.quantity !== undefined && itm.quantity !== null && itm.quantity !== "") {
+          qtyInput.value = itm.quantity;
+        }
+        const savedFum = itemSnapshotField(itm, "f_fumigacion", "fumigacion_date");
+        const savedLib = itemSnapshotField(itm, "f_liberacion", "liberacion_date");
+        const savedInst = itemSnapshotField(itm, "f_instalaciones", "instalaciones_date");
+        if (fumInput) fumInput.value = savedFum || getDefaultFumigacionDate();
+        if (libInput) libInput.value = savedLib || getDefaultLiberacionDate();
+        if (instInput) instInput.value = savedInst || getDefaultInstalacionesDate();
+        if (sacosInput) {
+          const sacos = itemSnapshotField(itm, "fumigacion_sacos", "cant_fumigada");
+          if (sacos !== "") sacosInput.value = sacos;
+        }
+        if (tabletasInput) {
+          const tab = itemSnapshotField(itm, "tabletas", "n_tabletas");
+          if (tab !== "") tabletasInput.value = tab;
+        }
+        if (fosfinaInput) {
+          const fos = itemSnapshotField(itm, "nivel_fosfina", "fosfina");
+          if (fos !== "") fosfinaInput.value = fos;
+        }
+      }
+
+      function fillProductsBody(bodyEl, items, { minRows = 0 } = {}) {
+        if (!bodyEl) return;
+        bodyEl.innerHTML = "";
+        (items || []).forEach((itm) => {
+          const name = itemSnapshotField(itm, "product_name_snapshot", "product");
+          const row = addRowToBody(bodyEl, name);
+          populateProductRowFromItem(row, itm);
+        });
+        ensureMinProductRows(bodyEl, minRows);
+        if (!items?.length && minRows === 0 && bodyEl.querySelectorAll("tr").length === 0) {
+          addRowToBody(bodyEl, "");
+        }
+      }
+
       function refreshOcrRowStates() {
-        if (!productsBody) return;
-        productsBody.querySelectorAll("tr").forEach((row) => {
-          const productInput = row.querySelector(".product-input");
-          const product = (productInput?.value || "").trim();
-          const lot = (row.querySelector(".lot-input")?.value || "").trim();
-          const otherInputs = Array.from(row.querySelectorAll("input")).filter(
-            (el) => !el.classList.contains("product-input")
-          );
-          const hasOtherData = otherInputs.some((el) => (el.value || "").trim());
-          const incomplete = (!product && hasOtherData) || (product && !lot);
-          row.classList.toggle("ocr-row-incomplete", incomplete);
+        getActiveProductBodies().forEach((bodyEl) => {
+          bodyEl.querySelectorAll("tr").forEach((row) => {
+            const productInput = row.querySelector(".product-input");
+            const product = (productInput?.value || "").trim();
+            const lot = (row.querySelector(".lot-input")?.value || "").trim();
+            const otherInputs = Array.from(row.querySelectorAll("input")).filter(
+              (el) => !el.classList.contains("product-input")
+            );
+            const hasOtherData = otherInputs.some((el) => (el.value || "").trim());
+            const incomplete = (!product && hasOtherData) || (product && !lot);
+            row.classList.toggle("ocr-row-incomplete", incomplete);
+          });
         });
       }
 
@@ -3220,15 +3392,19 @@
       }
 
       function fillProducts(lines) {
-        productsBody.innerHTML = "";
-        lines.forEach((line) => addRow(line));
+        const body = getPrimaryProductsBody();
+        if (!body) return;
+        body.innerHTML = "";
+        lines.forEach((line) => addRowToBody(body, line));
         applyProductDetailsFromCatalog();
       }
 
       function fillProductsWithQty(items) {
-        productsBody.innerHTML = "";
+        const body = getPrimaryProductsBody();
+        if (!body) return;
+        body.innerHTML = "";
         items.forEach((item) => {
-          const row = addRow(item.name || "");
+          const row = addRowToBody(body, item.name || "");
           if (row && item.qty) {
             const qtyInput = row.querySelector('input[type="number"]');
             if (qtyInput) {
@@ -3355,8 +3531,10 @@
 
       function applyProductDetailsFromCatalog() {
         if (!allProducts.length) return;
-        [...productsBody.querySelectorAll("tr")].forEach((tr) => {
-          applyProductDetailsForRow(tr);
+        getActiveProductBodies().forEach((bodyEl) => {
+          [...bodyEl.querySelectorAll("tr")].forEach((tr) => {
+            applyProductDetailsForRow(tr);
+          });
         });
       }
 
@@ -3372,51 +3550,12 @@
         renderOcrProductsHeader();
         syncAjilesTransportVisibility();
         applyOcrLayoutForClient._lastMode = getOcrClientLayoutMode();
-        productsBody.innerHTML = "";
-        (items || []).forEach((itm) => {
-          const name = itemSnapshotField(itm, "product_name_snapshot", "product");
-          const row = addRow(name);
-          const shipInput = row.querySelector(".shipping-date-input");
-          const lotInput = row.querySelector(".lot-input");
-          const prodInput = row.querySelector(".prod-date-input");
-          const expInput = row.querySelector(".exp-date-input");
-          const qtyInput = row.querySelector(".qty-input");
-          const fumInput = row.querySelector(".fumigacion-date-input");
-          const libInput = row.querySelector(".liberacion-date-input");
-          const instInput = row.querySelector(".instalaciones-date-input");
-          const sacosInput = row.querySelector(".fum-sacos-input");
-          const tabletasInput = row.querySelector(".tabletas-input");
-          const fosfinaInput = row.querySelector(".fosfina-input");
-          if (shipInput) {
-            shipInput.value =
-              itemSnapshotField(itm, "fecha_envio", "shipping_date") || formatEmissionDateForInput();
-          }
-          if (lotInput) lotInput.value = itemSnapshotField(itm, "lote_snapshot", "lot");
-          if (prodInput) prodInput.value = itemSnapshotField(itm, "production_date_snapshot", "production_text");
-          if (expInput) expInput.value = itemSnapshotField(itm, "expiration_date_snapshot", "expiration_text");
-          if (qtyInput && itm.quantity !== undefined && itm.quantity !== null && itm.quantity !== "") {
-            qtyInput.value = itm.quantity;
-          }
-          const savedFum = itemSnapshotField(itm, "f_fumigacion", "fumigacion_date");
-          const savedLib = itemSnapshotField(itm, "f_liberacion", "liberacion_date");
-          const savedInst = itemSnapshotField(itm, "f_instalaciones", "instalaciones_date");
-          if (fumInput) fumInput.value = savedFum || getDefaultFumigacionDate();
-          if (libInput) libInput.value = savedLib || getDefaultLiberacionDate();
-          if (instInput) instInput.value = savedInst || getDefaultInstalacionesDate();
-          if (sacosInput) {
-            const sacos = itemSnapshotField(itm, "fumigacion_sacos", "cant_fumigada");
-            if (sacos !== "") sacosInput.value = sacos;
-          }
-          if (tabletasInput) {
-            const tab = itemSnapshotField(itm, "tabletas", "n_tabletas");
-            if (tab !== "") tabletasInput.value = tab;
-          }
-          if (fosfinaInput) {
-            const fos = itemSnapshotField(itm, "nivel_fosfina", "fosfina");
-            if (fos !== "") fosfinaInput.value = fos;
-          }
-        });
-        if (!items?.length) addRow();
+        if (isActiveCencosudDualClient()) {
+          fillProductsBody(productsBodyIntl, items, { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
+          fillProductsBody(productsBodyComercial, [], { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
+        } else {
+          fillProductsBody(productsBody, items);
+        }
       }
 
       function refreshDefaultFumigacionDatesOnRows({ onlyEmpty = true } = {}) {
@@ -3424,24 +3563,25 @@
         const libDefault = getDefaultLiberacionDate();
         const instDefault = getDefaultInstalacionesDate();
         const shipDefault = formatEmissionDateForInput();
-        if (!productsBody) return;
-        productsBody.querySelectorAll("tr").forEach((row) => {
-          const fumInput = row.querySelector(".fumigacion-date-input");
-          const libInput = row.querySelector(".liberacion-date-input");
-          const instInput = row.querySelector(".instalaciones-date-input");
-          const shipInput = row.querySelector(".shipping-date-input");
-          if (fumInput && (!onlyEmpty || !(fumInput.value || "").trim())) {
-            fumInput.value = fumDefault;
-          }
-          if (libInput && (!onlyEmpty || !(libInput.value || "").trim())) {
-            libInput.value = libDefault;
-          }
-          if (instInput && (!onlyEmpty || !(instInput.value || "").trim())) {
-            instInput.value = instDefault;
-          }
-          if (shipInput && (!onlyEmpty || !(shipInput.value || "").trim())) {
-            shipInput.value = shipDefault;
-          }
+        getActiveProductBodies().forEach((bodyEl) => {
+          bodyEl.querySelectorAll("tr").forEach((row) => {
+            const fumInput = row.querySelector(".fumigacion-date-input");
+            const libInput = row.querySelector(".liberacion-date-input");
+            const instInput = row.querySelector(".instalaciones-date-input");
+            const shipInput = row.querySelector(".shipping-date-input");
+            if (fumInput && (!onlyEmpty || !(fumInput.value || "").trim())) {
+              fumInput.value = fumDefault;
+            }
+            if (libInput && (!onlyEmpty || !(libInput.value || "").trim())) {
+              libInput.value = libDefault;
+            }
+            if (instInput && (!onlyEmpty || !(instInput.value || "").trim())) {
+              instInput.value = instDefault;
+            }
+            if (shipInput && (!onlyEmpty || !(shipInput.value || "").trim())) {
+              shipInput.value = shipDefault;
+            }
+          });
         });
       }
 
@@ -3462,7 +3602,15 @@
         }
       }
 
-      productsBody.addEventListener("keydown", (event) => {
+      const ocrWorkspaceCard = document.querySelector("#section-ocr .ocr-workspace-card");
+
+      function productTableBodyFromTarget(target) {
+        return target?.closest?.("#productsBody, #productsBodyIntl, #productsBodyComercial") || null;
+      }
+
+      if (ocrWorkspaceCard) {
+      ocrWorkspaceCard.addEventListener("keydown", (event) => {
+        if (!productTableBodyFromTarget(event.target)) return;
         const input = event.target;
         if (!(input instanceof HTMLInputElement)) return;
 
@@ -3535,7 +3683,8 @@
         }
       });
 
-      productsBody.addEventListener("input", (event) => {
+      ocrWorkspaceCard.addEventListener("input", (event) => {
+        if (!productTableBodyFromTarget(event.target)) return;
         const input = event.target;
         if (!(input instanceof HTMLInputElement)) return;
         if (!input.classList.contains("product-input")) {
@@ -3546,18 +3695,41 @@
         refreshOcrRowStates();
       });
 
-      productsBody.addEventListener("change", () => {
+      ocrWorkspaceCard.addEventListener("change", (event) => {
+        if (!productTableBodyFromTarget(event.target)) return;
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement)) return;
+        if (input.classList.contains("prod-date-input")) {
+          applyUser01ExpirationFromProduction(input);
+          refreshOcrRowStates();
+          return;
+        }
+        if (input.classList.contains("product-input")) {
+          const row = input.closest("tr");
+          if (row) applyProductDetailsForRow(row);
+          const prodDateInput = row?.querySelector(".prod-date-input");
+          if (prodDateInput && (prodDateInput.value || "").trim()) {
+            applyUser01ExpirationFromProduction(prodDateInput);
+          }
+          const value = input.value || "";
+          if (value.trim() && !isKnownProduct(value)) {
+            promptNewProduct(value, input);
+          }
+        }
         refreshOcrRowStates();
       });
 
-      productsBody.addEventListener("focusin", (event) => {
+      ocrWorkspaceCard.addEventListener("focusin", (event) => {
+        const body = productTableBodyFromTarget(event.target);
+        if (body) lastFocusedProductsBody = body;
         const input = event.target;
         if (!(input instanceof HTMLInputElement)) return;
         if (!input.classList.contains("product-input")) return;
         showProductAutocomplete(input);
       });
 
-      productsBody.addEventListener("focusout", (event) => {
+      ocrWorkspaceCard.addEventListener("focusout", (event) => {
+        if (!productTableBodyFromTarget(event.target)) return;
         const input = event.target;
         if (!(input instanceof HTMLInputElement)) return;
         if (!input.classList.contains("product-input")) return;
@@ -3566,40 +3738,20 @@
         }, 120);
       });
 
-      window.addEventListener("resize", () => {
-        if (productAutocomplete.input && isProductAutocompleteOpen()) {
-          positionProductAutocomplete(productAutocomplete.input);
-        }
-      });
-
-      productsBody.addEventListener("change", (event) => {
-        const input = event.target;
-        if (!(input instanceof HTMLInputElement)) return;
-        if (input.classList.contains("prod-date-input")) {
-          applyUser01ExpirationFromProduction(input);
-          refreshOcrRowStates();
-          return;
-        }
-        if (!input.classList.contains("product-input")) return;
-        const row = input.closest("tr");
-        if (row) applyProductDetailsForRow(row);
-        // Si ya hay F. Producción, recalcular vencimiento según si el producto es integral (+6) o no (+8)
-        const prodDateInput = row?.querySelector(".prod-date-input");
-        if (prodDateInput && (prodDateInput.value || "").trim()) {
-          applyUser01ExpirationFromProduction(prodDateInput);
-        }
-        const value = input.value || "";
-        if (value.trim() && !isKnownProduct(value)) {
-          promptNewProduct(value, input);
-        }
-      });
-
-      productsBody.addEventListener("blur", (event) => {
+      ocrWorkspaceCard.addEventListener("blur", (event) => {
+        if (!productTableBodyFromTarget(event.target)) return;
         const input = event.target;
         if (!(input instanceof HTMLInputElement)) return;
         if (!input.classList.contains("prod-date-input")) return;
         applyUser01ExpirationFromProduction(input);
       }, true);
+      }
+
+      window.addEventListener("resize", () => {
+        if (productAutocomplete.input && isProductAutocompleteOpen()) {
+          positionProductAutocomplete(productAutocomplete.input);
+        }
+      });
 
       if (constanciaClienteInput) {
         clientFieldAutocomplete.bindInput(constanciaClienteInput);
@@ -5401,10 +5553,11 @@
         loadProducts();
       }
 
-      function collectConstanciaItems() {
+      function collectConstanciaItemsFromBody(bodyEl) {
         const items = [];
+        if (!bodyEl) return items;
         const ajiles = isActiveAjilesClient();
-        [...productsBody.querySelectorAll("tr")].forEach((tr) => {
+        [...bodyEl.querySelectorAll("tr")].forEach((tr) => {
           const product = (tr.querySelector(".product-input")?.value || "").trim();
           const lot = (tr.querySelector(".lot-input")?.value || "").trim();
           const prodDate = (tr.querySelector(".prod-date-input")?.value || "").trim();
@@ -5444,6 +5597,10 @@
           }
         });
         return items;
+      }
+
+      function collectConstanciaItems() {
+        return collectConstanciaItemsFromBody(getPrimaryProductsBody());
       }
 
       function formatToday() {
@@ -5488,8 +5645,14 @@
         renderOcrProductsHeader();
         syncAjilesTransportVisibility();
         syncTottusExtraVisibility();
-        productsBody.innerHTML = "";
-        addRow();
+        if (isActiveCencosudDualClient()) {
+          fillProductsBody(productsBodyIntl, [], { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
+          fillProductsBody(productsBodyComercial, [], { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
+          if (productsBody) productsBody.innerHTML = "";
+        } else {
+          productsBody.innerHTML = "";
+          addRow();
+        }
         currentConstanciaId = null;
         currentConstanciaStatus = "confirmada";
         clearConstanciaTrasiegoExtra();
@@ -5675,6 +5838,7 @@
         tottusExtraWasActive = isActiveTottusClient();
         if (data.cencosud_dual) {
           applyCencosudDualFromData(data.cencosud_dual);
+          syncCencosudDualVisibility();
         } else {
           cencosudDualSynced = false;
           clearCencosudComercialFields();
@@ -5684,6 +5848,9 @@
           tottusExtraWasActive = isActiveTottusClient();
           if (data.cencosud_dual) {
             applyCencosudDualFromData(data.cencosud_dual);
+          } else if (isActiveCencosudDualClient()) {
+            fillProductsBody(productsBodyIntl, data.items || [], { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
+            fillProductsBody(productsBodyComercial, [], { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
           }
           syncCencosudDualVisibility();
         }, 0);
@@ -8201,8 +8368,11 @@
         const items = constancia.items || [];
         const productCellHtml = (name) =>
           `<td class="cell-fit-line">${(name || "").toString()}</td>`;
-        const rows = items
-          .map((item, idx) => {
+        function buildFumigacionRowsHtml(sourceItems, plateValue) {
+          const list = sourceItems || [];
+          const plate = plateValue ?? transporte;
+          return list
+            .map((item, idx) => {
             const fumDefault = isAjilesFumigacion ? liberacion : fumigacion;
             const fumCell = formatShortDate(
               itemSnapshotField(item, "f_fumigacion", "fumigacion_date") || fumDefault
@@ -8223,7 +8393,7 @@
             if (isAjilesFumigacion) {
               const plateCell =
                 idx === 0
-                  ? `<td rowspan="${Math.max(items.length, 1)}" style="text-align:center; vertical-align:middle;">${transporte || "-"}</td>`
+                  ? `<td rowspan="${Math.max(list.length, 1)}" style="text-align:center; vertical-align:middle;">${plate || "-"}</td>`
                   : "";
               return `
             <tr>
@@ -8262,7 +8432,7 @@
             const lastCol = user01Layout
               ? `<td style="text-align:center; vertical-align:middle;">${instCell}</td>`
               : idx === 0
-                ? `<td rowspan="${Math.max(items.length, 1)}" style="text-align:center; vertical-align:middle;">${transporte}</td>`
+                ? `<td rowspan="${Math.max(list.length, 1)}" style="text-align:center; vertical-align:middle;">${plate}</td>`
                 : "";
             return `
             <tr>
@@ -8283,6 +8453,8 @@
           `;
           })
           .join("");
+        }
+        const rows = buildFumigacionRowsHtml(items, transporte);
         const fumigacionLastHeader = isAjilesFumigacion
           ? "Placa transporte"
           : user01Layout
@@ -8721,6 +8893,7 @@
               mobile_number: intl.mobile_number || constancia.mobile_number || constancia.mobile || "",
               pallets: intl.pallets || constancia.pallets || constancia.palets || "",
               issuer: "INDUAMERICA INTERNACIONAL S.A.C.",
+              items: Array.isArray(intl.items) && intl.items.length ? intl.items : items,
             },
             {
               number: com.number || bumpNumber(intl.number || numero),
@@ -8730,10 +8903,13 @@
               mobile_number: com.mobile_number || constancia.mobile_number || constancia.mobile || "",
               pallets: com.pallets || constancia.pallets || constancia.palets || "",
               issuer: "INDUAMERICA COMERCIAL S.A.C.",
+              items: Array.isArray(com.items) && com.items.length ? com.items : items,
             },
           ];
           pageList = [];
           dualBlocks.forEach((block) => {
+            const blockItems = block.items || items;
+            const blockRows = buildFumigacionRowsHtml(blockItems, block.transporte);
             if (showFumigacion) {
               pageList.push(
                 buildTottusFumigacionPage({
@@ -8742,7 +8918,7 @@
                   cliente: block.cliente,
                   issuerCompany: block.issuer,
                   tableHeadHtml: fumigacionTableHead,
-                  rowsHtml: rows,
+                  rowsHtml: blockRows,
                   colspan: fumigacionColspan,
                   wrapTable: wrapUser01Table,
                 })
@@ -8755,7 +8931,7 @@
                     mobile_number: block.mobile_number,
                     pallets: block.pallets,
                   },
-                  items,
+                  blockItems,
                   block.fecha,
                   block.number,
                   block.cliente,

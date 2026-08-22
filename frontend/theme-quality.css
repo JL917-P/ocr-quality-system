@@ -2104,7 +2104,16 @@ th {
 }
 
 #section-ocr .ocr-cencosud-comercial-block {
-  margin: 0 0 6px 0;
+  margin: 0 0 8px 0;
+}
+
+#section-ocr .ocr-cencosud-products-wrap {
+  margin: 0 0 10px 0;
+}
+
+#section-ocr .ocr-products-scroll--section {
+  margin: 4px 0 0 8px;
+  max-width: min(98%, 1180px);
 }
 
 #section-ocr .ocr-cencosud-comercial-block:not(.hidden) {
