@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home92" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home93" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -430,13 +430,24 @@
                   </div>
                 </div>
                 <div class="ocr-cencosud-products-wrap hidden" id="ocrIntlProductsWrap">
-                  <div class="ocr-products-scroll ocr-products-scroll--section">
-                    <table class="ocr-products-table">
-                      <thead>
-                        <tr id="productsHeadRowIntl"></tr>
-                      </thead>
-                      <tbody id="productsBodyIntl"></tbody>
-                    </table>
+                  <div class="ocr-products-section-with-preview">
+                    <div class="ocr-products-scroll ocr-products-scroll--section">
+                      <table class="ocr-products-table">
+                        <thead>
+                          <tr id="productsHeadRowIntl"></tr>
+                        </thead>
+                        <tbody id="productsBodyIntl"></tbody>
+                      </table>
+                    </div>
+                    <button
+                      type="button"
+                      class="ocr-table-preview-float"
+                      id="previewConstanciaIntlBtn"
+                      title="Vista previa Internacional (Fum. + Des.)"
+                    >
+                      <span class="ocr-table-preview-float-icon" aria-hidden="true">V</span>
+                      <span class="ocr-table-preview-float-label">Vista Previa</span>
+                    </button>
                   </div>
                 </div>
                 <button
@@ -500,36 +511,58 @@
                   </div>
                 </div>
                 <div class="ocr-cencosud-products-wrap" id="ocrComercialProductsWrap">
-                  <div class="ocr-products-scroll ocr-products-scroll--section">
-                    <table class="ocr-products-table">
-                      <thead>
-                        <tr id="productsHeadRowComercial"></tr>
-                      </thead>
-                      <tbody id="productsBodyComercial"></tbody>
-                    </table>
+                  <div class="ocr-products-section-with-preview">
+                    <div class="ocr-products-scroll ocr-products-scroll--section">
+                      <table class="ocr-products-table">
+                        <thead>
+                          <tr id="productsHeadRowComercial"></tr>
+                        </thead>
+                        <tbody id="productsBodyComercial"></tbody>
+                      </table>
+                    </div>
+                    <button
+                      type="button"
+                      class="ocr-table-preview-float"
+                      id="previewConstanciaComercialBtn"
+                      title="Vista previa Comercial (Fum. + Des.)"
+                    >
+                      <span class="ocr-table-preview-float-icon" aria-hidden="true">V</span>
+                      <span class="ocr-table-preview-float-label">Vista Previa</span>
+                    </button>
                   </div>
                 </div>
               </div>
 
               <div class="ocr-products-scroll" id="ocrStandardProductsWrap">
-                <div class="ocr-products-scroll" id="ocrProductsScroll">
-                <table class="ocr-products-table" id="ocrProductsTable">
-                  <thead>
-                    <tr id="productsHeadRow">
-                      <th style="width:50px;">Item</th>
-                      <th style="width:28%;">Producto *</th>
-                      <th style="width:90px;">Lote</th>
-                      <th style="width:100px;">F. Producción</th>
-                      <th style="width:100px;">F. Vencimiento</th>
-                      <th style="width:90px;">Cantidad (u)</th>
-                      <th style="width:95px;">F. Fumigación</th>
-                      <th style="width:95px;">F. Liberación</th>
-                      <th style="width:95px;">F. Instalaciones</th>
-                      <th style="width:60px;">Eliminar</th>
-                    </tr>
-                  </thead>
-                  <tbody id="productsBody"></tbody>
-                </table>
+                <div class="ocr-products-section-with-preview">
+                  <div class="ocr-products-scroll" id="ocrProductsScroll">
+                  <table class="ocr-products-table" id="ocrProductsTable">
+                    <thead>
+                      <tr id="productsHeadRow">
+                        <th style="width:50px;">Item</th>
+                        <th style="width:28%;">Producto *</th>
+                        <th style="width:90px;">Lote</th>
+                        <th style="width:100px;">F. Producción</th>
+                        <th style="width:100px;">F. Vencimiento</th>
+                        <th style="width:90px;">Cantidad (u)</th>
+                        <th style="width:95px;">F. Fumigación</th>
+                        <th style="width:95px;">F. Liberación</th>
+                        <th style="width:95px;">F. Instalaciones</th>
+                        <th style="width:60px;">Eliminar</th>
+                      </tr>
+                    </thead>
+                    <tbody id="productsBody"></tbody>
+                  </table>
+                  </div>
+                  <button
+                    type="button"
+                    class="ocr-table-preview-float"
+                    id="previewConstanciaBtn"
+                    title="Vista previa e imprimir"
+                  >
+                    <span class="ocr-table-preview-float-icon" aria-hidden="true">V</span>
+                    <span class="ocr-table-preview-float-label">Vista Previa</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -537,18 +570,6 @@
               <button class="ocr-dock-btn ocr-dock-btn--add" id="addRowBtn" type="button" title="Agregar fila de producto">
                 <span class="ocr-dock-btn-icon" aria-hidden="true">+</span>
                 <span class="ocr-dock-btn-label">Agregar</span>
-              </button>
-              <button class="ocr-dock-btn ocr-dock-btn--preview" id="previewConstanciaBtn" type="button" title="Vista previa e imprimir">
-                <span class="ocr-dock-btn-icon" aria-hidden="true">V</span>
-                <span class="ocr-dock-btn-label">Vista Previa</span>
-              </button>
-              <button class="ocr-dock-btn ocr-dock-btn--preview hidden" id="previewConstanciaIntlBtn" type="button" title="Vista previa Internacional (Fum. + Des.)">
-                <span class="ocr-dock-btn-icon" aria-hidden="true">V</span>
-                <span class="ocr-dock-btn-label">Prev. Intl</span>
-              </button>
-              <button class="ocr-dock-btn ocr-dock-btn--preview hidden" id="previewConstanciaComercialBtn" type="button" title="Vista previa Comercial (Fum. + Des.)">
-                <span class="ocr-dock-btn-icon" aria-hidden="true">V</span>
-                <span class="ocr-dock-btn-label">Prev. Com.</span>
               </button>
               <button class="ocr-dock-btn ocr-dock-btn--restore hidden" id="restoreConstanciaItemsBtn" type="button" title="Restaurar historial">
                 <span class="ocr-dock-btn-icon" aria-hidden="true">↺</span>
@@ -2099,10 +2120,8 @@
 
       function syncOcrPreviewButtons() {
         const dual = isActiveCencosudDualClient();
-        if (previewConstanciaBtn) previewConstanciaBtn.classList.toggle("hidden", dual);
-        if (previewConstanciaIntlBtn) previewConstanciaIntlBtn.classList.toggle("hidden", !dual);
-        if (previewConstanciaComercialBtn) {
-          previewConstanciaComercialBtn.classList.toggle("hidden", !dual);
+        if (previewConstanciaBtn) {
+          previewConstanciaBtn.classList.toggle("hidden", dual);
         }
       }
 
