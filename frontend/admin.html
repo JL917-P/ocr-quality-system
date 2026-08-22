@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home93" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home94" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -2123,6 +2123,94 @@
         if (previewConstanciaBtn) {
           previewConstanciaBtn.classList.toggle("hidden", dual);
         }
+        positionOcrPreviewButtons();
+      }
+
+      function positionOcrPreviewButtons() {
+        const section = document.getElementById("section-ocr");
+        const hideAll = () => {
+          [previewConstanciaBtn, previewConstanciaIntlBtn, previewConstanciaComercialBtn].forEach((btn) => {
+            if (btn) btn.style.display = "none";
+          });
+        };
+        if (!section || section.classList.contains("hidden")) {
+          hideAll();
+          return;
+        }
+
+        const dual = isActiveCencosudDualClient();
+        const comercialVisible =
+          dual &&
+          ocrCencosudComercialBlock &&
+          !ocrCencosudComercialBlock.classList.contains("hidden") &&
+          ocrCencosudComercialBlock.style.display !== "none";
+        const dockGap = 72;
+        const btnSize = 58;
+
+        const placePreviewButton = (btn, scrollEl, active) => {
+          if (!btn || !scrollEl || !active || btn.classList.contains("hidden")) {
+            if (btn) btn.style.display = "none";
+            return;
+          }
+          const thead = scrollEl.querySelector(".ocr-products-table thead");
+          if (!thead) {
+            btn.style.display = "none";
+            return;
+          }
+          const scrollRect = scrollEl.getBoundingClientRect();
+          const headRect = thead.getBoundingClientRect();
+          if (scrollRect.width < 48 || scrollRect.bottom < 64 || scrollRect.top > window.innerHeight) {
+            btn.style.display = "none";
+            return;
+          }
+          const maxLeft = window.innerWidth - dockGap - btnSize;
+          let left = scrollRect.right + 10;
+          if (left + btnSize > maxLeft) left = Math.max(scrollRect.left + 48, maxLeft - btnSize);
+          const top = Math.min(
+            Math.max(headRect.top + 6, 68),
+            window.innerHeight - btnSize - 10
+          );
+          btn.style.display = "flex";
+          btn.style.position = "fixed";
+          btn.style.left = `${left}px`;
+          btn.style.top = `${top}px`;
+          btn.style.right = "auto";
+        };
+
+        placePreviewButton(
+          previewConstanciaBtn,
+          document.getElementById("ocrProductsScroll"),
+          !dual
+        );
+        placePreviewButton(
+          previewConstanciaIntlBtn,
+          document.querySelector("#ocrIntlProductsWrap .ocr-products-scroll--section"),
+          dual && ocrIntlProductsWrap && !ocrIntlProductsWrap.classList.contains("hidden")
+        );
+        placePreviewButton(
+          previewConstanciaComercialBtn,
+          document.querySelector("#ocrComercialProductsWrap .ocr-products-scroll--section"),
+          comercialVisible
+        );
+      }
+
+      let ocrPreviewButtonsPositionBound = false;
+      function bindOcrPreviewButtonPositioning() {
+        if (ocrPreviewButtonsPositionBound) return;
+        ocrPreviewButtonsPositionBound = true;
+        const update = () => positionOcrPreviewButtons();
+        window.addEventListener("resize", update);
+        window.addEventListener("scroll", update, true);
+        const ocrSection = document.getElementById("section-ocr");
+        if (ocrSection) {
+          ocrSection.addEventListener("scroll", update, true);
+        }
+        ["ocrProductsScroll", "ocrIntlProductsWrap", "ocrComercialProductsWrap", "ocrStandardProductsWrap"].forEach(
+          (id) => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener("scroll", update);
+          }
+        );
       }
 
       function bindCencosudDualSync() {
@@ -2261,6 +2349,7 @@
         const items = collectConstanciaItems();
         fillConstanciaItems(items);
         updateOcrHeaderCollapseUi();
+        positionOcrPreviewButtons();
       }
       applyOcrLayoutForClient._lastMode = null;
       syncAjilesTransportVisibility();
@@ -3870,6 +3959,8 @@
       if (previewConstanciaComercialBtn) {
         previewConstanciaComercialBtn.addEventListener("click", () => openConstanciaPreview("comercial"));
       }
+      bindOcrPreviewButtonPositioning();
+      requestAnimationFrame(() => positionOcrPreviewButtons());
       const ocrCaret = document.getElementById("ocrCaret");
       function toggleBandeja(event) {
         if (event) {
@@ -4853,6 +4944,12 @@
         }
         if (targetId === "section-constancias") {
           requestAnimationFrame(() => paginateConstancias());
+        }
+        if (targetId === "section-ocr") {
+          bindOcrPreviewButtonPositioning();
+          requestAnimationFrame(() => positionOcrPreviewButtons());
+        } else {
+          positionOcrPreviewButtons();
         }
         suppressOcrReset = false;
       }
@@ -6049,6 +6146,7 @@
             fillProductsBody(productsBodyComercial, [], { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
           }
           syncCencosudDualVisibility();
+          positionOcrPreviewButtons();
         }, 0);
         updateRestoreConstanciaButton(data.items || []);
         if (data.repaired_from_duplicate) {
