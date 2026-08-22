@@ -55,6 +55,7 @@
         if (!ownerUser) return;
         window.QC_CONSTANCIA_OWNER_USERNAME = ownerUser;
         window.QC_CONSTANCIA_FIRMA_SRC = resolveFirmaSrcForUsername(ownerUser);
+        if (typeof syncOcrMoreOptionsVisibility === "function") syncOcrMoreOptionsVisibility();
       }
 
       function syncConstanciaOwnerContextFromSession() {
@@ -1590,7 +1591,7 @@
                   <tr>
                     <th rowspan="2">Item</th>
                     <th rowspan="2">Presentación</th>
-                    <th rowspan="2">Código lote</th>
+                    <th rowspan="2">${user01Layout && isMakroClient(cliente) ? "Lote" : "Código lote"}</th>
                     <th rowspan="2">Cantidad (Unid)</th>
                     <th rowspan="2">Fecha de Producción</th>
                     <th rowspan="2">Fecha de Vencimiento</th>
