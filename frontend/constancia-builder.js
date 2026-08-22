@@ -25,16 +25,44 @@
         user01: "/static/firma-user01.png?v=1",
       };
 
+      function staticAssetUrl(path) {
+        const value = String(path || "").trim();
+        if (!value) return value;
+        if (/^https?:\/\//i.test(value) || /^data:/i.test(value)) return value;
+        try {
+          const origin = typeof window !== "undefined" && window.location ? window.location.origin : "";
+          if (origin) return `${origin}${value.startsWith("/") ? value : `/${value}`}`;
+        } catch (e) {}
+        return value;
+      }
+
       function resolveFirmaSrcForUsername(username) {
         const key = String(username || "")
           .trim()
           .toLowerCase();
-        return FIRMA_BY_USERNAME[key] || "/static/firma.png";
+        return staticAssetUrl(FIRMA_BY_USERNAME[key] || "/static/firma.png");
+      }
+
+      async function ensureConstanciaOwnerContext(fetchApi) {
+        const fetchFn =
+          fetchApi ||
+          (window.QCAuth && typeof window.QCAuth.apiFetch === "function"
+            ? window.QCAuth.apiFetch.bind(window.QCAuth)
+            : fetch);
+        try {
+          const envRes = await fetchFn("/api/environment", { cache: "no-store" });
+          const envData = await envRes.json().catch(() => ({}));
+          if (envRes.ok && envData.owner?.username) {
+            const ownerUser = String(envData.owner.username).trim();
+            window.QC_CONSTANCIA_OWNER_USERNAME = ownerUser;
+            window.QC_CONSTANCIA_FIRMA_SRC = resolveFirmaSrcForUsername(ownerUser);
+          }
+        } catch (e) {}
       }
 
       function getConstanciaFirmaSrc() {
         if (typeof window !== "undefined" && window.QC_CONSTANCIA_FIRMA_SRC) {
-          return String(window.QC_CONSTANCIA_FIRMA_SRC);
+          return staticAssetUrl(String(window.QC_CONSTANCIA_FIRMA_SRC));
         }
         try {
           if (typeof isImpersonatingEnv === "function" && isImpersonatingEnv() && envOwnerProfile) {
@@ -43,7 +71,7 @@
           const me = window.QCAuth && window.QCAuth.getUser && window.QCAuth.getUser();
           if (me && me.username) return resolveFirmaSrcForUsername(me.username);
         } catch (e) {}
-        return "/static/firma.png";
+        return staticAssetUrl("/static/firma.png");
       }
 
       function getActiveConstanciaUsername() {
