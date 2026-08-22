@@ -1595,11 +1595,12 @@
           typeof dualPayload === "object" &&
           (dualPayload.internacional || dualPayload.comercial);
         const isCencosudDualPdf =
-          user01Layout &&
           isCencosudCdPrincipalClient(cliente) &&
-          isTottusFumigacion &&
+          isTottusStyleConstanciaClient(cliente) &&
+          !isAjilesFumigacion &&
           !isAjilesQuality &&
-          (previewSide || hasDualPayload);
+          (previewSide || hasDualPayload) &&
+          (user01Layout || previewSide || hasDualPayload);
         let pageList;
         if (isCencosudDualPdf) {
           const dual = constancia.cencosud_dual || {};

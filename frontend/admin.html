@@ -4690,7 +4690,7 @@
             openConstanciaInOcr(item.id);
           });
           el.querySelector(".home-view-btn").addEventListener("click", () => {
-            window.open(`/constancia-view?id=${item.id}${window.QCAuth && window.QCAuth.getEnvOwnerId() ? `&env=${encodeURIComponent(window.QCAuth.getEnvOwnerId())}` : ""}`, "_blank");
+            void openSavedConstanciaView(item.id);
           });
           homePendingList.appendChild(el);
         });
@@ -5730,6 +5730,41 @@
         previewWindow.document.close();
       }
 
+      async function openSavedConstanciaView(constanciaId) {
+        const id = Number(constanciaId);
+        if (!id) return;
+        if (typeof buildConstanciaHtml !== "function") {
+          showErrorModal("No se pudo generar la constancia.", { title: "Error" });
+          return;
+        }
+        try {
+          const res = await fetch(`/api/constancias/${id}`, { cache: "no-store" });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            showErrorModal(data.detail || "No se pudo cargar la constancia.", { title: "Error" });
+            return;
+          }
+          let catalog = Array.isArray(allProducts) ? allProducts : [];
+          let clients = Array.isArray(allClients) ? allClients : [];
+          if (!catalog.length) {
+            const prodRes = await fetch("/api/products", { cache: "no-store" });
+            const prodData = await prodRes.json().catch(() => ({}));
+            catalog = prodData.products || [];
+          }
+          if (!clients.length) {
+            const clientRes = await fetch("/api/clients", { cache: "no-store" });
+            const clientData = await clientRes.json().catch(() => ({}));
+            clients = clientData.clients || [];
+          }
+          const html = buildConstanciaHtml(data, catalog, clients);
+          openConstanciaPreviewWindow(html);
+        } catch (err) {
+          showErrorModal("Error al abrir la constancia: " + (err?.message || err), {
+            title: "Error",
+          });
+        }
+      }
+
       function openConstanciaPreview(dualSide = null) {
         if (!constanciaFumigacion.checked && !constanciaCalidad.checked) {
           showInfoModal("Selecciona al menos una constancia (Fumigación o Calidad).", {
@@ -6091,7 +6126,7 @@
           const viewBtn = row.querySelector(".view-btn");
           if (viewBtn) {
             viewBtn.addEventListener("click", () => {
-              window.open(`/constancia-view?id=${item.id}${window.QCAuth && window.QCAuth.getEnvOwnerId() ? `&env=${encodeURIComponent(window.QCAuth.getEnvOwnerId())}` : ""}`, "_blank");
+              void openSavedConstanciaView(item.id);
             });
           }
           constanciasList.appendChild(row);
@@ -9044,11 +9079,12 @@
           typeof dualPayload === "object" &&
           (dualPayload.internacional || dualPayload.comercial);
         const isCencosudDualPdf =
-          user01Layout &&
           isCencosudCdPrincipalClient(cliente) &&
-          isTottusFumigacion &&
+          isTottusStyleConstanciaClient(cliente) &&
+          !isAjilesFumigacion &&
           !isAjilesQuality &&
-          (previewSide || hasDualPayload);
+          (previewSide || hasDualPayload) &&
+          (user01Layout || previewSide || hasDualPayload);
         let pageList;
         if (isCencosudDualPdf) {
           const dual = constancia.cencosud_dual || {};

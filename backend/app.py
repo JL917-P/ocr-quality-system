@@ -2108,8 +2108,21 @@ def constancia_view_page(constancia_id: int = Query(..., alias="id")) -> HTMLRes
         <script src="/static/auth-api.js?v={auth_api_v}"></script>
         <script src="/static/constancia-builder.js?v={builder_v}"></script>
         <script>
+          function syncAuthFromOpener() {
+            try {
+              if (!window.opener || !window.opener.QCAuth || !window.QCAuth) return;
+              const token = window.opener.QCAuth.getToken();
+              const user = window.opener.QCAuth.getUser();
+              if (!token || !user) return;
+              window.QCAuth.setSession(token, user, false);
+              const env = window.opener.QCAuth.getEnvOwnerId();
+              if (env) window.QCAuth.setEnvOwnerId(env);
+            } catch (e) {}
+          }
+
           async function loadConstancia() {{
             try {{
+              syncAuthFromOpener();
               if (typeof window.buildConstanciaHtml !== "function") {{
                 throw new Error("builder");
               }}
