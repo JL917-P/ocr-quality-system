@@ -404,8 +404,8 @@
                       title="Palets (2 dígitos)"
                     />
                   </div>
-                  <div class="ocr-command-sep" aria-hidden="true"></div>
-                  <div class="ocr-command-group ocr-command-group--more">
+                  <div class="ocr-command-sep" id="ocrMoreOptionsSep" aria-hidden="true"></div>
+                  <div class="ocr-command-group ocr-command-group--more" id="ocrMoreOptionsGroup">
                     <div class="ocr-more-menu" id="ocrMoreMenu">
                       <button
                         type="button"
@@ -1576,6 +1576,8 @@
       const ocrTottusExtraGroup = document.getElementById("ocrTottusExtraGroup");
       const ocrTottusExtraSep = document.getElementById("ocrTottusExtraSep");
       const ocrMoreMenu = document.getElementById("ocrMoreMenu");
+      const ocrMoreOptionsGroup = document.getElementById("ocrMoreOptionsGroup");
+      const ocrMoreOptionsSep = document.getElementById("ocrMoreOptionsSep");
       const ocrMoreOptionsBtn = document.getElementById("ocrMoreOptionsBtn");
       const ocrMoreOptionsPanel = document.getElementById("ocrMoreOptionsPanel");
       const ocrMoreTrasiegoBtn = document.getElementById("ocrMoreTrasiegoBtn");
@@ -7602,6 +7604,7 @@
         if (!ownerUser) return;
         window.QC_CONSTANCIA_OWNER_USERNAME = ownerUser;
         window.QC_CONSTANCIA_FIRMA_SRC = resolveFirmaSrcForUsername(ownerUser);
+        if (typeof syncOcrMoreOptionsVisibility === "function") syncOcrMoreOptionsVisibility();
       }
 
       function syncConstanciaOwnerContextFromSession() {
@@ -9850,6 +9853,20 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
         }
         if (reserveEl) {
           reserveEl.classList.toggle("hidden", editing ? !canEdit : !canCreate);
+        }
+        syncOcrMoreOptionsVisibility();
+      }
+
+      /** Vladimir (user01) no usa Trasiego desde cabecera; solo admin lo ve. */
+      function syncOcrMoreOptionsVisibility() {
+        const hideForUser01 =
+          typeof isUser01ConstanciaLayout === "function"
+            ? isUser01ConstanciaLayout()
+            : getActiveConstanciaUsername() === "user01";
+        if (ocrMoreOptionsGroup) ocrMoreOptionsGroup.classList.toggle("hidden", hideForUser01);
+        if (ocrMoreOptionsSep) ocrMoreOptionsSep.classList.toggle("hidden", hideForUser01);
+        if (hideForUser01 && typeof setOcrMoreOptionsOpen === "function") {
+          setOcrMoreOptionsOpen(false);
         }
       }
 
