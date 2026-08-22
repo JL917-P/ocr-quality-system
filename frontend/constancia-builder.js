@@ -20,7 +20,51 @@
         return "";
       }
 
-function parseConstanciaDate(dateText) {
+/** Firma por entorno: solo user01 (Vladimir) usa firma propia; admin y resto conservan firma.png */
+      const FIRMA_BY_USERNAME = {
+        user01: "/static/firma-user01.png?v=1",
+      };
+
+      function resolveFirmaSrcForUsername(username) {
+        const key = String(username || "")
+          .trim()
+          .toLowerCase();
+        return FIRMA_BY_USERNAME[key] || "/static/firma.png";
+      }
+
+      function getConstanciaFirmaSrc() {
+        if (typeof window !== "undefined" && window.QC_CONSTANCIA_FIRMA_SRC) {
+          return String(window.QC_CONSTANCIA_FIRMA_SRC);
+        }
+        try {
+          if (typeof isImpersonatingEnv === "function" && isImpersonatingEnv() && envOwnerProfile) {
+            return resolveFirmaSrcForUsername(envOwnerProfile.username);
+          }
+          const me = window.QCAuth && window.QCAuth.getUser && window.QCAuth.getUser();
+          if (me && me.username) return resolveFirmaSrcForUsername(me.username);
+        } catch (e) {}
+        return "/static/firma.png";
+      }
+
+      function getActiveConstanciaUsername() {
+        try {
+          if (typeof window !== "undefined" && window.QC_CONSTANCIA_OWNER_USERNAME) {
+            return String(window.QC_CONSTANCIA_OWNER_USERNAME).trim().toLowerCase();
+          }
+          if (typeof isImpersonatingEnv === "function" && isImpersonatingEnv() && envOwnerProfile) {
+            return String(envOwnerProfile.username || "").trim().toLowerCase();
+          }
+          const me = window.QCAuth && window.QCAuth.getUser && window.QCAuth.getUser();
+          if (me && me.username) return String(me.username).trim().toLowerCase();
+        } catch (e) {}
+        return "";
+      }
+
+      function isUser01ConstanciaLayout() {
+        return getActiveConstanciaUsername() === "user01";
+      }
+
+      function parseConstanciaDate(dateText) {
         const value = (dateText || "").trim();
         if (!value) return null;
         let match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -1545,11 +1589,17 @@ function parseConstanciaDate(dateText) {
         const pageTransport = showTransport
           ? buildCencosudTransportPage(constancia, items, fecha, numero, cliente, transporte)
           : "";
+        const dualPayload = constancia.cencosud_dual;
+        const hasDualPayload =
+          dualPayload &&
+          typeof dualPayload === "object" &&
+          (dualPayload.internacional || dualPayload.comercial);
         const isCencosudDualPdf =
           user01Layout &&
           isCencosudCdPrincipalClient(cliente) &&
           isTottusFumigacion &&
-          !isAjilesQuality;
+          !isAjilesQuality &&
+          (previewSide || hasDualPayload);
         let pageList;
         if (isCencosudDualPdf) {
           const dual = constancia.cencosud_dual || {};

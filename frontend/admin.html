@@ -9038,11 +9038,17 @@
         const pageTransport = showTransport
           ? buildCencosudTransportPage(constancia, items, fecha, numero, cliente, transporte)
           : "";
+        const dualPayload = constancia.cencosud_dual;
+        const hasDualPayload =
+          dualPayload &&
+          typeof dualPayload === "object" &&
+          (dualPayload.internacional || dualPayload.comercial);
         const isCencosudDualPdf =
           user01Layout &&
           isCencosudCdPrincipalClient(cliente) &&
           isTottusFumigacion &&
-          !isAjilesQuality;
+          !isAjilesQuality &&
+          (previewSide || hasDualPayload);
         let pageList;
         if (isCencosudDualPdf) {
           const dual = constancia.cencosud_dual || {};
