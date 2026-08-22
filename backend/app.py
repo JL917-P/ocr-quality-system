@@ -2095,103 +2095,18 @@ def admin_page() -> HTMLResponse:
     )
 
 
-@app.get("/constancia-view", response_class=HTMLResponse)
-def constancia_view_page(constancia_id: int = Query(..., alias="id")) -> HTMLResponse:
-    builder_v = _constancia_builder_version()
-    auth_api_v = "auth11"
-    html = f"""
-    <!doctype html>
-    <html lang="es">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Constancia {constancia_id}</title>
-      </head>
-      <body>
-        <div style="font-family: Arial, sans-serif; padding: 16px;">Cargando constancia...</div>
-        <script src="/static/auth-api.js?v={auth_api_v}"></script>
-        <script src="/static/constancia-builder.js?v={builder_v}"></script>
-        <script>
-          function syncAuthFromOpener() {
-            try {
-              if (!window.opener || !window.opener.QCAuth || !window.QCAuth) return;
-              const token = window.opener.QCAuth.getToken();
-              const user = window.opener.QCAuth.getUser();
-              if (!token || !user) return;
-              window.QCAuth.setSession(token, user, false);
-              const env = window.opener.QCAuth.getEnvOwnerId();
-              if (env) window.QCAuth.setEnvOwnerId(env);
-            } catch (e) {}
-          }
-
-          function syncAuthFromStorage() {
-            try {
-              if (!window.QCAuth) return;
-              const token =
-                localStorage.getItem("qc_auth_token") || sessionStorage.getItem("qc_auth_token") || "";
-              const userRaw =
-                localStorage.getItem("qc_auth_user") || sessionStorage.getItem("qc_auth_user") || "";
-              if (!token || !userRaw) return;
-              window.QCAuth.setSession(token, JSON.parse(userRaw), !!localStorage.getItem("qc_auth_token"));
-            } catch (e) {}
-          }
-
-          async function loadConstancia() {{
-            try {{
-              syncAuthFromOpener();
-              syncAuthFromStorage();
-              if (typeof window.buildConstanciaHtml !== "function") {{
-                throw new Error("builder");
-              }}
-              const params = new URLSearchParams(window.location.search || "");
-              const envParam = params.get("env");
-              if (window.QCAuth && envParam) {{
-                window.QCAuth.setEnvOwnerId(envParam);
-              }}
-              const fetchApi =
-                window.QCAuth && typeof window.QCAuth.apiFetch === "function"
-                  ? window.QCAuth.apiFetch.bind(window.QCAuth)
-                  : fetch;
-              try {{
-                const envRes = await fetchApi("/api/environment", {{ cache: "no-store" }});
-                const envData = await envRes.json().catch(() => ({{}}));
-                if (envRes.ok && envData.owner) {{
-                  const ownerUser = envData.owner.username || "";
-                  window.QC_CONSTANCIA_OWNER_USERNAME = ownerUser;
-                  if (typeof window.resolveFirmaSrcForUsername === "function") {{
-                    window.QC_CONSTANCIA_FIRMA_SRC = window.resolveFirmaSrcForUsername(ownerUser);
-                  }} else {{
-                    const u = String(ownerUser).trim().toLowerCase();
-                    window.QC_CONSTANCIA_FIRMA_SRC = u === "user01"
-                      ? "/static/firma-user01.png?v=1"
-                      : "/static/firma.png";
-                  }}
-                }}
-              }} catch (e) {{}}
-              const res = await fetchApi('/api/constancias/{constancia_id}', {{ cache: 'no-store' }});
-              const data = await res.json().catch(() => ({{}}));
-              if (!res.ok) throw new Error("notfound");
-              const prodRes = await fetchApi('/api/products', {{ cache: 'no-store' }});
-              const prodData = await prodRes.json().catch(() => ({{}}));
-              const catalog = prodData.products || [];
-              const clientRes = await fetchApi('/api/clients', {{ cache: 'no-store' }});
-              const clientData = await clientRes.json().catch(() => ({{}}));
-              const clients = clientData.clients || [];
-              const html = window.buildConstanciaHtml(data, catalog, clients);
-              document.open();
-              document.write(html);
-              document.close();
-            }} catch (err) {{
-              document.body.innerHTML = '<div style="font-family: Arial, sans-serif; padding: 16px;">No se pudo cargar la constancia. Verifique que exista e intente recargar esta página.</div>';
-            }}
-          }}
-          loadConstancia();
-        </script>
-      </body>
-    </html>
-    """
-    return HTMLResponse(
-        content=html,
+@app.get("/constancia-view")
+def constancia_view_page(
+    request: Request,
+    constancia_id: int = Query(..., alias="id"),
+) -> RedirectResponse:
+    query = f"viewConstancia={constancia_id}"
+    env = request.query_params.get("env")
+    if env:
+        query += f"&env={env}"
+    return RedirectResponse(
+        url=f"/admin?{query}",
+        status_code=302,
         headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
     )
 

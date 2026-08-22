@@ -2122,104 +2122,6 @@
         if (previewConstanciaBtn) {
           previewConstanciaBtn.classList.toggle("hidden", dual);
         }
-        positionOcrPreviewButtons();
-      }
-
-      function positionOcrPreviewButtons() {
-        const section = document.getElementById("section-ocr");
-        const buttons = [previewConstanciaBtn, previewConstanciaIntlBtn, previewConstanciaComercialBtn];
-        const hideAll = () => {
-          buttons.forEach((btn) => {
-            if (btn) btn.style.display = "none";
-          });
-        };
-        if (!section || section.classList.contains("hidden")) {
-          hideAll();
-          return;
-        }
-
-        const dual = isActiveCencosudDualClient();
-        const comercialVisible =
-          dual &&
-          ocrCencosudComercialBlock &&
-          !ocrCencosudComercialBlock.classList.contains("hidden") &&
-          ocrCencosudComercialBlock.style.display !== "none";
-        const btnSize = 58;
-        const dockGap = 76;
-
-        const placePreviewButton = (btn, table, active) => {
-          if (!btn || !table || !active || btn.classList.contains("hidden")) {
-            if (btn) btn.style.display = "none";
-            return;
-          }
-          if (btn.parentElement !== document.body) {
-            document.body.appendChild(btn);
-          }
-          const deleteTh = table.querySelector("thead th:last-child");
-          if (!deleteTh) {
-            btn.style.display = "none";
-            return;
-          }
-          const anchor = deleteTh.getBoundingClientRect();
-          if (!anchor.width && !anchor.height) {
-            btn.style.display = "none";
-            return;
-          }
-          if (anchor.bottom < 48 || anchor.top > window.innerHeight - 12) {
-            btn.style.display = "none";
-            return;
-          }
-          const maxLeft = window.innerWidth - dockGap - btnSize;
-          let left = anchor.right + 8;
-          if (left + btnSize > maxLeft) {
-            left = Math.max(8, anchor.left - btnSize - 8);
-          }
-          const top = Math.min(
-            Math.max(anchor.top + (anchor.height - btnSize) / 2, 8),
-            window.innerHeight - btnSize - 8
-          );
-          btn.style.display = "flex";
-          btn.style.position = "fixed";
-          btn.style.left = `${left}px`;
-          btn.style.top = `${top}px`;
-          btn.style.right = "auto";
-          btn.style.zIndex = "118";
-        };
-
-        placePreviewButton(
-          previewConstanciaBtn,
-          document.getElementById("ocrProductsTable"),
-          !dual && ocrStandardProductsWrap && !ocrStandardProductsWrap.classList.contains("hidden")
-        );
-        placePreviewButton(
-          previewConstanciaIntlBtn,
-          document.querySelector("#ocrIntlProductsWrap .ocr-products-table"),
-          dual && ocrIntlProductsWrap && !ocrIntlProductsWrap.classList.contains("hidden")
-        );
-        placePreviewButton(
-          previewConstanciaComercialBtn,
-          document.querySelector("#ocrComercialProductsWrap .ocr-products-table"),
-          comercialVisible
-        );
-      }
-
-      let ocrPreviewButtonsPositionBound = false;
-      function bindOcrPreviewButtonPositioning() {
-        if (ocrPreviewButtonsPositionBound) return;
-        ocrPreviewButtonsPositionBound = true;
-        const update = () => positionOcrPreviewButtons();
-        window.addEventListener("resize", update);
-        window.addEventListener("scroll", update, true);
-        const ocrSection = document.getElementById("section-ocr");
-        if (ocrSection) {
-          ocrSection.addEventListener("scroll", update, true);
-        }
-        ["ocrProductsScroll", "ocrIntlProductsWrap", "ocrComercialProductsWrap", "ocrStandardProductsWrap"].forEach(
-          (id) => {
-            const el = document.getElementById(id);
-            if (el) el.addEventListener("scroll", update);
-          }
-        );
       }
 
       function bindCencosudDualSync() {
@@ -2358,7 +2260,6 @@
         const items = collectConstanciaItems();
         fillConstanciaItems(items);
         updateOcrHeaderCollapseUi();
-        positionOcrPreviewButtons();
       }
       applyOcrLayoutForClient._lastMode = null;
       syncAjilesTransportVisibility();
@@ -3968,8 +3869,17 @@
       if (previewConstanciaComercialBtn) {
         previewConstanciaComercialBtn.addEventListener("click", () => openConstanciaPreview("comercial"));
       }
-      bindOcrPreviewButtonPositioning();
-      requestAnimationFrame(() => positionOcrPreviewButtons());
+
+      function openPendingConstanciaViewFromUrl() {
+        const params = new URLSearchParams(window.location.search || "");
+        const pendingId = params.get("viewConstancia");
+        if (!pendingId) return;
+        params.delete("viewConstancia");
+        const nextQuery = params.toString();
+        const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`;
+        window.history.replaceState({}, "", nextUrl);
+        void openSavedConstanciaView(pendingId);
+      }
       const ocrCaret = document.getElementById("ocrCaret");
       function toggleBandeja(event) {
         if (event) {
@@ -4954,12 +4864,6 @@
         if (targetId === "section-constancias") {
           requestAnimationFrame(() => paginateConstancias());
         }
-        if (targetId === "section-ocr") {
-          bindOcrPreviewButtonPositioning();
-          requestAnimationFrame(() => positionOcrPreviewButtons());
-        } else {
-          positionOcrPreviewButtons();
-        }
         suppressOcrReset = false;
       }
 
@@ -5824,16 +5728,32 @@
       }
 
       function openConstanciaPreviewWindow(html) {
-        const previewWindow = window.open("", "_blank");
-        if (!previewWindow) {
-          showErrorModal("Permite ventanas emergentes para abrir la vista previa.", {
-            title: "Ventana bloqueada",
+        try {
+          const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+          const blobUrl = URL.createObjectURL(blob);
+          const previewWindow = window.open(blobUrl, "_blank");
+          if (!previewWindow) {
+            URL.revokeObjectURL(blobUrl);
+            showErrorModal("Permite ventanas emergentes para abrir la vista previa.", {
+              title: "Ventana bloqueada",
+            });
+            return;
+          }
+          previewWindow.addEventListener("load", () => {
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
           });
-          return;
+        } catch (err) {
+          const previewWindow = window.open("", "_blank");
+          if (!previewWindow) {
+            showErrorModal("Permite ventanas emergentes para abrir la vista previa.", {
+              title: "Ventana bloqueada",
+            });
+            return;
+          }
+          previewWindow.document.open();
+          previewWindow.document.write(html);
+          previewWindow.document.close();
         }
-        previewWindow.document.open();
-        previewWindow.document.write(html);
-        previewWindow.document.close();
       }
 
       async function openSavedConstanciaView(constanciaId) {
@@ -6168,7 +6088,6 @@
             fillProductsBody(productsBodyComercial, [], { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
           }
           syncCencosudDualVisibility();
-          positionOcrPreviewButtons();
         }, 0);
         updateRestoreConstanciaButton(data.items || []);
         if (data.repaired_from_duplicate) {
@@ -10273,6 +10192,7 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
           ensureAllowedSection();
           await reloadActiveEnvironmentData();
           void refreshNotifications();
+          openPendingConstanciaViewFromUrl();
         })();
       });
       // No aplicar restricciones hasta tener sesión (evita pantalla vacía al cargar)
