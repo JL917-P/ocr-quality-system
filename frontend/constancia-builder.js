@@ -1370,6 +1370,12 @@
                 body.user01-wide.user01-zoom .u01-table-slot .data.quality:not(.ajiles-fum) thead th {
                   font-size: var(--u01-fs-head) !important;
                 }
+                body.user01-wide.user01-zoom .u01-table-slot .data.quality.makro-quality td:nth-child(2),
+                body.user01-wide.user01-zoom .u01-table-slot .data.quality.makro-quality td.cell-fit-line {
+                  text-align: left;
+                  padding-left: 4px;
+                  padding-right: 6px !important;
+                }
                 body.user01-wide.user01-zoom .u01-table-slot .data.tottus-desinsectacion {
                   font-size: var(--u01-fs) !important;
                 }
@@ -1586,7 +1592,7 @@
                 </tbody>
               </table>
               ${wrapUser01Table(`
-              <table class="data quality">
+              <table class="data quality${user01Layout && isMakroClient(cliente) ? " makro-quality" : ""}">
                 <thead>
                   <tr>
                     <th rowspan="2">Item</th>
@@ -1904,6 +1910,28 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
                 .data.quality th:nth-child(10) { width: 7.5%; }
                 .data.quality th:nth-child(11) { width: 6%; }
                 .data.quality th:nth-child(12) { width: 6%; }
+                /* Makro user01: más ancho en Presentación para no cortar el peso */
+                .data.quality.makro-quality th:nth-child(1) { width: 3.5%; }
+                .data.quality.makro-quality th:nth-child(2) { width: 34%; }
+                .data.quality.makro-quality th:nth-child(3) { width: 5%; }
+                .data.quality.makro-quality th:nth-child(4) { width: 5%; }
+                .data.quality.makro-quality th:nth-child(5) { width: 7%; }
+                .data.quality.makro-quality th:nth-child(6) { width: 7%; }
+                .data.quality.makro-quality th:nth-child(7) { width: 4.5%; }
+                .data.quality.makro-quality th:nth-child(8) { width: 6%; }
+                .data.quality.makro-quality th:nth-child(9) { width: 7%; }
+                .data.quality.makro-quality th:nth-child(10) { width: 7%; }
+                .data.quality.makro-quality th:nth-child(11) { width: 5.5%; }
+                .data.quality.makro-quality th:nth-child(12) { width: 5.5%; }
+                .data.quality.makro-quality td:nth-child(2) {
+                  text-align: left;
+                  padding-left: 4px;
+                  padding-right: 5px;
+                  box-sizing: border-box;
+                }
+                .data.quality.makro-quality td.cell-fit-line {
+                  padding-right: 5px !important;
+                }
                 .empty { text-align: center; padding: 6px; }
                 .footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 4px; gap: 12px; }
                 .firma-wrap { width: 55%; min-height: 104px; display: flex; align-items: flex-end; }
