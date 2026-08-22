@@ -1325,6 +1325,11 @@
       const ocrIntlProductsWrap = document.getElementById("ocrIntlProductsWrap");
       const ocrStandardProductsWrap = document.getElementById("ocrStandardProductsWrap");
       const CENCOSUD_DUAL_DEFAULT_ROWS = 5;
+
+      /** 5 filas solo en constancia nueva; al editar guardada/reservada solo las usadas. */
+      function cencosudDualMinRows() {
+        return currentConstanciaId ? 0 : CENCOSUD_DUAL_DEFAULT_ROWS;
+      }
       let lastFocusedProductsBody = null;
       const addRowBtn = document.getElementById("addRowBtn");
       const previewConstanciaBtn = document.getElementById("previewConstanciaBtn");
@@ -2050,8 +2055,8 @@
         }
         const intlItems = Array.isArray(intl.items) ? intl.items : [];
         const comItems = Array.isArray(com.items) ? com.items : [];
-        fillProductsBody(productsBodyIntl, intlItems, { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
-        fillProductsBody(productsBodyComercial, comItems, { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
+        fillProductsBody(productsBodyIntl, intlItems, { minRows: cencosudDualMinRows() });
+        fillProductsBody(productsBodyComercial, comItems, { minRows: cencosudDualMinRows() });
         } finally {
           cencosudDualSyncing = false;
         }
@@ -2094,15 +2099,16 @@
         }
         if (show && !cencosudDualWasActive) {
           const existing = collectConstanciaItemsFromBody(productsBody);
-          fillProductsBody(productsBodyIntl, existing, { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
-          fillProductsBody(productsBodyComercial, [], { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
+          const minRows = cencosudDualMinRows();
+          fillProductsBody(productsBodyIntl, existing, { minRows });
+          fillProductsBody(productsBodyComercial, [], { minRows });
           if (productsBody) productsBody.innerHTML = "";
         } else if (!show && cencosudDualWasActive) {
           const intlItems = collectConstanciaItemsFromBody(productsBodyIntl);
           fillProductsBody(productsBody, intlItems, { minRows: 1 });
           if (productsBodyIntl) productsBodyIntl.innerHTML = "";
           if (productsBodyComercial) productsBodyComercial.innerHTML = "";
-        } else if (show) {
+        } else if (show && !currentConstanciaId) {
           ensureMinProductRows(productsBodyIntl, CENCOSUD_DUAL_DEFAULT_ROWS);
           ensureMinProductRows(productsBodyComercial, CENCOSUD_DUAL_DEFAULT_ROWS);
         }
@@ -2420,7 +2426,13 @@
           populateProductRowFromItem(row, itm);
         });
         ensureMinProductRows(bodyEl, minRows);
-        if (!items?.length && minRows === 0 && bodyEl.querySelectorAll("tr").length === 0) {
+        // Constancia nueva: al menos 1 fila vacía si no hay datos. Editando guardada: solo filas usadas.
+        if (
+          !items?.length &&
+          minRows === 0 &&
+          !currentConstanciaId &&
+          bodyEl.querySelectorAll("tr").length === 0
+        ) {
           addRowToBody(bodyEl, "");
         }
       }
@@ -3600,8 +3612,8 @@
         syncAjilesTransportVisibility();
         applyOcrLayoutForClient._lastMode = getOcrClientLayoutMode();
         if (isActiveCencosudDualClient()) {
-          fillProductsBody(productsBodyIntl, items, { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
-          fillProductsBody(productsBodyComercial, [], { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
+          fillProductsBody(productsBodyIntl, items, { minRows: cencosudDualMinRows() });
+          fillProductsBody(productsBodyComercial, [], { minRows: cencosudDualMinRows() });
         } else {
           fillProductsBody(productsBody, items);
         }
@@ -6108,8 +6120,8 @@
           if (data.cencosud_dual) {
             applyCencosudDualFromData(data.cencosud_dual);
           } else if (isActiveCencosudDualClient()) {
-            fillProductsBody(productsBodyIntl, data.items || [], { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
-            fillProductsBody(productsBodyComercial, [], { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
+            fillProductsBody(productsBodyIntl, data.items || [], { minRows: 0 });
+            fillProductsBody(productsBodyComercial, [], { minRows: 0 });
           }
           syncCencosudDualVisibility();
         }, 0);
