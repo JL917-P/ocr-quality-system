@@ -20,8 +20,9 @@
         return "";
       }
 
-/** Firma por entorno: solo user01 (Vladimir) usa firma propia; admin y resto conservan firma.png */
+/** Firma por entorno: user01 usa firma propia; admin y resto usan firma.png */
       const FIRMA_BY_USERNAME = {
+        admin: "/static/firma.png?v=1",
         user01: "/static/firma-user01.png?v=1",
       };
 
@@ -40,7 +41,13 @@
         const key = String(username || "")
           .trim()
           .toLowerCase();
-        return staticAssetUrl(FIRMA_BY_USERNAME[key] || "/static/firma.png");
+        return staticAssetUrl(FIRMA_BY_USERNAME[key] || "/static/firma.png?v=1");
+      }
+
+      function resolveConstanciaDocumentOwner(constancia, options) {
+        const explicit = options?.ownerUsername || constancia?.owner_username;
+        if (explicit) return String(explicit).trim();
+        return "";
       }
 
       function applyConstanciaOwnerContext(username) {
@@ -88,12 +95,12 @@
             if (envOwnerProfile?.username) {
               return resolveFirmaSrcForUsername(envOwnerProfile.username);
             }
-            return staticAssetUrl("/static/firma.png");
+            return staticAssetUrl("/static/firma.png?v=1");
           }
           const me = window.QCAuth && window.QCAuth.getUser && window.QCAuth.getUser();
           if (me && me.username) return resolveFirmaSrcForUsername(me.username);
         } catch (e) {}
-        return staticAssetUrl("/static/firma.png");
+        return staticAssetUrl("/static/firma.png?v=1");
       }
 
       function getActiveConstanciaUsername() {
@@ -1097,6 +1104,12 @@
       }
 
       function buildConstanciaHtml(constancia, catalog, clients = null, options = null) {
+        const documentOwner = resolveConstanciaDocumentOwner(constancia, options);
+        if (documentOwner) {
+          applyConstanciaOwnerContext(documentOwner);
+        } else {
+          syncConstanciaOwnerContextFromSession();
+        }
         const previewSide =
           options && (options.dualPreviewSide === "internacional" || options.dualPreviewSide === "comercial")
             ? options.dualPreviewSide
@@ -1781,9 +1794,12 @@ async function savePdf(){
 document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeout(fitSingleLineCells,80);});` +
           '</scr' +
           'ipt>';
+        const previewOrigin =
+          typeof window !== "undefined" && window.location?.origin ? window.location.origin : "";
         return `
           <html>
             <head>
+              ${previewOrigin ? `<base href="${previewOrigin}/">` : ""}
               <title>${fileName || `Constancia ${numero}`}</title>
               <style>
                 body { margin: 0; background: #e5e7eb; font-family: "Segoe UI", Arial, sans-serif; }
