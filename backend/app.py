@@ -3267,6 +3267,8 @@ def get_constancia(
         mobile_number = (row[10] or extras.get("mobile_number") or "").strip()
         pallets = (row[11] or extras.get("pallets") or "").strip()
         cencosud_dual = extras.get("cencosud_dual")
+        owner_user = get_user_by_id(conn, owner_id)
+        owner_username = (owner_user or {}).get("username")
     if repaired and items_json_for_sync and header_for_sync is not None and created_at_for_sync:
         run_sync_after_create(
             TAB_CONSTANCIAS,
@@ -3302,6 +3304,8 @@ def get_constancia(
     }
     if cencosud_dual:
         response_body["cencosud_dual"] = cencosud_dual
+    if owner_username:
+        response_body["owner_username"] = owner_username
     return JSONResponse(response_body)
 
 

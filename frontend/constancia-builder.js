@@ -43,6 +43,24 @@
         return staticAssetUrl(FIRMA_BY_USERNAME[key] || "/static/firma.png");
       }
 
+      function applyConstanciaOwnerContext(username) {
+        const ownerUser = String(username || "").trim();
+        if (!ownerUser) return;
+        window.QC_CONSTANCIA_OWNER_USERNAME = ownerUser;
+        window.QC_CONSTANCIA_FIRMA_SRC = resolveFirmaSrcForUsername(ownerUser);
+      }
+
+      function syncConstanciaOwnerContextFromSession() {
+        try {
+          if (typeof isImpersonatingEnv === "function" && isImpersonatingEnv() && envOwnerProfile?.username) {
+            applyConstanciaOwnerContext(envOwnerProfile.username);
+            return;
+          }
+          const me = window.QCAuth && window.QCAuth.getUser && window.QCAuth.getUser();
+          if (me?.username) applyConstanciaOwnerContext(me.username);
+        } catch (e) {}
+      }
+
       async function ensureConstanciaOwnerContext(fetchApi) {
         const fetchFn =
           fetchApi ||
@@ -53,11 +71,12 @@
           const envRes = await fetchFn("/api/environment", { cache: "no-store" });
           const envData = await envRes.json().catch(() => ({}));
           if (envRes.ok && envData.owner?.username) {
-            const ownerUser = String(envData.owner.username).trim();
-            window.QC_CONSTANCIA_OWNER_USERNAME = ownerUser;
-            window.QC_CONSTANCIA_FIRMA_SRC = resolveFirmaSrcForUsername(ownerUser);
+            envOwnerProfile = envData.owner;
+            applyConstanciaOwnerContext(envData.owner.username);
+            return;
           }
         } catch (e) {}
+        syncConstanciaOwnerContextFromSession();
       }
 
       function getConstanciaFirmaSrc() {
@@ -65,8 +84,11 @@
           return staticAssetUrl(String(window.QC_CONSTANCIA_FIRMA_SRC));
         }
         try {
-          if (typeof isImpersonatingEnv === "function" && isImpersonatingEnv() && envOwnerProfile) {
-            return resolveFirmaSrcForUsername(envOwnerProfile.username);
+          if (typeof isImpersonatingEnv === "function" && isImpersonatingEnv()) {
+            if (envOwnerProfile?.username) {
+              return resolveFirmaSrcForUsername(envOwnerProfile.username);
+            }
+            return staticAssetUrl("/static/firma.png");
           }
           const me = window.QCAuth && window.QCAuth.getUser && window.QCAuth.getUser();
           if (me && me.username) return resolveFirmaSrcForUsername(me.username);
