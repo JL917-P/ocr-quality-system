@@ -27,6 +27,7 @@ helpers = """
 
 """
 body = admin[start:end].strip()
+body = body.replace("      bindUser01CatalogExpirationCalc();\n", "")
 footer = """
       globalThis.buildConstanciaHtml = buildConstanciaHtml;
       globalThis.isCencosudCdLimaClient = isCencosudCdLimaClient;

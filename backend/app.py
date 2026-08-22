@@ -145,6 +145,10 @@ app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 def _inject_panel_config(html: str) -> str:
     """Inyecta URL del panel (producción) sin hardcodear localhost en el frontend."""
     cfg = app_config_payload()
+    try:
+        cfg["admin_build"] = str(int((FRONTEND_DIR / "admin.html").stat().st_mtime))
+    except OSError:
+        cfg["admin_build"] = "1"
     snippet = (
         f'<link rel="canonical" href="{ADMIN_URL}" />'
         f'<script>window.QC_APP_CONFIG={json.dumps(cfg, ensure_ascii=True)};</script>'
@@ -2120,19 +2124,36 @@ def constancia_view_page(constancia_id: int = Query(..., alias="id")) -> HTMLRes
             } catch (e) {}
           }
 
+          function syncAuthFromStorage() {
+            try {
+              if (!window.QCAuth) return;
+              const token =
+                localStorage.getItem("qc_auth_token") || sessionStorage.getItem("qc_auth_token") || "";
+              const userRaw =
+                localStorage.getItem("qc_auth_user") || sessionStorage.getItem("qc_auth_user") || "";
+              if (!token || !userRaw) return;
+              window.QCAuth.setSession(token, JSON.parse(userRaw), !!localStorage.getItem("qc_auth_token"));
+            } catch (e) {}
+          }
+
           async function loadConstancia() {{
             try {{
               syncAuthFromOpener();
+              syncAuthFromStorage();
               if (typeof window.buildConstanciaHtml !== "function") {{
                 throw new Error("builder");
               }}
               const params = new URLSearchParams(window.location.search || "");
               const envParam = params.get("env");
-              if (window.QCAuth) {{
-                if (envParam) window.QCAuth.setEnvOwnerId(envParam);
+              if (window.QCAuth && envParam) {{
+                window.QCAuth.setEnvOwnerId(envParam);
               }}
+              const fetchApi =
+                window.QCAuth && typeof window.QCAuth.apiFetch === "function"
+                  ? window.QCAuth.apiFetch.bind(window.QCAuth)
+                  : fetch;
               try {{
-                const envRes = await fetch("/api/environment", {{ cache: "no-store", credentials: "include" }});
+                const envRes = await fetchApi("/api/environment", {{ cache: "no-store" }});
                 const envData = await envRes.json().catch(() => ({{}}));
                 if (envRes.ok && envData.owner) {{
                   const ownerUser = envData.owner.username || "";
@@ -2147,14 +2168,14 @@ def constancia_view_page(constancia_id: int = Query(..., alias="id")) -> HTMLRes
                   }}
                 }}
               }} catch (e) {{}}
-              const res = await fetch('/api/constancias/{constancia_id}', {{ cache: 'no-store', credentials: 'include' }});
-              const data = await res.json();
+              const res = await fetchApi('/api/constancias/{constancia_id}', {{ cache: 'no-store' }});
+              const data = await res.json().catch(() => ({{}}));
               if (!res.ok) throw new Error("notfound");
-              const prodRes = await fetch('/api/products', {{ cache: 'no-store', credentials: 'include' }});
-              const prodData = await prodRes.json();
+              const prodRes = await fetchApi('/api/products', {{ cache: 'no-store' }});
+              const prodData = await prodRes.json().catch(() => ({{}}));
               const catalog = prodData.products || [];
-              const clientRes = await fetch('/api/clients', {{ cache: 'no-store', credentials: 'include' }});
-              const clientData = await clientRes.json();
+              const clientRes = await fetchApi('/api/clients', {{ cache: 'no-store' }});
+              const clientData = await clientRes.json().catch(() => ({{}}));
               const clients = clientData.clients || [];
               const html = window.buildConstanciaHtml(data, catalog, clients);
               document.open();

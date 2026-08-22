@@ -368,7 +368,6 @@
           });
         }
       }
-      bindUser01CatalogExpirationCalc();
 
       // SKU Ajiles: mapas independientes (admin/otros vs user01)
       const AJILES_PERU_SKU_MAP_ADMIN = [

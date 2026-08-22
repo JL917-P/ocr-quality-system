@@ -2155,13 +2155,13 @@ th {
   margin-top: 0;
 }
 
-#section-ocr #ocrStandardProductsWrap > .ocr-products-section-with-preview {
+#section-ocr #ocrStandardProductsWrap {
   margin: 0;
   max-width: none;
   width: 100%;
 }
 
-#section-ocr #ocrStandardProductsWrap > .ocr-products-section-with-preview > .ocr-products-scroll {
+#section-ocr #ocrStandardProductsWrap > .ocr-products-scroll {
   flex: 1 1 auto;
   min-width: 0;
   margin-right: 0;
@@ -2675,7 +2675,8 @@ th {
   display: none !important;
 }
 
-#section-ocr #ocrHeaderCard.is-collapsed ~ #ocrCencosudComercialBlock {
+#section-ocr #ocrHeaderCard.is-collapsed ~ #ocrCencosudComercialBlock,
+#section-ocr #ocrHeaderCard.is-collapsed ~ #ocrIntlProductsWrap {
   display: none !important;
 }
 

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home94" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home95" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -429,27 +429,6 @@
                     <button type="button" class="ocr-header-collapse-btn hidden" id="ocrHeaderCollapseBtn">Contraer</button>
                   </div>
                 </div>
-                <div class="ocr-cencosud-products-wrap hidden" id="ocrIntlProductsWrap">
-                  <div class="ocr-products-section-with-preview">
-                    <div class="ocr-products-scroll ocr-products-scroll--section">
-                      <table class="ocr-products-table">
-                        <thead>
-                          <tr id="productsHeadRowIntl"></tr>
-                        </thead>
-                        <tbody id="productsBodyIntl"></tbody>
-                      </table>
-                    </div>
-                    <button
-                      type="button"
-                      class="ocr-table-preview-float"
-                      id="previewConstanciaIntlBtn"
-                      title="Vista previa Internacional (Fum. + Des.)"
-                    >
-                      <span class="ocr-table-preview-float-icon" aria-hidden="true">V</span>
-                      <span class="ocr-table-preview-float-label">Vista Previa</span>
-                    </button>
-                  </div>
-                </div>
                 <button
                   type="button"
                   class="ocr-header-summary hidden"
@@ -460,6 +439,28 @@
                   <span class="ocr-header-summary-text" id="ocrHeaderSummaryText"></span>
                   <span class="ocr-header-summary-hint">Editar</span>
                 </button>
+              </div>
+
+              <div class="ocr-cencosud-products-wrap hidden" id="ocrIntlProductsWrap">
+                <div class="ocr-products-section-with-preview">
+                  <div class="ocr-products-scroll ocr-products-scroll--section">
+                    <table class="ocr-products-table">
+                      <thead>
+                        <tr id="productsHeadRowIntl"></tr>
+                      </thead>
+                      <tbody id="productsBodyIntl"></tbody>
+                    </table>
+                  </div>
+                  <button
+                    type="button"
+                    class="ocr-table-preview-float"
+                    id="previewConstanciaIntlBtn"
+                    title="Vista previa Internacional (Fum. + Des.)"
+                  >
+                    <span class="ocr-table-preview-float-icon" aria-hidden="true">V</span>
+                    <span class="ocr-table-preview-float-label">Vista Previa</span>
+                  </button>
+                </div>
               </div>
 
               <div class="ocr-cencosud-comercial-block hidden" id="ocrCencosudComercialBlock">
@@ -533,9 +534,8 @@
                 </div>
               </div>
 
-              <div class="ocr-products-scroll" id="ocrStandardProductsWrap">
-                <div class="ocr-products-section-with-preview">
-                  <div class="ocr-products-scroll" id="ocrProductsScroll">
+              <div class="ocr-products-section-with-preview" id="ocrStandardProductsWrap">
+                <div class="ocr-products-scroll" id="ocrProductsScroll">
                   <table class="ocr-products-table" id="ocrProductsTable">
                     <thead>
                       <tr id="productsHeadRow">
@@ -553,17 +553,16 @@
                     </thead>
                     <tbody id="productsBody"></tbody>
                   </table>
-                  </div>
-                  <button
-                    type="button"
-                    class="ocr-table-preview-float"
-                    id="previewConstanciaBtn"
-                    title="Vista previa e imprimir"
-                  >
-                    <span class="ocr-table-preview-float-icon" aria-hidden="true">V</span>
-                    <span class="ocr-table-preview-float-label">Vista Previa</span>
-                  </button>
                 </div>
+                <button
+                  type="button"
+                  class="ocr-table-preview-float"
+                  id="previewConstanciaBtn"
+                  title="Vista previa e imprimir"
+                >
+                  <span class="ocr-table-preview-float-icon" aria-hidden="true">V</span>
+                  <span class="ocr-table-preview-float-label">Vista Previa</span>
+                </button>
               </div>
             </div>
             <aside class="ocr-side-dock" id="ocrSideDock" aria-label="Acciones de constancia">
@@ -807,7 +806,7 @@
                     <th style="width:128px;">Estado</th>
                     <th style="width:72px;">Editar</th>
                     <th style="width:80px;">Confirmar</th>
-                    <th style="width:64px;">Plantilla</th>
+                    <th style="width:64px;">Ver</th>
                   </tr>
                 </thead>
                 <tbody id="constanciasList"></tbody>
@@ -2128,8 +2127,9 @@
 
       function positionOcrPreviewButtons() {
         const section = document.getElementById("section-ocr");
+        const buttons = [previewConstanciaBtn, previewConstanciaIntlBtn, previewConstanciaComercialBtn];
         const hideAll = () => {
-          [previewConstanciaBtn, previewConstanciaIntlBtn, previewConstanciaComercialBtn].forEach((btn) => {
+          buttons.forEach((btn) => {
             if (btn) btn.style.display = "none";
           });
         };
@@ -2144,52 +2144,61 @@
           ocrCencosudComercialBlock &&
           !ocrCencosudComercialBlock.classList.contains("hidden") &&
           ocrCencosudComercialBlock.style.display !== "none";
-        const dockGap = 72;
         const btnSize = 58;
+        const dockGap = 76;
 
-        const placePreviewButton = (btn, scrollEl, active) => {
-          if (!btn || !scrollEl || !active || btn.classList.contains("hidden")) {
+        const placePreviewButton = (btn, table, active) => {
+          if (!btn || !table || !active || btn.classList.contains("hidden")) {
             if (btn) btn.style.display = "none";
             return;
           }
-          const thead = scrollEl.querySelector(".ocr-products-table thead");
-          if (!thead) {
+          if (btn.parentElement !== document.body) {
+            document.body.appendChild(btn);
+          }
+          const deleteTh = table.querySelector("thead th:last-child");
+          if (!deleteTh) {
             btn.style.display = "none";
             return;
           }
-          const scrollRect = scrollEl.getBoundingClientRect();
-          const headRect = thead.getBoundingClientRect();
-          if (scrollRect.width < 48 || scrollRect.bottom < 64 || scrollRect.top > window.innerHeight) {
+          const anchor = deleteTh.getBoundingClientRect();
+          if (!anchor.width && !anchor.height) {
+            btn.style.display = "none";
+            return;
+          }
+          if (anchor.bottom < 48 || anchor.top > window.innerHeight - 12) {
             btn.style.display = "none";
             return;
           }
           const maxLeft = window.innerWidth - dockGap - btnSize;
-          let left = scrollRect.right + 10;
-          if (left + btnSize > maxLeft) left = Math.max(scrollRect.left + 48, maxLeft - btnSize);
+          let left = anchor.right + 8;
+          if (left + btnSize > maxLeft) {
+            left = Math.max(8, anchor.left - btnSize - 8);
+          }
           const top = Math.min(
-            Math.max(headRect.top + 6, 68),
-            window.innerHeight - btnSize - 10
+            Math.max(anchor.top + (anchor.height - btnSize) / 2, 8),
+            window.innerHeight - btnSize - 8
           );
           btn.style.display = "flex";
           btn.style.position = "fixed";
           btn.style.left = `${left}px`;
           btn.style.top = `${top}px`;
           btn.style.right = "auto";
+          btn.style.zIndex = "118";
         };
 
         placePreviewButton(
           previewConstanciaBtn,
-          document.getElementById("ocrProductsScroll"),
-          !dual
+          document.getElementById("ocrProductsTable"),
+          !dual && ocrStandardProductsWrap && !ocrStandardProductsWrap.classList.contains("hidden")
         );
         placePreviewButton(
           previewConstanciaIntlBtn,
-          document.querySelector("#ocrIntlProductsWrap .ocr-products-scroll--section"),
+          document.querySelector("#ocrIntlProductsWrap .ocr-products-table"),
           dual && ocrIntlProductsWrap && !ocrIntlProductsWrap.classList.contains("hidden")
         );
         placePreviewButton(
           previewConstanciaComercialBtn,
-          document.querySelector("#ocrComercialProductsWrap .ocr-products-scroll--section"),
+          document.querySelector("#ocrComercialProductsWrap .ocr-products-table"),
           comercialVisible
         );
       }
@@ -5834,8 +5843,12 @@
           showErrorModal("No se pudo generar la constancia.", { title: "Error" });
           return;
         }
+        const fetchApi =
+          window.QCAuth && typeof window.QCAuth.apiFetch === "function"
+            ? window.QCAuth.apiFetch.bind(window.QCAuth)
+            : fetch;
         try {
-          const res = await fetch(`/api/constancias/${id}`, { cache: "no-store" });
+          const res = await fetchApi(`/api/constancias/${id}`, { cache: "no-store" });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
             showErrorModal(data.detail || "No se pudo cargar la constancia.", { title: "Error" });
@@ -5844,16 +5857,25 @@
           let catalog = Array.isArray(allProducts) ? allProducts : [];
           let clients = Array.isArray(allClients) ? allClients : [];
           if (!catalog.length) {
-            const prodRes = await fetch("/api/products", { cache: "no-store" });
+            const prodRes = await fetchApi("/api/products", { cache: "no-store" });
             const prodData = await prodRes.json().catch(() => ({}));
             catalog = prodData.products || [];
           }
           if (!clients.length) {
-            const clientRes = await fetch("/api/clients", { cache: "no-store" });
+            const clientRes = await fetchApi("/api/clients", { cache: "no-store" });
             const clientData = await clientRes.json().catch(() => ({}));
             clients = clientData.clients || [];
           }
-          const html = buildConstanciaHtml(data, catalog, clients);
+          let html;
+          try {
+            html = buildConstanciaHtml(data, catalog, clients);
+          } catch (buildErr) {
+            showErrorModal(
+              "Error al generar la constancia: " + (buildErr?.message || buildErr),
+              { title: "Error" }
+            );
+            return;
+          }
           openConstanciaPreviewWindow(html);
         } catch (err) {
           showErrorModal("Error al abrir la constancia: " + (err?.message || err), {
