@@ -1065,6 +1065,21 @@ body.page-admin {
   border-color: #16a34a;
 }
 
+.ocr-dock-btn--preview {
+  background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+  border-color: #4338ca;
+  color: #fff;
+}
+
+.ocr-dock-btn--preview .ocr-dock-btn-icon {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.ocr-dock-btn--preview:hover {
+  background: linear-gradient(180deg, #818cf8 0%, #6366f1 100%);
+  border-color: #4f46e5;
+}
+
 .ocr-dock-btn--restore {
   background: linear-gradient(180deg, #64748b 0%, #475569 100%);
   border-color: #334155;
@@ -2104,29 +2119,68 @@ th {
 }
 
 #section-ocr .ocr-cencosud-comercial-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
   margin: 0 0 8px 0;
+  clear: both;
 }
 
 #section-ocr .ocr-cencosud-products-wrap {
   margin: 0 0 10px 0;
+  display: block;
+  width: 100%;
+  max-width: min(98%, 1180px);
 }
 
 #section-ocr .ocr-products-scroll--section {
   margin: 4px 0 0 8px;
   max-width: min(98%, 1180px);
+  width: 100%;
 }
 
 #section-ocr .ocr-cencosud-comercial-block:not(.hidden) {
-  display: block;
+  display: flex;
 }
 
 #section-ocr .ocr-header-form--comercial {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  align-self: flex-start;
+  width: fit-content;
+  max-width: min(98%, 1180px);
   margin-top: 2px;
 }
 
-#section-ocr #ocrHeaderCard.is-collapsed .ocr-cencosud-razon-label,
-#section-ocr #ocrHeaderCard.is-collapsed .ocr-cencosud-comercial-block {
-  display: none !important;
+#section-ocr #ocrComercialProductsWrap {
+  align-self: stretch;
+}
+
+#section-ocr #constanciaNumeroComercial {
+  width: 104px;
+  flex: 0 0 104px;
+  max-width: 104px;
+}
+
+#section-ocr #constanciaFechaComercial {
+  width: 118px;
+  flex: 0 0 118px;
+  max-width: 118px;
+}
+
+#section-ocr #constanciaClienteComercial {
+  width: 340px;
+  flex: 0 0 340px;
+  max-width: 340px;
+}
+
+#section-ocr #constanciaTransporteComercial {
+  width: 88px;
+  flex: 0 0 88px;
+  max-width: 88px;
 }
 
 #section-ocr .ocr-command-group--tottus-extra {
@@ -2513,8 +2567,11 @@ th {
   display: none;
 }
 
-#ocrHeaderCard.is-collapsed #ocrCencosudComercialBlock,
 #ocrHeaderCard.is-collapsed #ocrCencosudIntlLabel {
+  display: none !important;
+}
+
+#section-ocr #ocrHeaderCard.is-collapsed ~ #ocrCencosudComercialBlock {
   display: none !important;
 }
 

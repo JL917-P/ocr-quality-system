@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home89" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home92" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -439,64 +439,6 @@
                     </table>
                   </div>
                 </div>
-                <div class="ocr-cencosud-comercial-block hidden" id="ocrCencosudComercialBlock">
-                  <div class="ocr-cencosud-razon-label" id="ocrCencosudComercialLabel">Induamerica Comercial</div>
-                  <div class="ocr-command-bar ocr-header-form ocr-header-form--comercial" id="ocrHeaderFormComercial">
-                    <div class="ocr-command-group">
-                      <span class="ocr-command-label">Número</span>
-                      <input id="constanciaNumeroComercial" type="text" placeholder="CONST-002" />
-                    </div>
-                    <div class="ocr-command-sep" aria-hidden="true"></div>
-                    <div class="ocr-command-group">
-                      <span class="ocr-command-label">Fecha</span>
-                      <input id="constanciaFechaComercial" type="date" />
-                    </div>
-                    <div class="ocr-command-sep" aria-hidden="true"></div>
-                    <div class="ocr-command-group ocr-command-group--client">
-                      <span class="ocr-command-label">Cliente</span>
-                      <input id="constanciaClienteComercial" type="text" placeholder="Buscar..." autocomplete="off" list="clientesList" />
-                    </div>
-                    <div class="ocr-command-sep" aria-hidden="true"></div>
-                    <div class="ocr-command-group ocr-command-group--transport">
-                      <span class="ocr-command-label">Placa</span>
-                      <input id="constanciaTransporteComercial" type="text" placeholder="Buscar..." autocomplete="off" list="transportesList" />
-                    </div>
-                    <div class="ocr-command-sep" aria-hidden="true"></div>
-                    <div class="ocr-command-group ocr-command-group--tottus-extra">
-                      <span class="ocr-command-label" title="Número de móvil">N° móvil</span>
-                      <input
-                        id="constanciaMobileComercial"
-                        type="text"
-                        maxlength="2"
-                        inputmode="text"
-                        placeholder="M2"
-                        autocomplete="off"
-                        spellcheck="false"
-                        title="Número de móvil (2 caracteres)"
-                      />
-                      <span class="ocr-command-label" title="Palets">Palets</span>
-                      <input
-                        id="constanciaPalletsComercial"
-                        type="text"
-                        maxlength="2"
-                        inputmode="numeric"
-                        placeholder="35"
-                        autocomplete="off"
-                        spellcheck="false"
-                        title="Palets (2 dígitos)"
-                    />
-                  </div>
-                  <div class="ocr-cencosud-products-wrap" id="ocrComercialProductsWrap">
-                    <div class="ocr-products-scroll ocr-products-scroll--section">
-                      <table class="ocr-products-table">
-                        <thead>
-                          <tr id="productsHeadRowComercial"></tr>
-                        </thead>
-                        <tbody id="productsBodyComercial"></tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
                 <button
                   type="button"
                   class="ocr-header-summary hidden"
@@ -507,6 +449,66 @@
                   <span class="ocr-header-summary-text" id="ocrHeaderSummaryText"></span>
                   <span class="ocr-header-summary-hint">Editar</span>
                 </button>
+              </div>
+
+              <div class="ocr-cencosud-comercial-block hidden" id="ocrCencosudComercialBlock">
+                <div class="ocr-cencosud-razon-label" id="ocrCencosudComercialLabel">Induamerica Comercial</div>
+                <div class="ocr-command-bar ocr-header-form ocr-header-form--comercial" id="ocrHeaderFormComercial">
+                  <div class="ocr-command-group">
+                    <span class="ocr-command-label">Número</span>
+                    <input id="constanciaNumeroComercial" type="text" placeholder="CONST-002" />
+                  </div>
+                  <div class="ocr-command-sep" aria-hidden="true"></div>
+                  <div class="ocr-command-group">
+                    <span class="ocr-command-label">Fecha</span>
+                    <input id="constanciaFechaComercial" type="date" />
+                  </div>
+                  <div class="ocr-command-sep" aria-hidden="true"></div>
+                  <div class="ocr-command-group ocr-command-group--client">
+                    <span class="ocr-command-label">Cliente</span>
+                    <input id="constanciaClienteComercial" type="text" placeholder="Buscar..." autocomplete="off" list="clientesList" />
+                  </div>
+                  <div class="ocr-command-sep" aria-hidden="true"></div>
+                  <div class="ocr-command-group ocr-command-group--transport">
+                    <span class="ocr-command-label">Placa</span>
+                    <input id="constanciaTransporteComercial" type="text" placeholder="Buscar..." autocomplete="off" list="transportesList" />
+                  </div>
+                  <div class="ocr-command-sep" aria-hidden="true"></div>
+                  <div class="ocr-command-group ocr-command-group--tottus-extra">
+                    <span class="ocr-command-label" title="Número de móvil">N° móvil</span>
+                    <input
+                      id="constanciaMobileComercial"
+                      type="text"
+                      maxlength="2"
+                      inputmode="text"
+                      placeholder="M2"
+                      autocomplete="off"
+                      spellcheck="false"
+                      title="Número de móvil (2 caracteres)"
+                    />
+                    <span class="ocr-command-label" title="Palets">Palets</span>
+                    <input
+                      id="constanciaPalletsComercial"
+                      type="text"
+                      maxlength="2"
+                      inputmode="numeric"
+                      placeholder="35"
+                      autocomplete="off"
+                      spellcheck="false"
+                      title="Palets (2 dígitos)"
+                    />
+                  </div>
+                </div>
+                <div class="ocr-cencosud-products-wrap" id="ocrComercialProductsWrap">
+                  <div class="ocr-products-scroll ocr-products-scroll--section">
+                    <table class="ocr-products-table">
+                      <thead>
+                        <tr id="productsHeadRowComercial"></tr>
+                      </thead>
+                      <tbody id="productsBodyComercial"></tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
 
               <div class="ocr-products-scroll" id="ocrStandardProductsWrap">
@@ -535,6 +537,18 @@
               <button class="ocr-dock-btn ocr-dock-btn--add" id="addRowBtn" type="button" title="Agregar fila de producto">
                 <span class="ocr-dock-btn-icon" aria-hidden="true">+</span>
                 <span class="ocr-dock-btn-label">Agregar</span>
+              </button>
+              <button class="ocr-dock-btn ocr-dock-btn--preview" id="previewConstanciaBtn" type="button" title="Vista previa e imprimir">
+                <span class="ocr-dock-btn-icon" aria-hidden="true">V</span>
+                <span class="ocr-dock-btn-label">Vista Previa</span>
+              </button>
+              <button class="ocr-dock-btn ocr-dock-btn--preview hidden" id="previewConstanciaIntlBtn" type="button" title="Vista previa Internacional (Fum. + Des.)">
+                <span class="ocr-dock-btn-icon" aria-hidden="true">V</span>
+                <span class="ocr-dock-btn-label">Prev. Intl</span>
+              </button>
+              <button class="ocr-dock-btn ocr-dock-btn--preview hidden" id="previewConstanciaComercialBtn" type="button" title="Vista previa Comercial (Fum. + Des.)">
+                <span class="ocr-dock-btn-icon" aria-hidden="true">V</span>
+                <span class="ocr-dock-btn-label">Prev. Com.</span>
               </button>
               <button class="ocr-dock-btn ocr-dock-btn--restore hidden" id="restoreConstanciaItemsBtn" type="button" title="Restaurar historial">
                 <span class="ocr-dock-btn-icon" aria-hidden="true">↺</span>
@@ -1293,6 +1307,9 @@
       const CENCOSUD_DUAL_DEFAULT_ROWS = 5;
       let lastFocusedProductsBody = null;
       const addRowBtn = document.getElementById("addRowBtn");
+      const previewConstanciaBtn = document.getElementById("previewConstanciaBtn");
+      const previewConstanciaIntlBtn = document.getElementById("previewConstanciaIntlBtn");
+      const previewConstanciaComercialBtn = document.getElementById("previewConstanciaComercialBtn");
       const adminLayout = document.getElementById("adminLayout");
       const sidebarToggle = document.getElementById("sidebarToggle");
       const sidebarHomeBtn = document.getElementById("sidebarHomeBtn");
@@ -2043,7 +2060,7 @@
         }
         if (ocrCencosudComercialBlock) {
           ocrCencosudComercialBlock.classList.toggle("hidden", !show);
-          ocrCencosudComercialBlock.style.display = show ? "block" : "none";
+          ocrCencosudComercialBlock.style.display = show ? "flex" : "none";
         }
         if (ocrIntlProductsWrap) {
           ocrIntlProductsWrap.classList.toggle("hidden", !show);
@@ -2077,6 +2094,16 @@
           cencosudDualSynced = false;
         }
         cencosudDualWasActive = show;
+        syncOcrPreviewButtons();
+      }
+
+      function syncOcrPreviewButtons() {
+        const dual = isActiveCencosudDualClient();
+        if (previewConstanciaBtn) previewConstanciaBtn.classList.toggle("hidden", dual);
+        if (previewConstanciaIntlBtn) previewConstanciaIntlBtn.classList.toggle("hidden", !dual);
+        if (previewConstanciaComercialBtn) {
+          previewConstanciaComercialBtn.classList.toggle("hidden", !dual);
+        }
       }
 
       function bindCencosudDualSync() {
@@ -3815,6 +3842,15 @@
       }
 
       addRowBtn.addEventListener("click", () => addRow());
+      if (previewConstanciaBtn) {
+        previewConstanciaBtn.addEventListener("click", () => openConstanciaPreview());
+      }
+      if (previewConstanciaIntlBtn) {
+        previewConstanciaIntlBtn.addEventListener("click", () => openConstanciaPreview("internacional"));
+      }
+      if (previewConstanciaComercialBtn) {
+        previewConstanciaComercialBtn.addEventListener("click", () => openConstanciaPreview("comercial"));
+      }
       const ocrCaret = document.getElementById("ocrCaret");
       function toggleBandeja(event) {
         if (event) {
@@ -5660,6 +5696,112 @@
         setOcrHeaderCollapsed(false);
         updateOcrHeaderCollapseUi();
         if (typeof updateOcrDockPermissions === "function") updateOcrDockPermissions();
+      }
+
+      function openConstanciaPreviewWindow(html) {
+        const previewWindow = window.open("", "_blank");
+        if (!previewWindow) {
+          showErrorModal("Permite ventanas emergentes para abrir la vista previa.", {
+            title: "Ventana bloqueada",
+          });
+          return;
+        }
+        previewWindow.document.open();
+        previewWindow.document.write(html);
+        previewWindow.document.close();
+      }
+
+      function openConstanciaPreview(dualSide = null) {
+        if (!constanciaFumigacion.checked && !constanciaCalidad.checked) {
+          showInfoModal("Selecciona al menos una constancia (Fumigación o Calidad).", {
+            title: "Campo requerido",
+          });
+          return;
+        }
+        if (typeof buildConstanciaHtml !== "function") {
+          showErrorModal("No se pudo generar la vista previa.", { title: "Error" });
+          return;
+        }
+
+        const dualActive = isActiveCencosudDualClient();
+        if (dualActive && dualSide) {
+          const cencosudDual = collectCencosudDualPayload();
+          const block =
+            dualSide === "internacional" ? cencosudDual.internacional : cencosudDual.comercial;
+          const blockLabel = dualSide === "internacional" ? "Internacional" : "Comercial";
+          const bodyEl = dualSide === "internacional" ? productsBodyIntl : productsBodyComercial;
+          const blockItems = collectConstanciaItemsFromBody(bodyEl);
+          const clientName = (block?.client_name || constanciaClienteInput.value || "").trim();
+          if (!clientName) {
+            showInfoModal(`Selecciona un cliente para la vista previa ${blockLabel}.`, {
+              title: "Campo requerido",
+            });
+            return;
+          }
+          if (!blockItems.length) {
+            showInfoModal(`Agrega al menos un producto en la tabla ${blockLabel}.`, {
+              title: "Productos requeridos",
+            });
+            return;
+          }
+          const intl = cencosudDual.internacional || {};
+          const constancia = {
+            number: intl.number || constanciaNumero.value.trim() || "PREVIEW",
+            issue_date: intl.issue_date || constanciaFecha.value.trim(),
+            client_name: intl.client_name || constanciaClienteInput.value.trim(),
+            transport_plate: intl.transport_plate || constanciaTransporteInput.value.trim(),
+            fumigacion: constanciaFumigacion.checked,
+            calidad: constanciaCalidad.checked,
+            mobile_number: intl.mobile_number || "",
+            pallets: intl.pallets || "",
+            items: collectConstanciaItemsFromBody(productsBodyIntl),
+            cencosud_dual: cencosudDual,
+          };
+          const html = buildConstanciaHtml(constancia, allProducts, allClients, {
+            dualPreviewSide: dualSide,
+          });
+          openConstanciaPreviewWindow(html);
+          return;
+        }
+
+        const clientName = constanciaClienteInput.value.trim();
+        if (!clientName) {
+          showInfoModal("Selecciona un cliente para la vista previa.", { title: "Campo requerido" });
+          return;
+        }
+        const items = collectConstanciaItems();
+        if (!items.length) {
+          showInfoModal("Agrega al menos un producto para la vista previa.", {
+            title: "Productos requeridos",
+          });
+          return;
+        }
+        const mobileToPreview = (constanciaMobileNumber?.value || "")
+          .trim()
+          .toUpperCase()
+          .replace(/\s+/g, "")
+          .slice(0, 2);
+        const palletsToPreview = (constanciaPallets?.value || "")
+          .trim()
+          .replace(/\s+/g, "")
+          .slice(0, 2);
+        const cencosudDual = collectCencosudDualPayload();
+        const constancia = {
+          number: constanciaNumero.value.trim() || "PREVIEW",
+          issue_date: constanciaFecha.value.trim(),
+          client_name: clientName,
+          transport_plate: constanciaTransporteInput.value.trim(),
+          fumigacion: constanciaFumigacion.checked,
+          calidad: constanciaCalidad.checked,
+          mobile_number: mobileToPreview,
+          pallets: palletsToPreview,
+          items,
+        };
+        if (cencosudDual) {
+          constancia.cencosud_dual = cencosudDual;
+        }
+        const html = buildConstanciaHtml(constancia, allProducts, allClients);
+        openConstanciaPreviewWindow(html);
       }
 
       async function saveConstancia(status) {
@@ -8335,7 +8477,11 @@
           .join("");
       }
 
-      function buildConstanciaHtml(constancia, catalog, clients = null) {
+      function buildConstanciaHtml(constancia, catalog, clients = null, options = null) {
+        const previewSide =
+          options && (options.dualPreviewSide === "internacional" || options.dualPreviewSide === "comercial")
+            ? options.dualPreviewSide
+            : null;
         const numero = constancia.number || constancia.id || "";
         const fecha = constancia.issue_date || "";
         const cliente = constancia.client_name || "";
@@ -8349,7 +8495,12 @@
           .replace(/[^a-zA-Z0-9 -]/g, "")
           .trim()
           .replace(/\s+/g, " ");
-        const fileName = `${fileDate} ${safeCliente}`.trim();
+        let fileName = `${fileDate} ${safeCliente}`.trim();
+        if (previewSide === "internacional") {
+          fileName += " Intl";
+        } else if (previewSide === "comercial") {
+          fileName += " Comercial";
+        }
         const transporte = constancia.transport_plate || "";
         const fumigacion = formatDateMinusDays(fecha, 9);
         const liberacion = formatDateMinusDays(fecha, 2);
@@ -8886,6 +9037,7 @@
           };
           const dualBlocks = [
             {
+              side: "internacional",
               number: intl.number || numero,
               fecha: intl.issue_date || fecha,
               cliente: intl.client_name || cliente,
@@ -8896,6 +9048,7 @@
               items: Array.isArray(intl.items) && intl.items.length ? intl.items : items,
             },
             {
+              side: "comercial",
               number: com.number || bumpNumber(intl.number || numero),
               fecha: com.issue_date || fecha,
               cliente: com.client_name || cliente,
@@ -8906,8 +9059,11 @@
               items: Array.isArray(com.items) && com.items.length ? com.items : items,
             },
           ];
+          const blocksToRender = previewSide
+            ? dualBlocks.filter((block) => block.side === previewSide)
+            : dualBlocks;
           pageList = [];
-          dualBlocks.forEach((block) => {
+          blocksToRender.forEach((block) => {
             const blockItems = block.items || items;
             const blockRows = buildFumigacionRowsHtml(blockItems, block.transporte);
             if (showFumigacion) {

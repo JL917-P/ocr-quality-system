@@ -1003,7 +1003,11 @@ function parseConstanciaDate(dateText) {
           .join("");
       }
 
-      function buildConstanciaHtml(constancia, catalog, clients = null) {
+      function buildConstanciaHtml(constancia, catalog, clients = null, options = null) {
+        const previewSide =
+          options && (options.dualPreviewSide === "internacional" || options.dualPreviewSide === "comercial")
+            ? options.dualPreviewSide
+            : null;
         const numero = constancia.number || constancia.id || "";
         const fecha = constancia.issue_date || "";
         const cliente = constancia.client_name || "";
@@ -1017,7 +1021,12 @@ function parseConstanciaDate(dateText) {
           .replace(/[^a-zA-Z0-9 -]/g, "")
           .trim()
           .replace(/\s+/g, " ");
-        const fileName = `${fileDate} ${safeCliente}`.trim();
+        let fileName = `${fileDate} ${safeCliente}`.trim();
+        if (previewSide === "internacional") {
+          fileName += " Intl";
+        } else if (previewSide === "comercial") {
+          fileName += " Comercial";
+        }
         const transporte = constancia.transport_plate || "";
         const fumigacion = formatDateMinusDays(fecha, 9);
         const liberacion = formatDateMinusDays(fecha, 2);
@@ -1554,6 +1563,7 @@ function parseConstanciaDate(dateText) {
           };
           const dualBlocks = [
             {
+              side: "internacional",
               number: intl.number || numero,
               fecha: intl.issue_date || fecha,
               cliente: intl.client_name || cliente,
@@ -1564,6 +1574,7 @@ function parseConstanciaDate(dateText) {
               items: Array.isArray(intl.items) && intl.items.length ? intl.items : items,
             },
             {
+              side: "comercial",
               number: com.number || bumpNumber(intl.number || numero),
               fecha: com.issue_date || fecha,
               cliente: com.client_name || cliente,
@@ -1574,8 +1585,11 @@ function parseConstanciaDate(dateText) {
               items: Array.isArray(com.items) && com.items.length ? com.items : items,
             },
           ];
+          const blocksToRender = previewSide
+            ? dualBlocks.filter((block) => block.side === previewSide)
+            : dualBlocks;
           pageList = [];
-          dualBlocks.forEach((block) => {
+          blocksToRender.forEach((block) => {
             const blockItems = block.items || items;
             const blockRows = buildFumigacionRowsHtml(blockItems, block.transporte);
             if (showFumigacion) {
