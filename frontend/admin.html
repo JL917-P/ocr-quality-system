@@ -5801,59 +5801,144 @@
         }
       }
 
+      function openRefreshableConstanciaWindow(query) {
+        const params = new URLSearchParams(query || {});
+        const envId = window.QCAuth && window.QCAuth.getEnvOwnerId && window.QCAuth.getEnvOwnerId();
+        if (envId && !params.has("env")) params.set("env", envId);
+        const url = `/constancia-print?${params.toString()}`;
+        const targetName =
+          params.get("mode") === "saved" && params.get("id")
+            ? `qc-constancia-view-${params.get("id")}`
+            : `qc-constancia-preview-${params.get("side") || "main"}`;
+        const previewWindow = window.open(url, targetName);
+        if (!previewWindow) {
+          showErrorModal("Permite ventanas emergentes para abrir la vista previa.", {
+            title: "Ventana bloqueada",
+          });
+          return null;
+        }
+        try {
+          previewWindow.focus();
+        } catch (e) {}
+        return previewWindow;
+      }
+
+      async function QCBuildLiveConstanciaPreview(dualSide = null) {
+        try {
+          if (typeof loadProducts === "function") await loadProducts();
+          if (typeof loadClients === "function") await loadClients();
+          if (typeof loadTransports === "function") await loadTransports();
+        } catch (e) {}
+        if (typeof applyProductDetailsFromCatalog === "function") {
+          applyProductDetailsFromCatalog();
+        }
+        if (!constanciaFumigacion.checked && !constanciaCalidad.checked) {
+          return {
+            ok: false,
+            message: "Selecciona al menos una constancia (Fumigación o Calidad).",
+          };
+        }
+        if (typeof buildConstanciaHtml !== "function") {
+          return { ok: false, message: "No se pudo generar la vista previa." };
+        }
+        await ensureConstanciaOwnerContext();
+        const previewOwner =
+          window.QC_CONSTANCIA_OWNER_USERNAME || getActiveConstanciaUsername() || undefined;
+        const dualActive = isActiveCencosudDualClient();
+        try {
+          if (dualActive && dualSide) {
+            const cencosudDual = collectCencosudDualPayload();
+            const block =
+              dualSide === "internacional" ? cencosudDual.internacional : cencosudDual.comercial;
+            const blockLabel = dualSide === "internacional" ? "Internacional" : "Comercial";
+            const bodyEl = dualSide === "internacional" ? productsBodyIntl : productsBodyComercial;
+            const blockItems = collectConstanciaItemsFromBody(bodyEl);
+            const clientName = (block?.client_name || constanciaClienteInput.value || "").trim();
+            if (!clientName) {
+              return {
+                ok: false,
+                message: `Selecciona un cliente para la vista previa ${blockLabel}.`,
+              };
+            }
+            if (!blockItems.length) {
+              return {
+                ok: false,
+                message: `Agrega al menos un producto en la tabla ${blockLabel}.`,
+              };
+            }
+            const intl = cencosudDual.internacional || {};
+            const constancia = {
+              number: intl.number || constanciaNumero.value.trim() || "PREVIEW",
+              issue_date: intl.issue_date || constanciaFecha.value.trim(),
+              client_name: intl.client_name || constanciaClienteInput.value.trim(),
+              transport_plate: intl.transport_plate || constanciaTransporteInput.value.trim(),
+              fumigacion: constanciaFumigacion.checked,
+              calidad: constanciaCalidad.checked,
+              mobile_number: intl.mobile_number || "",
+              pallets: intl.pallets || "",
+              items: collectConstanciaItemsFromBody(productsBodyIntl),
+              cencosud_dual: cencosudDual,
+            };
+            return {
+              ok: true,
+              html: buildConstanciaHtml(constancia, allProducts, allClients, {
+                dualPreviewSide: dualSide,
+                ownerUsername: previewOwner,
+              }),
+            };
+          }
+
+          const clientName = constanciaClienteInput.value.trim();
+          if (!clientName) {
+            return { ok: false, message: "Selecciona un cliente para la vista previa." };
+          }
+          const items = collectConstanciaItems();
+          if (!items.length) {
+            return { ok: false, message: "Agrega al menos un producto para la vista previa." };
+          }
+          const mobileToPreview = (constanciaMobileNumber?.value || "")
+            .trim()
+            .toUpperCase()
+            .replace(/\s+/g, "")
+            .slice(0, 2);
+          const palletsToPreview = (constanciaPallets?.value || "")
+            .trim()
+            .replace(/\s+/g, "")
+            .slice(0, 2);
+          const cencosudDual = collectCencosudDualPayload();
+          const constancia = {
+            number: constanciaNumero.value.trim() || "PREVIEW",
+            issue_date: constanciaFecha.value.trim(),
+            client_name: clientName,
+            transport_plate: constanciaTransporteInput.value.trim(),
+            fumigacion: constanciaFumigacion.checked,
+            calidad: constanciaCalidad.checked,
+            mobile_number: mobileToPreview,
+            pallets: palletsToPreview,
+            items,
+          };
+          if (cencosudDual) {
+            constancia.cencosud_dual = cencosudDual;
+          }
+          return {
+            ok: true,
+            html: buildConstanciaHtml(constancia, allProducts, allClients, {
+              ownerUsername: previewOwner,
+            }),
+          };
+        } catch (err) {
+          return {
+            ok: false,
+            message: "Error al generar la vista previa: " + (err?.message || err),
+          };
+        }
+      }
+      window.QCBuildLiveConstanciaPreview = QCBuildLiveConstanciaPreview;
+
       async function openSavedConstanciaView(constanciaId) {
         const id = Number(constanciaId);
         if (!id) return;
-        if (typeof buildConstanciaHtml !== "function") {
-          showErrorModal("No se pudo generar la constancia.", { title: "Error" });
-          return;
-        }
-        const fetchApi =
-          window.QCAuth && typeof window.QCAuth.apiFetch === "function"
-            ? window.QCAuth.apiFetch.bind(window.QCAuth)
-            : fetch;
-        try {
-          const res = await fetchApi(`/api/constancias/${id}`, { cache: "no-store" });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            showErrorModal(data.detail || "No se pudo cargar la constancia.", { title: "Error" });
-            return;
-          }
-          if (data.owner_username) {
-            applyConstanciaOwnerContext(data.owner_username);
-          } else {
-            await ensureConstanciaOwnerContext(fetchApi);
-          }
-          let catalog = Array.isArray(allProducts) ? allProducts : [];
-          let clients = Array.isArray(allClients) ? allClients : [];
-          if (!catalog.length) {
-            const prodRes = await fetchApi("/api/products", { cache: "no-store" });
-            const prodData = await prodRes.json().catch(() => ({}));
-            catalog = prodData.products || [];
-          }
-          if (!clients.length) {
-            const clientRes = await fetchApi("/api/clients", { cache: "no-store" });
-            const clientData = await clientRes.json().catch(() => ({}));
-            clients = clientData.clients || [];
-          }
-          let html;
-          try {
-            html = buildConstanciaHtml(data, catalog, clients, {
-              ownerUsername: data.owner_username,
-            });
-          } catch (buildErr) {
-            showErrorModal(
-              "Error al generar la constancia: " + (buildErr?.message || buildErr),
-              { title: "Error" }
-            );
-            return;
-          }
-          openConstanciaPreviewWindow(html);
-        } catch (err) {
-          showErrorModal("Error al abrir la constancia: " + (err?.message || err), {
-            title: "Error",
-          });
-        }
+        openRefreshableConstanciaWindow({ mode: "saved", id: String(id) });
       }
 
       async function openConstanciaPreview(dualSide = null) {
@@ -5867,9 +5952,6 @@
           showErrorModal("No se pudo generar la vista previa.", { title: "Error" });
           return;
         }
-        await ensureConstanciaOwnerContext();
-        const previewOwner =
-          window.QC_CONSTANCIA_OWNER_USERNAME || getActiveConstanciaUsername() || undefined;
 
         const dualActive = isActiveCencosudDualClient();
         if (dualActive && dualSide) {
@@ -5892,24 +5974,7 @@
             });
             return;
           }
-          const intl = cencosudDual.internacional || {};
-          const constancia = {
-            number: intl.number || constanciaNumero.value.trim() || "PREVIEW",
-            issue_date: intl.issue_date || constanciaFecha.value.trim(),
-            client_name: intl.client_name || constanciaClienteInput.value.trim(),
-            transport_plate: intl.transport_plate || constanciaTransporteInput.value.trim(),
-            fumigacion: constanciaFumigacion.checked,
-            calidad: constanciaCalidad.checked,
-            mobile_number: intl.mobile_number || "",
-            pallets: intl.pallets || "",
-            items: collectConstanciaItemsFromBody(productsBodyIntl),
-            cencosud_dual: cencosudDual,
-          };
-          const html = buildConstanciaHtml(constancia, allProducts, allClients, {
-            dualPreviewSide: dualSide,
-            ownerUsername: previewOwner,
-          });
-          openConstanciaPreviewWindow(html);
+          openRefreshableConstanciaWindow({ mode: "live", side: dualSide });
           return;
         }
 
@@ -5925,34 +5990,7 @@
           });
           return;
         }
-        const mobileToPreview = (constanciaMobileNumber?.value || "")
-          .trim()
-          .toUpperCase()
-          .replace(/\s+/g, "")
-          .slice(0, 2);
-        const palletsToPreview = (constanciaPallets?.value || "")
-          .trim()
-          .replace(/\s+/g, "")
-          .slice(0, 2);
-        const cencosudDual = collectCencosudDualPayload();
-        const constancia = {
-          number: constanciaNumero.value.trim() || "PREVIEW",
-          issue_date: constanciaFecha.value.trim(),
-          client_name: clientName,
-          transport_plate: constanciaTransporteInput.value.trim(),
-          fumigacion: constanciaFumigacion.checked,
-          calidad: constanciaCalidad.checked,
-          mobile_number: mobileToPreview,
-          pallets: palletsToPreview,
-          items,
-        };
-        if (cencosudDual) {
-          constancia.cencosud_dual = cencosudDual;
-        }
-        const html = buildConstanciaHtml(constancia, allProducts, allClients, {
-          ownerUsername: previewOwner,
-        });
-        openConstanciaPreviewWindow(html);
+        openRefreshableConstanciaWindow({ mode: "live" });
       }
 
       async function saveConstancia(status) {
@@ -7148,7 +7186,7 @@
       }
 
       async function loadClients() {
-        const res = await fetch("/api/clients");
+        const res = await fetch("/api/clients?limit=5000", { cache: "no-store" });
         const data = await res.json();
         if (!res.ok) return;
         allClients = data.clients || [];
@@ -7333,7 +7371,7 @@
       }
 
       async function loadTransports() {
-        const res = await fetch("/api/transports");
+        const res = await fetch("/api/transports?limit=5000", { cache: "no-store" });
         const data = await res.json();
         if (!res.ok) return;
         allTransports = data.transports || [];

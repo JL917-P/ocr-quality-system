@@ -2095,17 +2095,30 @@ def admin_page() -> HTMLResponse:
     )
 
 
+@app.get("/constancia-print", response_class=HTMLResponse)
+def constancia_print_page() -> HTMLResponse:
+    builder_v = _constancia_builder_version()
+    html = _read_frontend_html("constancia-print.html").replace(
+        "/static/constancia-builder.js?v=print1",
+        f"/static/constancia-builder.js?v={builder_v}",
+    )
+    return HTMLResponse(
+        content=html,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
+
+
 @app.get("/constancia-view")
 def constancia_view_page(
     request: Request,
     constancia_id: int = Query(..., alias="id"),
 ) -> RedirectResponse:
-    query = f"viewConstancia={constancia_id}"
+    query = f"mode=saved&id={constancia_id}"
     env = request.query_params.get("env")
     if env:
         query += f"&env={env}"
     return RedirectResponse(
-        url=f"/admin?{query}",
+        url=f"/constancia-print?{query}",
         status_code=302,
         headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
     )

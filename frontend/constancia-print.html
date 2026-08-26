@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <title>Constancia</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: #e5e7eb;
+        color: #0f172a;
+      }
+      .qc-print-status {
+        max-width: 520px;
+        margin: 48px auto;
+        padding: 20px 22px;
+        background: #fff;
+        border: 1px solid #cbd5e1;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+      }
+      .qc-print-status h1 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+      .qc-print-status p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.45;
+        color: #475569;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="qc-print-status" id="qcPrintStatus">
+      <h1>Cargando constancia…</h1>
+      <p>Obteniendo datos actualizados. Si refrescas esta página, se volverán a cargar.</p>
+    </div>
+    <script src="/static/auth-api.js?v=auth11"></script>
+    <script src="/static/constancia-builder.js?v=print1"></script>
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search || "");
+        const mode = (params.get("mode") || "saved").trim().toLowerCase();
+        const side = (params.get("side") || "").trim().toLowerCase() || null;
+        const constanciaId = Number(params.get("id") || 0);
+        const envParam = params.get("env");
+
+        function showStatus(title, message) {
+          document.body.innerHTML =
+            '<div class="qc-print-status"><h1>' +
+            title +
+            "</h1><p>" +
+            message +
+            "</p></div>";
+        }
+
+        function syncAuthFromOpener() {
+          try {
+            if (!window.opener || !window.opener.QCAuth || !window.QCAuth) return;
+            const token = window.opener.QCAuth.getToken();
+            const user = window.opener.QCAuth.getUser();
+            if (!token || !user) return;
+            window.QCAuth.setSession(token, user, false);
+            const env = window.opener.QCAuth.getEnvOwnerId();
+            if (env) window.QCAuth.setEnvOwnerId(env);
+          } catch (e) {}
+        }
+
+        function syncAuthFromStorage() {
+          try {
+            if (!window.QCAuth) return;
+            const token =
+              localStorage.getItem("qc_auth_token") || sessionStorage.getItem("qc_auth_token") || "";
+            const userRaw =
+              localStorage.getItem("qc_auth_user") || sessionStorage.getItem("qc_auth_user") || "";
+            if (!token || !userRaw) return;
+            window.QCAuth.setSession(token, JSON.parse(userRaw), !!localStorage.getItem("qc_auth_token"));
+          } catch (e) {}
+        }
+
+        function writeHtml(html) {
+          const origin = window.location.origin || "";
+          let docHtml = html || "";
+          if (origin && !/<base\s/i.test(docHtml)) {
+            docHtml = docHtml.replace(/<head>/i, '<head><base href="' + origin + '/">');
+          }
+          document.open();
+          document.write(docHtml);
+          document.close();
+        }
+
+        async function loadLiveFromOpener() {
+          if (!window.opener || window.opener.closed) {
+            showStatus(
+              "Ventana de origen cerrada",
+              "Vuelve a abrir Vista Previa desde la constancia. El refresco necesita el panel abierto."
+            );
+            return;
+          }
+          const builder =
+            window.opener.QCBuildLiveConstanciaPreview ||
+            window.opener.buildLiveConstanciaPreviewHtml;
+          if (typeof builder !== "function") {
+            showStatus(
+              "No se pudo generar la vista previa",
+              "Recarga el panel admin e intenta de nuevo."
+            );
+            return;
+          }
+          const result = await builder(side);
+          if (!result || result.ok === false) {
+            showStatus(
+              "Vista previa",
+              (result && result.message) || "No se pudo generar la vista previa con los datos actuales."
+            );
+            return;
+          }
+          writeHtml(result.html);
+        }
+
+        async function loadSavedFromApi() {
+          syncAuthFromOpener();
+          syncAuthFromStorage();
+          if (envParam && window.QCAuth) {
+            window.QCAuth.setEnvOwnerId(envParam);
+          }
+          if (!constanciaId) {
+            showStatus("Constancia no encontrada", "Falta el id de la constancia en la URL.");
+            return;
+          }
+          if (typeof window.buildConstanciaHtml !== "function") {
+            showStatus("Error", "No se pudo cargar el generador de constancias.");
+            return;
+          }
+          const fetchApi =
+            window.QCAuth && typeof window.QCAuth.apiFetch === "function"
+              ? window.QCAuth.apiFetch.bind(window.QCAuth)
+              : fetch;
+          try {
+            try {
+              const envRes = await fetchApi("/api/environment", { cache: "no-store" });
+              const envData = await envRes.json().catch(() => ({}));
+              if (envRes.ok && envData.owner && envData.owner.username) {
+                const ownerUser = String(envData.owner.username).trim();
+                window.QC_CONSTANCIA_OWNER_USERNAME = ownerUser;
+                if (typeof window.resolveFirmaSrcForUsername === "function") {
+                  window.QC_CONSTANCIA_FIRMA_SRC = window.resolveFirmaSrcForUsername(ownerUser);
+                }
+              }
+            } catch (e) {}
+
+            const res = await fetchApi("/api/constancias/" + constanciaId, { cache: "no-store" });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              throw new Error(data.detail || "notfound");
+            }
+            if (data.owner_username) {
+              window.QC_CONSTANCIA_OWNER_USERNAME = data.owner_username;
+              if (typeof window.resolveFirmaSrcForUsername === "function") {
+                window.QC_CONSTANCIA_FIRMA_SRC = window.resolveFirmaSrcForUsername(data.owner_username);
+              }
+            }
+
+            const prodRes = await fetchApi("/api/products?limit=5000", { cache: "no-store" });
+            const prodData = await prodRes.json().catch(() => ({}));
+            const catalog = prodData.products || [];
+            const clientRes = await fetchApi("/api/clients?limit=5000", { cache: "no-store" });
+            const clientData = await clientRes.json().catch(() => ({}));
+            const clients = clientData.clients || [];
+
+            const html = window.buildConstanciaHtml(data, catalog, clients, {
+              ownerUsername: data.owner_username || window.QC_CONSTANCIA_OWNER_USERNAME,
+            });
+            writeHtml(html);
+          } catch (err) {
+            showStatus(
+              "No se pudo cargar la constancia",
+              "Verifica que exista, que tengas sesión activa e intenta recargar esta página."
+            );
+          }
+        }
+
+        async function boot() {
+          if (mode === "live") {
+            await loadLiveFromOpener();
+          } else {
+            await loadSavedFromApi();
+          }
+        }
+
+        boot();
+      })();
+    </script>
+  </body>
+</html>
