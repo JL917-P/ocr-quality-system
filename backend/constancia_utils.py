@@ -123,6 +123,31 @@ def find_product_by_name(
         tuple(params),
     ).fetchone()
     if not row:
+        # Fallback: comparar sin espacios ni signos (ej. "X 49 KG" vs "X49KG")
+        def _norm(value: str) -> str:
+            return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
+
+        target_norm = _norm(target)
+        if target_norm:
+            owner_params: list[Any] = []
+            owner_clause = ""
+            if owner_user_id is not None:
+                owner_clause = " WHERE owner_user_id = ?"
+                owner_params.append(owner_user_id)
+            candidates = conn.execute(
+                f"""
+                SELECT id, name, lot, production_text, expiration_text,
+                       humidity, broken_grains, chalky_1, chalky_2, damaged_grains, whiteness
+                FROM products
+                {owner_clause}
+                """,
+                tuple(owner_params),
+            ).fetchall()
+            for cand in candidates:
+                if _norm(cand[1] or "") == target_norm:
+                    row = cand
+                    break
+    if not row:
         return None
     return {
         "id": row[0],
@@ -149,6 +174,13 @@ def build_item_snapshot(
     lot = _str(item.get("lot") or item.get("lote_snapshot"))
     production = _str(item.get("production_text") or item.get("production_date_snapshot"))
     expiration = _str(item.get("expiration_text") or item.get("expiration_date_snapshot"))
+    if catalog:
+        if not lot:
+            lot = _str(catalog.get("lot"))
+        if not production:
+            production = _str(catalog.get("production_text"))
+        if not expiration:
+            expiration = _str(catalog.get("expiration_text"))
     quantity = item.get("quantity")
 
     snap: dict[str, Any] = {

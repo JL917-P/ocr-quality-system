@@ -2714,7 +2714,7 @@
         input.value = selectedName;
         hideProductAutocomplete();
         const row = input.closest("tr");
-        if (row) applyProductDetailsForRow(row);
+        if (row) applyProductDetailsForRow(row, { force: true });
         const value = input.value || "";
         if (value.trim() && !isKnownProduct(value)) {
           promptNewProduct(value, input);
@@ -3477,9 +3477,48 @@
       }
 
       function getProductByName(name) {
-        const target = name.trim().toLowerCase();
-        if (!target) return null;
-        return allProducts.find((prod) => (prod.name || "").trim().toLowerCase() === target) || null;
+        const raw = (name || "").trim();
+        if (!raw) return null;
+        const target = raw.toLowerCase();
+        const exact = allProducts.find((prod) => (prod.name || "").trim().toLowerCase() === target);
+        if (exact) return exact;
+        const key = normalizeProductKey(raw);
+        if (!key) return null;
+        return (
+          allProducts.find((prod) => normalizeProductKey(prod.name || "") === key) ||
+          allProducts.find((prod) => normalizeProductKey(prod.origin || "") === key) ||
+          null
+        );
+      }
+
+      function isBlankCatalogField(value) {
+        const text = String(value || "").trim();
+        return !text || text === "-";
+      }
+
+      function applyProductDetailsForRow(tr, { force = false } = {}) {
+        if (!allProducts.length) return;
+        const productInput = tr.querySelector(".product-input");
+        if (!productInput) return;
+        const match = getProductByName(productInput.value || "");
+        if (!match) return;
+        const lotInput = tr.querySelector(".lot-input");
+        const prodInput = tr.querySelector(".prod-date-input");
+        const expInput = tr.querySelector(".exp-date-input");
+        if (lotInput && (force || isBlankCatalogField(lotInput.value))) {
+          lotInput.value = match.lot || "";
+        }
+        if (prodInput && (force || isBlankCatalogField(prodInput.value))) {
+          prodInput.value = match.production_text || "";
+        }
+        if (expInput && (force || isBlankCatalogField(expInput.value))) {
+          // Preferir vencimiento del catálogo; si no hay, calcular (user01).
+          if (match.expiration_text) {
+            expInput.value = match.expiration_text;
+          } else if (prodInput && (prodInput.value || "").trim()) {
+            applyUser01ExpirationFromProduction(prodInput);
+          }
+        }
       }
 
       function isKnownProduct(value) {
@@ -3574,20 +3613,6 @@
         if (value.trim() && !isKnownTransport(value)) {
           promptNewTransport(value, constanciaTransporteInput);
         }
-      }
-
-      function applyProductDetailsForRow(tr) {
-        if (!allProducts.length) return;
-        const productInput = tr.querySelector(".product-input");
-        if (!productInput) return;
-        const match = getProductByName(productInput.value || "");
-        if (!match) return;
-        const lotInput = tr.querySelector(".lot-input");
-        const prodInput = tr.querySelector(".prod-date-input");
-        const expInput = tr.querySelector(".exp-date-input");
-        if (lotInput && !lotInput.value) lotInput.value = match.lot || "";
-        if (prodInput && !prodInput.value) prodInput.value = match.production_text || "";
-        if (expInput && !expInput.value) expInput.value = match.expiration_text || "";
       }
 
       function applyProductDetailsFromCatalog() {
@@ -3767,11 +3792,7 @@
         }
         if (input.classList.contains("product-input")) {
           const row = input.closest("tr");
-          if (row) applyProductDetailsForRow(row);
-          const prodDateInput = row?.querySelector(".prod-date-input");
-          if (prodDateInput && (prodDateInput.value || "").trim()) {
-            applyUser01ExpirationFromProduction(prodDateInput);
-          }
+          if (row) applyProductDetailsForRow(row, { force: true });
           const value = input.value || "";
           if (value.trim() && !isKnownProduct(value)) {
             promptNewProduct(value, input);
@@ -5414,7 +5435,7 @@
               wasEdit ? "Producto actualizado correctamente." : "Producto guardado correctamente.",
               { title: wasEdit ? "Producto actualizado" : "Producto guardado" }
             );
-            void loadProducts();
+            await loadProducts();
           } else {
             showErrorModal(data.detail || data.error || "No se pudo guardar el producto.", {
               title: "Error al guardar",
@@ -5529,7 +5550,7 @@
       }
 
       async function loadProducts() {
-        const res = await fetch("/api/products", { cache: "no-store" });
+        const res = await fetch("/api/products?limit=5000", { cache: "no-store" });
         const data = await res.json();
         if (!res.ok) {
           return;
@@ -5537,6 +5558,7 @@
         allProducts = data.products || [];
         applyFilters();
         renderHomeDashboard();
+        applyProductDetailsFromCatalog();
       }
 
       saveProductBtn.addEventListener("click", () => saveProduct(true));
@@ -5639,6 +5661,7 @@
         if (!bodyEl) return items;
         const ajiles = isActiveAjilesClient();
         [...bodyEl.querySelectorAll("tr")].forEach((tr) => {
+          applyProductDetailsForRow(tr);
           const product = (tr.querySelector(".product-input")?.value || "").trim();
           const lot = (tr.querySelector(".lot-input")?.value || "").trim();
           const prodDate = (tr.querySelector(".prod-date-input")?.value || "").trim();
@@ -5656,9 +5679,9 @@
             const match = getProductByName(product);
             const row = {
               product,
-              lot,
-              production_text: prodDate,
-              expiration_text: expDate,
+              lot: lot || match?.lot || "",
+              production_text: prodDate || match?.production_text || "",
+              expiration_text: expDate || match?.expiration_text || "",
               f_fumigacion: fumDate || getDefaultFumigacionDate(),
             };
             if (ajiles) {
