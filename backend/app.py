@@ -289,6 +289,17 @@ def init_db() -> None:
             conn.execute("ALTER TABLE constancias ADD COLUMN fumigacion INTEGER NOT NULL DEFAULT 1")
         if "calidad" not in columns:
             conn.execute("ALTER TABLE constancias ADD COLUMN calidad INTEGER NOT NULL DEFAULT 1")
+        if "personalizado" not in columns:
+            conn.execute("ALTER TABLE constancias ADD COLUMN personalizado INTEGER NOT NULL DEFAULT 0")
+            conn.execute(
+                """
+                UPDATE constancias
+                SET personalizado = 1, calidad = 0
+                WHERE calidad = 1
+                  AND lower(client_name) LIKE '%ajiles%'
+                  AND lower(client_name) LIKE '%peru%'
+                """
+            )
         if "mobile_number" not in columns:
             conn.execute("ALTER TABLE constancias ADD COLUMN mobile_number TEXT")
         if "pallets" not in columns:
@@ -2831,7 +2842,8 @@ async def create_constancia(
         )
     fumigacion = 1 if payload.get("fumigacion", True) else 0
     calidad = 1 if payload.get("calidad", True) else 0
-    if fumigacion == 0 and calidad == 0:
+    personalizado = 1 if payload.get("personalizado", False) else 0
+    if fumigacion == 0 and calidad == 0 and personalizado == 0:
         raise HTTPException(status_code=400, detail="Selecciona al menos una constancia.")
     header = constancia_header_snapshot(payload)
     cencosud_dual = normalize_cencosud_dual(payload.get("cencosud_dual"))
@@ -2848,9 +2860,9 @@ async def create_constancia(
         cursor = conn.execute(
             """
             INSERT INTO constancias (
-                number, issue_date, client_name, transport_plate, fumigacion, calidad,
+                number, issue_date, client_name, transport_plate, fumigacion, calidad, personalizado,
                 mobile_number, pallets, status, items_json, created_at, owner_user_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 header["number"],
@@ -2859,6 +2871,7 @@ async def create_constancia(
                 header["transport_plate"],
                 header["fumigacion"],
                 header["calidad"],
+                header["personalizado"],
                 header.get("mobile_number"),
                 header.get("pallets"),
                 header["status"],
@@ -3254,7 +3267,7 @@ def get_constancia(
         row = conn.execute(
             """
             SELECT id, number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json, created_at,
-                   mobile_number, pallets
+                   mobile_number, pallets, personalizado
             FROM constancias
             WHERE id = ? AND owner_user_id = ?
             """,
@@ -3308,6 +3321,7 @@ def get_constancia(
         "transport_plate": row[4],
         "fumigacion": bool(row[5]),
         "calidad": bool(row[6]),
+        "personalizado": bool(row[12]) if len(row) > 12 else False,
         "status": normalize_constancia_status(row[7]),
         "items": items,
         "created_at": row[9],
@@ -3354,7 +3368,8 @@ async def update_constancia(
             )
     fumigacion = 1 if payload.get("fumigacion", True) else 0
     calidad = 1 if payload.get("calidad", True) else 0
-    if fumigacion == 0 and calidad == 0:
+    personalizado = 1 if payload.get("personalizado", False) else 0
+    if fumigacion == 0 and calidad == 0 and personalizado == 0:
         raise HTTPException(status_code=400, detail="Selecciona al menos una constancia.")
     header = constancia_header_snapshot(payload)
     usuario = _actor_label(user)
@@ -3363,7 +3378,7 @@ async def update_constancia(
         row = conn.execute(
             """
             SELECT number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json,
-                   mobile_number, pallets
+                   mobile_number, pallets, personalizado
             FROM constancias WHERE id = ? AND owner_user_id = ?
             """,
             (constancia_id, owner_id),
@@ -3377,6 +3392,7 @@ async def update_constancia(
             "transport_plate": row[3],
             "fumigacion": row[4],
             "calidad": row[5],
+            "personalizado": row[10] if len(row) > 10 else 0,
             "status": row[6],
             "mobile_number": row[8],
             "pallets": row[9],
@@ -3417,7 +3433,7 @@ async def update_constancia(
             """
             UPDATE constancias
             SET number = ?, issue_date = ?, client_name = ?, transport_plate = ?,
-                fumigacion = ?, calidad = ?, status = ?, items_json = ?,
+                fumigacion = ?, calidad = ?, personalizado = ?, status = ?, items_json = ?,
                 mobile_number = ?, pallets = ?
             WHERE id = ? AND owner_user_id = ?
             """,
@@ -3428,6 +3444,7 @@ async def update_constancia(
                 header["transport_plate"],
                 header["fumigacion"],
                 header["calidad"],
+                header["personalizado"],
                 header["status"],
                 items_json,
                 mobile_to_save,

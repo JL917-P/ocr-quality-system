@@ -1140,6 +1140,11 @@
         const instalaciones = formatDateMinusDays(fecha, 0);
         const showFumigacion = constancia.fumigacion !== 0 && constancia.fumigacion !== false;
         const showCalidad = constancia.calidad !== 0 && constancia.calidad !== false;
+        const isAjilesClient = isAjilesPeruClient(cliente);
+        const showPersonalizado =
+          isAjilesClient &&
+          constancia.personalizado !== 0 &&
+          constancia.personalizado !== false;
         const user01Layout = isUser01ConstanciaLayout();
         const isAjilesFumigacion = isAjilesPeruClient(cliente);
         const isMakroFumigacion =
@@ -1400,8 +1405,24 @@
               `
           : "";
         const itemQuality = (item, snapKey, legacyKey) => {
-          const key = (itemSnapshotField(item, "product_name_snapshot", "product") || "").trim().toLowerCase();
-          const prod = (catalog || []).find((p) => (p.name || "").trim().toLowerCase() === key);
+          const productName = itemSnapshotField(item, "product_name_snapshot", "product");
+          const findCatalogProductByName = (name, list) => {
+            const raw = (name || "").trim();
+            if (!raw || !Array.isArray(list)) return null;
+            const target = raw.toLowerCase();
+            const exact = list.find((p) => (p.name || "").trim().toLowerCase() === target);
+            if (exact) return exact;
+            const key = normalizeSearchText(raw).replace(/\s+/g, "");
+            if (!key) return null;
+            return (
+              list.find((p) => normalizeSearchText(p.name || "").replace(/\s+/g, "") === key) ||
+              list.find((p) => normalizeSearchText(p.origin || "").replace(/\s+/g, "") === key) ||
+              null
+            );
+          };
+          const prod =
+            (typeof getProductByName === "function" ? getProductByName(productName) : null) ||
+            findCatalogProductByName(productName, catalog);
           if (prod && legacyKey) {
             const catalogVal = prod[legacyKey];
             if (catalogVal !== undefined && catalogVal !== null && catalogVal !== "") {
@@ -1547,9 +1568,9 @@
             </div>
           </div>
         `;
-        const isAjilesQuality = isAjilesPeruClient(cliente);
+        const isAjilesQuality = isAjilesClient;
         const isTottusDesinsectacion =
-          user01Layout && isTottusStyleConstanciaClient(cliente) && !isAjilesQuality;
+          user01Layout && isTottusStyleConstanciaClient(cliente) && !isAjilesClient;
         const pageQualityStandard = `
           <div class="page last-page">
             <div class="header">
@@ -1651,9 +1672,9 @@
           ? buildTottusDesinsectacionPage(constancia, items, fecha, numero, cliente, transporte, {
               enableUser01Zoom: user01DynamicZoom,
             })
-          : isAjilesQuality
-            ? buildAjilesQualityPage(constancia, clientMatch, items, fecha)
-            : pageQualityStandard;
+          : pageQualityStandard;
+        const pagePersonalizado =
+          showPersonalizado ? buildAjilesQualityPage(constancia, clientMatch, items, fecha) : "";
         const showTransport = isCencosudCdLimaClient(cliente, clientMatch);
         const pageTransport = showTransport
           ? buildCencosudTransportPage(constancia, items, fecha, numero, cliente, transporte)
@@ -1747,9 +1768,12 @@
             }
           });
         } else {
-          pageList = [showFumigacion ? pageContent : "", showCalidad ? pageQuality : "", showTransport ? pageTransport : ""].filter(
-            (page) => page
-          );
+          pageList = [
+            showFumigacion ? pageContent : "",
+            showCalidad ? pageQuality : "",
+            pagePersonalizado,
+            showTransport ? pageTransport : "",
+          ].filter((page) => page);
         }
         const selectedPages = applyConstanciaPageBreaks(pageList);
         const emptyMessage = `

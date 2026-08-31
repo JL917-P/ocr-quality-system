@@ -377,6 +377,7 @@
                     <div class="ocr-command-checks">
                       <label><input id="constanciaFumigacion" type="checkbox" checked /> Fum.</label>
                       <label><input id="constanciaCalidad" type="checkbox" checked /> <span id="constanciaCalidadText">Cal.</span></label>
+                      <label id="constanciaPersonalizadoLabel" class="hidden"><input id="constanciaPersonalizado" type="checkbox" checked /> Pers.</label>
                     </div>
                   </div>
                   <div class="ocr-command-sep hidden" id="ocrTottusExtraSep" aria-hidden="true"></div>
@@ -1576,6 +1577,8 @@
       const constanciaFumigacion = document.getElementById("constanciaFumigacion");
       const constanciaCalidad = document.getElementById("constanciaCalidad");
       const constanciaCalidadText = document.getElementById("constanciaCalidadText");
+      const constanciaPersonalizado = document.getElementById("constanciaPersonalizado");
+      const constanciaPersonalizadoLabel = document.getElementById("constanciaPersonalizadoLabel");
       const constanciaMobileNumber = document.getElementById("constanciaMobileNumber");
       const constanciaPallets = document.getElementById("constanciaPallets");
       const ocrTottusExtraGroup = document.getElementById("ocrTottusExtraGroup");
@@ -1730,8 +1733,23 @@
         const types = [];
         if (constanciaFumigacion.checked) types.push("Fumigación");
         if (constanciaCalidad.checked) types.push(isActiveTottusClient() ? "Desinsectación" : "Calidad");
+        if (isActiveAjilesClient() && constanciaPersonalizado?.checked) types.push("Personalizado");
         if (types.length) parts.push(types.join(" + "));
         return parts.join(" · ") || "Datos de constancia";
+      }
+
+      function hasSelectedConstanciaTypes() {
+        if (constanciaFumigacion.checked || constanciaCalidad.checked) return true;
+        if (isActiveAjilesClient() && constanciaPersonalizado?.checked) return true;
+        return false;
+      }
+
+      function applyConstanciaTypeCheckboxesFromData(data) {
+        constanciaFumigacion.checked = data.fumigacion !== 0 && data.fumigacion !== false;
+        constanciaCalidad.checked = data.calidad !== 0 && data.calidad !== false;
+        if (constanciaPersonalizado) {
+          constanciaPersonalizado.checked = data.personalizado !== 0 && data.personalizado !== false;
+        }
       }
 
       function isOcrHeaderReadyToCollapse() {
@@ -1739,7 +1757,7 @@
           constanciaNumero.value.trim() &&
             constanciaFecha.value.trim() &&
             constanciaClienteInput.value.trim() &&
-            (constanciaFumigacion.checked || constanciaCalidad.checked)
+            hasSelectedConstanciaTypes()
         );
       }
 
@@ -1807,6 +1825,7 @@
           constanciaTransporteInput,
           constanciaFumigacion,
           constanciaCalidad,
+          constanciaPersonalizado,
           constanciaNumeroComercial,
           constanciaFechaComercial,
           constanciaClienteComercial,
@@ -2243,6 +2262,13 @@
         if (headCom) headCom.innerHTML = headHtml;
       }
 
+      function syncAjilesPersonalizadoVisibility() {
+        const show = isActiveAjilesClient();
+        if (constanciaPersonalizadoLabel) {
+          constanciaPersonalizadoLabel.classList.toggle("hidden", !show);
+        }
+      }
+
       function syncAjilesTransportVisibility() {
         // Placa visible para todos los clientes (opcional); mantiene búsqueda/autocomplete
         const group = document.querySelector(".ocr-command-group--transport");
@@ -2258,6 +2284,7 @@
         const mode = getOcrClientLayoutMode();
         if (!force && applyOcrLayoutForClient._lastMode === mode) {
           syncAjilesTransportVisibility();
+          syncAjilesPersonalizadoVisibility();
           syncTottusExtraVisibility();
           updateOcrHeaderCollapseUi();
           return;
@@ -2265,6 +2292,7 @@
         applyOcrLayoutForClient._lastMode = mode;
         renderOcrProductsHeader();
         syncAjilesTransportVisibility();
+        syncAjilesPersonalizadoVisibility();
         syncTottusExtraVisibility();
         if (!productsBody) return;
         const items = collectConstanciaItems();
@@ -2273,6 +2301,7 @@
       }
       applyOcrLayoutForClient._lastMode = null;
       syncAjilesTransportVisibility();
+      syncAjilesPersonalizadoVisibility();
       syncTottusExtraVisibility();
       renderOcrProductsHeader();
 
@@ -3494,6 +3523,24 @@
       function isBlankCatalogField(value) {
         const text = String(value || "").trim();
         return !text || text === "-";
+      }
+
+      function appendCatalogQualityFields(row, match) {
+        if (!row || !match) return;
+        const pairs = [
+          ["humidity", "humidity_snapshot"],
+          ["broken_grains", "broken_grains_snapshot"],
+          ["chalky_1", "chalky_grains_1_snapshot"],
+          ["chalky_2", "chalky_grains_2_snapshot"],
+          ["damaged_grains", "damaged_grains_snapshot"],
+          ["whiteness", "whiteness_snapshot"],
+        ];
+        pairs.forEach(([legacyKey, snapKey]) => {
+          const val = match[legacyKey];
+          if (val === undefined || val === null || val === "") return;
+          row[legacyKey] = val;
+          row[snapKey] = val;
+        });
       }
 
       function applyProductDetailsForRow(tr, { force = false } = {}) {
@@ -5696,6 +5743,7 @@
               row.f_instalaciones = instDate || getDefaultInstalacionesDate();
             }
             if (match?.id) row.product_id = match.id;
+            appendCatalogQualityFields(row, match);
             if (qty !== null && !Number.isNaN(qty)) row.quantity = qty;
             items.push(row);
           }
@@ -5740,6 +5788,7 @@
         constanciaTransporteInput.value = "";
         constanciaFumigacion.checked = true;
         constanciaCalidad.checked = true;
+        if (constanciaPersonalizado) constanciaPersonalizado.checked = true;
         clearTottusExtraFields();
         clearCencosudComercialFields();
         cencosudDualSynced = false;
@@ -5748,6 +5797,7 @@
         applyOcrLayoutForClient._lastMode = null;
         renderOcrProductsHeader();
         syncAjilesTransportVisibility();
+        syncAjilesPersonalizadoVisibility();
         syncTottusExtraVisibility();
         if (isActiveCencosudDualClient()) {
           fillProductsBody(productsBodyIntl, [], { minRows: CENCOSUD_DUAL_DEFAULT_ROWS });
@@ -5832,10 +5882,10 @@
         if (typeof applyProductDetailsFromCatalog === "function") {
           applyProductDetailsFromCatalog();
         }
-        if (!constanciaFumigacion.checked && !constanciaCalidad.checked) {
+        if (!hasSelectedConstanciaTypes()) {
           return {
             ok: false,
-            message: "Selecciona al menos una constancia (Fumigación o Calidad).",
+            message: "Selecciona al menos una constancia (Fumigación, Calidad o Personalizado).",
           };
         }
         if (typeof buildConstanciaHtml !== "function") {
@@ -5874,6 +5924,7 @@
               transport_plate: intl.transport_plate || constanciaTransporteInput.value.trim(),
               fumigacion: constanciaFumigacion.checked,
               calidad: constanciaCalidad.checked,
+              personalizado: isActiveAjilesClient() && constanciaPersonalizado?.checked,
               mobile_number: intl.mobile_number || "",
               pallets: intl.pallets || "",
               items: collectConstanciaItemsFromBody(productsBodyIntl),
@@ -5913,6 +5964,7 @@
             transport_plate: constanciaTransporteInput.value.trim(),
             fumigacion: constanciaFumigacion.checked,
             calidad: constanciaCalidad.checked,
+            personalizado: isActiveAjilesClient() && constanciaPersonalizado?.checked,
             mobile_number: mobileToPreview,
             pallets: palletsToPreview,
             items,
@@ -5942,8 +5994,8 @@
       }
 
       async function openConstanciaPreview(dualSide = null) {
-        if (!constanciaFumigacion.checked && !constanciaCalidad.checked) {
-          showInfoModal("Selecciona al menos una constancia (Fumigación o Calidad).", {
+        if (!hasSelectedConstanciaTypes()) {
+          showInfoModal("Selecciona al menos una constancia (Fumigación, Calidad o Personalizado).", {
             title: "Campo requerido",
           });
           return;
@@ -6010,8 +6062,8 @@
           );
           return;
         }
-        if (!constanciaFumigacion.checked && !constanciaCalidad.checked) {
-          showInfoModal("Selecciona al menos una constancia (Fumigación o Calidad).", {
+        if (!hasSelectedConstanciaTypes()) {
+          showInfoModal("Selecciona al menos una constancia (Fumigación, Calidad o Personalizado).", {
             title: "Campo requerido",
           });
           return;
@@ -6061,6 +6113,7 @@
           transport_plate: constanciaTransporteInput.value.trim(),
           fumigacion: constanciaFumigacion.checked,
           calidad: constanciaCalidad.checked,
+          personalizado: isActiveAjilesClient() && constanciaPersonalizado?.checked,
           mobile_number: mobileToSave,
           pallets: palletsToSave,
           status,
@@ -6156,14 +6209,14 @@
         constanciaFecha.value = toInputDateValue(data.issue_date);
         constanciaClienteInput.value = data.client_name || "";
         constanciaTransporteInput.value = data.transport_plate || "";
-        constanciaFumigacion.checked = data.fumigacion !== 0 && data.fumigacion !== false;
-        constanciaCalidad.checked = data.calidad !== 0 && data.calidad !== false;
+        applyConstanciaTypeCheckboxesFromData(data);
         const mobileSaved = (data.mobile_number || data.mobile || "").toString();
         const palletsSaved = (data.pallets || data.palets || "").toString();
         applyOcrLayoutForClient._lastMode = null;
         fillConstanciaItems(data.items || []);
         applyOcrLayoutForClient({ force: true });
         syncAjilesTransportVisibility();
+        syncAjilesPersonalizadoVisibility();
         syncTottusExtraVisibility();
         // Restaurar después del layout (y un tick más) para no perderlos al importar
         setTottusExtraFields(mobileSaved, palletsSaved);
@@ -8763,6 +8816,11 @@
         const instalaciones = formatDateMinusDays(fecha, 0);
         const showFumigacion = constancia.fumigacion !== 0 && constancia.fumigacion !== false;
         const showCalidad = constancia.calidad !== 0 && constancia.calidad !== false;
+        const isAjilesClient = isAjilesPeruClient(cliente);
+        const showPersonalizado =
+          isAjilesClient &&
+          constancia.personalizado !== 0 &&
+          constancia.personalizado !== false;
         const user01Layout = isUser01ConstanciaLayout();
         const isAjilesFumigacion = isAjilesPeruClient(cliente);
         const isMakroFumigacion =
@@ -9023,8 +9081,24 @@
               `
           : "";
         const itemQuality = (item, snapKey, legacyKey) => {
-          const key = (itemSnapshotField(item, "product_name_snapshot", "product") || "").trim().toLowerCase();
-          const prod = (catalog || []).find((p) => (p.name || "").trim().toLowerCase() === key);
+          const productName = itemSnapshotField(item, "product_name_snapshot", "product");
+          const findCatalogProductByName = (name, list) => {
+            const raw = (name || "").trim();
+            if (!raw || !Array.isArray(list)) return null;
+            const target = raw.toLowerCase();
+            const exact = list.find((p) => (p.name || "").trim().toLowerCase() === target);
+            if (exact) return exact;
+            const key = normalizeSearchText(raw).replace(/\s+/g, "");
+            if (!key) return null;
+            return (
+              list.find((p) => normalizeSearchText(p.name || "").replace(/\s+/g, "") === key) ||
+              list.find((p) => normalizeSearchText(p.origin || "").replace(/\s+/g, "") === key) ||
+              null
+            );
+          };
+          const prod =
+            (typeof getProductByName === "function" ? getProductByName(productName) : null) ||
+            findCatalogProductByName(productName, catalog);
           if (prod && legacyKey) {
             const catalogVal = prod[legacyKey];
             if (catalogVal !== undefined && catalogVal !== null && catalogVal !== "") {
@@ -9170,9 +9244,9 @@
             </div>
           </div>
         `;
-        const isAjilesQuality = isAjilesPeruClient(cliente);
+        const isAjilesQuality = isAjilesClient;
         const isTottusDesinsectacion =
-          user01Layout && isTottusStyleConstanciaClient(cliente) && !isAjilesQuality;
+          user01Layout && isTottusStyleConstanciaClient(cliente) && !isAjilesClient;
         const pageQualityStandard = `
           <div class="page last-page">
             <div class="header">
@@ -9274,9 +9348,9 @@
           ? buildTottusDesinsectacionPage(constancia, items, fecha, numero, cliente, transporte, {
               enableUser01Zoom: user01DynamicZoom,
             })
-          : isAjilesQuality
-            ? buildAjilesQualityPage(constancia, clientMatch, items, fecha)
-            : pageQualityStandard;
+          : pageQualityStandard;
+        const pagePersonalizado =
+          showPersonalizado ? buildAjilesQualityPage(constancia, clientMatch, items, fecha) : "";
         const showTransport = isCencosudCdLimaClient(cliente, clientMatch);
         const pageTransport = showTransport
           ? buildCencosudTransportPage(constancia, items, fecha, numero, cliente, transporte)
@@ -9370,9 +9444,12 @@
             }
           });
         } else {
-          pageList = [showFumigacion ? pageContent : "", showCalidad ? pageQuality : "", showTransport ? pageTransport : ""].filter(
-            (page) => page
-          );
+          pageList = [
+            showFumigacion ? pageContent : "",
+            showCalidad ? pageQuality : "",
+            pagePersonalizado,
+            showTransport ? pageTransport : "",
+          ].filter((page) => page);
         }
         const selectedPages = applyConstanciaPageBreaks(pageList);
         const emptyMessage = `
