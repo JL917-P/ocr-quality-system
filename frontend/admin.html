@@ -8045,6 +8045,11 @@
           .includes("integral");
       }
 
+      /** Detecta si la fecha de producción admin usa prefijo FP. */
+      function hasAdminFpPrefix(text) {
+        return /^(FP)\s*/i.test((text || "").trim());
+      }
+
       /** Quita prefijo FP/FV (admin) si existe. */
       function stripAdminFpFvPrefix(text) {
         const raw = (text || "").trim();
@@ -8052,33 +8057,39 @@
         return match ? match[2].trim() : raw;
       }
 
-      function formatAdminFpFvExpiration(parsed) {
+      function formatAdminDayMonthYearBody(parsed) {
         const abbr = USER01_MONTH_ABBR[parsed.month - 1] || "";
-        const monthOut =
-          parsed.monthCase === "lower" ? abbr : abbr.toUpperCase();
+        const monthOut = parsed.monthCase === "lower" ? abbr : abbr.toUpperCase();
         const dd =
           parsed.dayPadded !== false
             ? String(parsed.day).padStart(2, "0")
             : String(parsed.day);
         const yy = String(parsed.year).slice(-2);
-        return `FV${dd}${monthOut}${yy}`;
+        return `${dd}${monthOut}${yy}`;
       }
 
-      /** Admin: F. Vencimiento con prefijo FV (+6 integral / +8 resto). */
+      /**
+       * Admin: dos formatos de producción:
+       * - Con FP (día+mes+año): FP27AGO26 → FV27ABR27
+       * - Solo mes+año: AGO26 / jul26 → ABR27 / mar27 (sin FV)
+       * Integrales: +6 meses; resto: +8 meses.
+       */
       function computeAdminExpirationFromProduction(productionText, productName) {
         const value = (productionText || "").trim();
         if (!value) return null;
         const monthsAhead = user01ProductIsIntegral(productName) ? 6 : 8;
+        const useFvPrefix = hasAdminFpPrefix(value);
         const inner = stripAdminFpFvPrefix(value);
 
         const dayMonthYear = parseUser01DayMonthYearText(inner);
         if (dayMonthYear) {
           const next = addMonthsKeepDay(dayMonthYear, monthsAhead);
-          return formatAdminFpFvExpiration({
+          const body = formatAdminDayMonthYearBody({
             ...next,
-            monthCase: dayMonthYear.monthCase === "lower" ? "lower" : "upper",
+            monthCase: dayMonthYear.monthCase,
             dayPadded: dayMonthYear.dayPadded,
           });
+          return useFvPrefix ? `FV${body}` : body;
         }
 
         const monthYear = parseUser01MonthYearText(inner);
@@ -8086,19 +8097,22 @@
           const next = addMonthsMonthYear(monthYear, monthsAhead);
           const body = formatUser01MonthYearText({
             ...next,
-            monthCase: monthYear.monthCase === "lower" ? "lower" : "upper",
+            monthCase: monthYear.monthCase,
           });
-          return `FV${body}`;
+          return useFvPrefix ? `FV${body}` : body;
         }
 
         const numeric = parseConstanciaDate(inner);
         if (numeric) {
           const next = addMonthsKeepDay(numeric, monthsAhead);
-          return formatAdminFpFvExpiration({
-            ...next,
-            monthCase: "upper",
-            dayPadded: true,
-          });
+          if (useFvPrefix) {
+            return `FV${formatAdminDayMonthYearBody({
+              ...next,
+              monthCase: "upper",
+              dayPadded: true,
+            })}`;
+          }
+          return formatUser01ProdExpDate(next);
         }
 
         return null;
