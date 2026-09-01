@@ -1145,13 +1145,13 @@
             <div class="row-2">
               <div class="field">
                 <label>Fecha Producción (texto)</label>
-                <input id="prodProduction" type="text" placeholder="Ej: 01DIC25" autocapitalize="off" spellcheck="false" />
+                <input id="prodProduction" type="text" placeholder="Ej: FP01AGO26" autocapitalize="off" spellcheck="false" />
               </div>
             </div>
             <div class="row-2">
               <div class="field">
                 <label>Fecha Vencimiento (texto)</label>
-                <input id="prodExpiration" type="text" placeholder="Ej: AGO26" autocapitalize="off" spellcheck="false" />
+                <input id="prodExpiration" type="text" placeholder="Ej: FV01ABR27" autocapitalize="off" spellcheck="false" />
               </div>
             </div>
 
@@ -2310,6 +2310,9 @@
         const fumDefault = getDefaultFumigacionDate();
         const libDefault = getDefaultLiberacionDate();
         const instDefault = getDefaultInstalacionesDate();
+        const user01Dates = typeof isUser01ConstanciaLayout === "function" && isUser01ConstanciaLayout();
+        const prodPlaceholder = user01Dates ? "Ej: DIC25" : "Ej: FP01AGO26";
+        const expPlaceholder = user01Dates ? "Ej: AGO26" : "Ej: FV01ABR27";
         if (isActiveAjilesClient()) {
           const shipDefault = formatEmissionDateForInput();
           return `
@@ -2317,8 +2320,8 @@
           <td><input type="text" class="shipping-date-input" value="${shipDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AAAA" /></td>
           <td><input type="text" class="product-input" value="${safeProduct}" placeholder="Buscar producto..." autocomplete="off" /></td>
           <td><input type="text" class="lot-input" placeholder="-" /></td>
-          <td><input type="text" class="prod-date-input" placeholder="Ej: DIC25" /></td>
-          <td><input type="text" class="exp-date-input" placeholder="Ej: AGO26" /></td>
+          <td><input type="text" class="prod-date-input" placeholder="${prodPlaceholder}" /></td>
+          <td><input type="text" class="exp-date-input" placeholder="${expPlaceholder}" /></td>
           <td><input type="number" class="qty-input" min="0" step="any" placeholder="" /></td>
           <td><input type="text" class="fumigacion-date-input" value="${fumDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AAAA" /></td>
           <td><input type="number" class="fum-sacos-input" min="0" step="any" value="400" placeholder="400" /></td>
@@ -2331,8 +2334,8 @@
           <td class="itemCell"></td>
           <td><input type="text" class="product-input" value="${safeProduct}" placeholder="Buscar producto..." autocomplete="off" /></td>
           <td><input type="text" class="lot-input" placeholder="-" /></td>
-          <td><input type="text" class="prod-date-input" placeholder="Ej: DIC25" /></td>
-          <td><input type="text" class="exp-date-input" placeholder="Ej: AGO26" /></td>
+          <td><input type="text" class="prod-date-input" placeholder="${prodPlaceholder}" /></td>
+          <td><input type="text" class="exp-date-input" placeholder="${expPlaceholder}" /></td>
           <td><input type="number" class="qty-input" min="0" step="any" placeholder="" /></td>
           <td><input type="text" class="fumigacion-date-input" value="${fumDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AAAA" /></td>
           <td><input type="text" class="liberacion-date-input" value="${libDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AAAA" /></td>
@@ -3559,11 +3562,17 @@
           prodInput.value = match.production_text || "";
         }
         if (expInput && (force || isBlankCatalogField(expInput.value))) {
-          // Preferir vencimiento del catálogo; si no hay, calcular (user01).
           if (match.expiration_text) {
             expInput.value = match.expiration_text;
-          } else if (prodInput && (prodInput.value || "").trim()) {
-            applyUser01ExpirationFromProduction(prodInput);
+          } else {
+            const prodText = (prodInput?.value || match.production_text || "").trim();
+            const productName = productInput.value || match.name || "";
+            const computed = computeExpirationFromProduction(prodText, productName);
+            if (computed != null) {
+              expInput.value = computed;
+            } else if (prodInput && prodText) {
+              applyExpirationFromProduction(prodInput);
+            }
           }
         }
       }
@@ -3833,7 +3842,7 @@
         const input = event.target;
         if (!(input instanceof HTMLInputElement)) return;
         if (input.classList.contains("prod-date-input")) {
-          applyUser01ExpirationFromProduction(input);
+          applyExpirationFromProduction(input);
           refreshOcrRowStates();
           return;
         }
@@ -3872,7 +3881,7 @@
         const input = event.target;
         if (!(input instanceof HTMLInputElement)) return;
         if (!input.classList.contains("prod-date-input")) return;
-        applyUser01ExpirationFromProduction(input);
+        applyExpirationFromProduction(input);
       }, true);
       }
 
@@ -5371,6 +5380,9 @@
       }
 
       function getProductPayload() {
+        if ((prodProduction.value || "").trim() && !(prodExpiration.value || "").trim()) {
+          applyCatalogExpirationFromProduction();
+        }
         return {
           name: prodName.value.trim(),
           origin: prodOrigin.value.trim(),
@@ -8033,11 +8045,74 @@
           .includes("integral");
       }
 
+      /** Quita prefijo FP/FV (admin) si existe. */
+      function stripAdminFpFvPrefix(text) {
+        const raw = (text || "").trim();
+        const match = raw.match(/^(FP|FV)\s*(.+)$/i);
+        return match ? match[2].trim() : raw;
+      }
+
+      function formatAdminFpFvExpiration(parsed) {
+        const abbr = USER01_MONTH_ABBR[parsed.month - 1] || "";
+        const monthOut =
+          parsed.monthCase === "lower" ? abbr : abbr.toUpperCase();
+        const dd =
+          parsed.dayPadded !== false
+            ? String(parsed.day).padStart(2, "0")
+            : String(parsed.day);
+        const yy = String(parsed.year).slice(-2);
+        return `FV${dd}${monthOut}${yy}`;
+      }
+
+      /** Admin: F. Vencimiento con prefijo FV (+6 integral / +8 resto). */
+      function computeAdminExpirationFromProduction(productionText, productName) {
+        const value = (productionText || "").trim();
+        if (!value) return null;
+        const monthsAhead = user01ProductIsIntegral(productName) ? 6 : 8;
+        const inner = stripAdminFpFvPrefix(value);
+
+        const dayMonthYear = parseUser01DayMonthYearText(inner);
+        if (dayMonthYear) {
+          const next = addMonthsKeepDay(dayMonthYear, monthsAhead);
+          return formatAdminFpFvExpiration({
+            ...next,
+            monthCase: dayMonthYear.monthCase === "lower" ? "lower" : "upper",
+            dayPadded: dayMonthYear.dayPadded,
+          });
+        }
+
+        const monthYear = parseUser01MonthYearText(inner);
+        if (monthYear) {
+          const next = addMonthsMonthYear(monthYear, monthsAhead);
+          const body = formatUser01MonthYearText({
+            ...next,
+            monthCase: monthYear.monthCase === "lower" ? "lower" : "upper",
+          });
+          return `FV${body}`;
+        }
+
+        const numeric = parseConstanciaDate(inner);
+        if (numeric) {
+          const next = addMonthsKeepDay(numeric, monthsAhead);
+          return formatAdminFpFvExpiration({
+            ...next,
+            monthCase: "upper",
+            dayPadded: true,
+          });
+        }
+
+        return null;
+      }
+
+      function computeExpirationFromProduction(productionText, productName) {
+        if (typeof isUser01ConstanciaLayout === "function" && isUser01ConstanciaLayout()) {
+          return computeUser01ExpirationFromProduction(productionText, productName);
+        }
+        return computeAdminExpirationFromProduction(productionText, productName);
+      }
+
       /** Devuelve F. Vencimiento (+6 integral / +8 resto) o null si no reconoce el formato. */
       function computeUser01ExpirationFromProduction(productionText, productName) {
-        if (typeof isUser01ConstanciaLayout !== "function" || !isUser01ConstanciaLayout()) {
-          return null;
-        }
         const value = (productionText || "").trim();
         if (!value) return null;
         const monthsAhead = user01ProductIsIntegral(productName) ? 6 : 8;
@@ -8065,31 +8140,31 @@
         return null;
       }
 
-      /** user01 (constancia): al editar F. Producción → F. Vencimiento. */
-      function applyUser01ExpirationFromProduction(prodInput) {
+      /** Constancia: al editar F. Producción → F. Vencimiento (user01 o admin FP/FV). */
+      function applyExpirationFromProduction(prodInput) {
         if (!(prodInput instanceof HTMLInputElement)) return;
         if (!prodInput.classList.contains("prod-date-input")) return;
         const row = prodInput.closest("tr");
         const expInput = row?.querySelector(".exp-date-input");
         if (!expInput) return;
         const productName = row.querySelector(".product-input")?.value || "";
-        const computed = computeUser01ExpirationFromProduction(prodInput.value, productName);
+        const computed = computeExpirationFromProduction(prodInput.value, productName);
         if (computed != null) expInput.value = computed;
       }
 
-      /** user01 (catálogo): al editar Fecha Producción → Fecha Vencimiento. */
-      function applyUser01CatalogExpirationFromProduction() {
+      /** Catálogo: al editar Fecha Producción → Fecha Vencimiento. */
+      function applyCatalogExpirationFromProduction() {
         if (!prodProduction || !prodExpiration) return;
-        const computed = computeUser01ExpirationFromProduction(
+        const computed = computeExpirationFromProduction(
           prodProduction.value,
           prodName?.value || ""
         );
         if (computed != null) prodExpiration.value = computed;
       }
 
-      function bindUser01CatalogExpirationCalc() {
+      function bindCatalogExpirationCalc() {
         if (!prodProduction || !prodExpiration) return;
-        const run = () => applyUser01CatalogExpirationFromProduction();
+        const run = () => applyCatalogExpirationFromProduction();
         prodProduction.addEventListener("change", run);
         prodProduction.addEventListener("blur", run);
         if (prodName) {
@@ -8101,7 +8176,7 @@
           });
         }
       }
-      bindUser01CatalogExpirationCalc();
+      bindCatalogExpirationCalc();
 
       // SKU Ajiles: mapas independientes (admin/otros vs user01)
       const AJILES_PERU_SKU_MAP_ADMIN = [

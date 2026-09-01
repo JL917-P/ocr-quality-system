@@ -358,11 +358,74 @@
           .includes("integral");
       }
 
+      /** Quita prefijo FP/FV (admin) si existe. */
+      function stripAdminFpFvPrefix(text) {
+        const raw = (text || "").trim();
+        const match = raw.match(/^(FP|FV)\s*(.+)$/i);
+        return match ? match[2].trim() : raw;
+      }
+
+      function formatAdminFpFvExpiration(parsed) {
+        const abbr = USER01_MONTH_ABBR[parsed.month - 1] || "";
+        const monthOut =
+          parsed.monthCase === "lower" ? abbr : abbr.toUpperCase();
+        const dd =
+          parsed.dayPadded !== false
+            ? String(parsed.day).padStart(2, "0")
+            : String(parsed.day);
+        const yy = String(parsed.year).slice(-2);
+        return `FV${dd}${monthOut}${yy}`;
+      }
+
+      /** Admin: F. Vencimiento con prefijo FV (+6 integral / +8 resto). */
+      function computeAdminExpirationFromProduction(productionText, productName) {
+        const value = (productionText || "").trim();
+        if (!value) return null;
+        const monthsAhead = user01ProductIsIntegral(productName) ? 6 : 8;
+        const inner = stripAdminFpFvPrefix(value);
+
+        const dayMonthYear = parseUser01DayMonthYearText(inner);
+        if (dayMonthYear) {
+          const next = addMonthsKeepDay(dayMonthYear, monthsAhead);
+          return formatAdminFpFvExpiration({
+            ...next,
+            monthCase: dayMonthYear.monthCase === "lower" ? "lower" : "upper",
+            dayPadded: dayMonthYear.dayPadded,
+          });
+        }
+
+        const monthYear = parseUser01MonthYearText(inner);
+        if (monthYear) {
+          const next = addMonthsMonthYear(monthYear, monthsAhead);
+          const body = formatUser01MonthYearText({
+            ...next,
+            monthCase: monthYear.monthCase === "lower" ? "lower" : "upper",
+          });
+          return `FV${body}`;
+        }
+
+        const numeric = parseConstanciaDate(inner);
+        if (numeric) {
+          const next = addMonthsKeepDay(numeric, monthsAhead);
+          return formatAdminFpFvExpiration({
+            ...next,
+            monthCase: "upper",
+            dayPadded: true,
+          });
+        }
+
+        return null;
+      }
+
+      function computeExpirationFromProduction(productionText, productName) {
+        if (typeof isUser01ConstanciaLayout === "function" && isUser01ConstanciaLayout()) {
+          return computeUser01ExpirationFromProduction(productionText, productName);
+        }
+        return computeAdminExpirationFromProduction(productionText, productName);
+      }
+
       /** Devuelve F. Vencimiento (+6 integral / +8 resto) o null si no reconoce el formato. */
       function computeUser01ExpirationFromProduction(productionText, productName) {
-        if (typeof isUser01ConstanciaLayout !== "function" || !isUser01ConstanciaLayout()) {
-          return null;
-        }
         const value = (productionText || "").trim();
         if (!value) return null;
         const monthsAhead = user01ProductIsIntegral(productName) ? 6 : 8;
@@ -390,31 +453,31 @@
         return null;
       }
 
-      /** user01 (constancia): al editar F. Producción → F. Vencimiento. */
-      function applyUser01ExpirationFromProduction(prodInput) {
+      /** Constancia: al editar F. Producción → F. Vencimiento (user01 o admin FP/FV). */
+      function applyExpirationFromProduction(prodInput) {
         if (!(prodInput instanceof HTMLInputElement)) return;
         if (!prodInput.classList.contains("prod-date-input")) return;
         const row = prodInput.closest("tr");
         const expInput = row?.querySelector(".exp-date-input");
         if (!expInput) return;
         const productName = row.querySelector(".product-input")?.value || "";
-        const computed = computeUser01ExpirationFromProduction(prodInput.value, productName);
+        const computed = computeExpirationFromProduction(prodInput.value, productName);
         if (computed != null) expInput.value = computed;
       }
 
-      /** user01 (catálogo): al editar Fecha Producción → Fecha Vencimiento. */
-      function applyUser01CatalogExpirationFromProduction() {
+      /** Catálogo: al editar Fecha Producción → Fecha Vencimiento. */
+      function applyCatalogExpirationFromProduction() {
         if (!prodProduction || !prodExpiration) return;
-        const computed = computeUser01ExpirationFromProduction(
+        const computed = computeExpirationFromProduction(
           prodProduction.value,
           prodName?.value || ""
         );
         if (computed != null) prodExpiration.value = computed;
       }
 
-      function bindUser01CatalogExpirationCalc() {
+      function bindCatalogExpirationCalc() {
         if (!prodProduction || !prodExpiration) return;
-        const run = () => applyUser01CatalogExpirationFromProduction();
+        const run = () => applyCatalogExpirationFromProduction();
         prodProduction.addEventListener("change", run);
         prodProduction.addEventListener("blur", run);
         if (prodName) {
