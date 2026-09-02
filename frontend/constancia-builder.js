@@ -22,7 +22,7 @@
 
 /** Firma por entorno: admin usa firma Area de Control de Calidad; user01 firma propia. */
       const FIRMA_BY_USERNAME = {
-        admin: "/static/firma.png?v=3",
+        admin: "/static/firma.png?v=4",
         user01: "/static/firma-user01.png?v=1",
       };
 
@@ -41,7 +41,7 @@
         const key = String(username || "")
           .trim()
           .toLowerCase();
-        return staticAssetUrl(FIRMA_BY_USERNAME[key] || "/static/firma.png?v=3");
+        return staticAssetUrl(FIRMA_BY_USERNAME[key] || "/static/firma.png?v=4");
       }
 
       function resolveConstanciaDocumentOwner(constancia, options) {
@@ -96,12 +96,12 @@
             if (envOwnerProfile?.username) {
               return resolveFirmaSrcForUsername(envOwnerProfile.username);
             }
-            return staticAssetUrl("/static/firma.png?v=3");
+            return staticAssetUrl("/static/firma.png?v=4");
           }
           const me = window.QCAuth && window.QCAuth.getUser && window.QCAuth.getUser();
           if (me && me.username) return resolveFirmaSrcForUsername(me.username);
         } catch (e) {}
-        return staticAssetUrl("/static/firma.png?v=3");
+        return staticAssetUrl("/static/firma.png?v=4");
       }
 
       function getActiveConstanciaUsername() {
