@@ -20,9 +20,9 @@
         return "";
       }
 
-/** Firma por entorno: user01 usa firma propia; admin y resto usan firma.png */
+/** Firma por entorno: admin usa firma Area de Control de Calidad; user01 firma propia. */
       const FIRMA_BY_USERNAME = {
-        admin: "/static/firma.png?v=1",
+        admin: "/static/firma.png?v=2",
         user01: "/static/firma-user01.png?v=1",
       };
 
@@ -41,7 +41,7 @@
         const key = String(username || "")
           .trim()
           .toLowerCase();
-        return staticAssetUrl(FIRMA_BY_USERNAME[key] || "/static/firma.png?v=1");
+        return staticAssetUrl(FIRMA_BY_USERNAME[key] || "/static/firma.png?v=2");
       }
 
       function resolveConstanciaDocumentOwner(constancia, options) {
@@ -96,7 +96,7 @@
             if (envOwnerProfile?.username) {
               return resolveFirmaSrcForUsername(envOwnerProfile.username);
             }
-            return staticAssetUrl("/static/firma.png?v=1");
+            return staticAssetUrl("/static/firma.png?v=2");
           }
           const me = window.QCAuth && window.QCAuth.getUser && window.QCAuth.getUser();
           if (me && me.username) return resolveFirmaSrcForUsername(me.username);
