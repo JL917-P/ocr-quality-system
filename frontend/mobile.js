@@ -126,7 +126,16 @@
     addProductRow();
   }
 
+  function dateFieldPlaceholders() {
+    const user01 = window.QCDateExpiration?.isUser01Owner?.(ownerUsername);
+    if (user01) {
+      return { prod: "Ej: Ago26 o 01ago26", exp: "Ej: Abr27 o 01abr27" };
+    }
+    return { prod: "Ej: 01AGO26 o FP01AGO26", exp: "Ej: 01ABR27 o FV01ABR27" };
+  }
+
   function productRowTemplate(index) {
+    const ph = dateFieldPlaceholders();
     const row = document.createElement("div");
     row.className = "mob-product-row";
     row.innerHTML = `
@@ -145,11 +154,11 @@
       <div class="mob-date-row">
         <div class="mob-field">
           <label>F. Producción</label>
-          <input type="text" class="mob-prod-date" placeholder="Ej: Ago26" autocomplete="off" />
+          <input type="text" class="mob-prod-date" placeholder="${ph.prod}" autocomplete="off" />
         </div>
         <div class="mob-field">
           <label>F. Vencimiento</label>
-          <input type="text" class="mob-exp-date" placeholder="Ej: Abr27" autocomplete="off" />
+          <input type="text" class="mob-exp-date" placeholder="${ph.exp}" autocomplete="off" />
         </div>
       </div>
       <div class="mob-field">

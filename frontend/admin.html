@@ -1163,7 +1163,7 @@
             <div class="row-2">
               <div class="field">
                 <label>Fecha Producción (texto)</label>
-                <input id="prodProduction" type="text" placeholder="Ej: FP01AGO26" autocapitalize="off" spellcheck="false" />
+                <input id="prodProduction" type="text" placeholder="Ej: 01AGO26 o FP01AGO26" autocapitalize="off" spellcheck="false" />
               </div>
             </div>
             <div class="row-2">
@@ -2329,8 +2329,8 @@
         const libDefault = getDefaultLiberacionDate();
         const instDefault = getDefaultInstalacionesDate();
         const user01Dates = typeof isUser01ConstanciaLayout === "function" && isUser01ConstanciaLayout();
-        const prodPlaceholder = user01Dates ? "Ej: DIC25" : "Ej: FP01AGO26";
-        const expPlaceholder = user01Dates ? "Ej: AGO26" : "Ej: FV01ABR27";
+        const prodPlaceholder = user01Dates ? "Ej: DIC25" : "Ej: 01AGO26 o FP01AGO26";
+        const expPlaceholder = user01Dates ? "Ej: AGO26" : "Ej: 01ABR27 o FV01ABR27";
         if (isActiveAjilesClient()) {
           const shipDefault = formatEmissionDateForInput();
           return `
@@ -3866,7 +3866,13 @@
         }
         if (input.classList.contains("product-input")) {
           const row = input.closest("tr");
-          if (row) applyProductDetailsForRow(row, { force: true });
+          if (row) {
+            applyProductDetailsForRow(row, { force: true });
+            const prodInput = row.querySelector(".prod-date-input");
+            if (prodInput && (prodInput.value || "").trim()) {
+              applyExpirationFromProduction(prodInput);
+            }
+          }
           const value = input.value || "";
           if (value.trim() && !isKnownProduct(value)) {
             promptNewProduct(value, input);
@@ -3888,6 +3894,13 @@
         if (!productTableBodyFromTarget(event.target)) return;
         const input = event.target;
         if (!(input instanceof HTMLInputElement)) return;
+        if (input.classList.contains("product-input")) {
+          const row = input.closest("tr");
+          const prodInput = row?.querySelector(".prod-date-input");
+          if (prodInput && (prodInput.value || "").trim()) {
+            applyExpirationFromProduction(prodInput);
+          }
+        }
         if (!input.classList.contains("product-input")) return;
         productAutocomplete.blurTimer = setTimeout(() => {
           hideProductAutocomplete();
@@ -8087,9 +8100,10 @@
       }
 
       /**
-       * Admin: dos formatos de producción:
-       * - Con FP (día+mes+año): FP27AGO26 → FV27ABR27
-       * - Solo mes+año: AGO26 / jul26 → ABR27 / mar27 (sin FV)
+       * Admin / user02: formatos de producción:
+       * - Día+mes+año sin FP: 01AGO26 → 01ABR27 (+8) / 01FEB27 integral (+6)
+       * - Con FP: FP01AGO26 → FV01ABR27
+       * - Solo mes+año: AGO26 → ABR27 (sin FV)
        * Integrales: +6 meses; resto: +8 meses.
        */
       function computeAdminExpirationFromProduction(productionText, productName) {
