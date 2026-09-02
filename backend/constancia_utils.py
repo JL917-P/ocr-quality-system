@@ -457,6 +457,7 @@ def parse_constancia_extras(raw: str) -> dict[str, Any]:
         "mobile_number": mobile,
         "pallets": pallets,
         "cencosud_dual": normalize_cencosud_dual(data.get("cencosud_dual")),
+        "capture_source": _str(data.get("capture_source")),
     }
 
 
@@ -466,6 +467,7 @@ def encode_items_json(
     mobile_number: Any = None,
     pallets: Any = None,
     cencosud_dual: Any = None,
+    capture_source: Any = None,
 ) -> str:
     """Serializa ítems + extras Tottus/Cencosud (doble guardado junto a columnas SQL)."""
     mobile = _str(mobile_number)
@@ -482,6 +484,9 @@ def encode_items_json(
     dual = normalize_cencosud_dual(cencosud_dual)
     if dual:
         payload["cencosud_dual"] = dual
+    source = _str(capture_source)
+    if source:
+        payload["capture_source"] = source
     return json.dumps(payload, ensure_ascii=True)
 
 

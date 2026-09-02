@@ -2097,6 +2097,15 @@ def capture_page() -> HTMLResponse:
     return HTMLResponse(content=_read_frontend_html("capture.html"))
 
 
+@app.get("/mobile", response_class=HTMLResponse)
+def mobile_page() -> HTMLResponse:
+    html = _inject_panel_config(_read_frontend_html("mobile.html"))
+    return HTMLResponse(
+        content=html,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
+
+
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page() -> HTMLResponse:
     html = _inject_panel_config(_read_frontend_html("admin.html"))
@@ -2856,6 +2865,7 @@ async def create_constancia(
             mobile_number=header.get("mobile_number"),
             pallets=header.get("pallets"),
             cencosud_dual=cencosud_dual,
+            capture_source=payload.get("capture_source"),
         )
         cursor = conn.execute(
             """
@@ -2983,6 +2993,7 @@ def list_constancias(
                     "status": normalize_constancia_status(row[7]),
                     "items": items,
                     "created_at": row[9],
+                    "capture_source": parse_constancia_extras(row[8] or "").get("capture_source") or "",
                 }
             )
     return JSONResponse(
@@ -3328,6 +3339,7 @@ def get_constancia(
         "mobile_number": mobile_number,
         "pallets": pallets,
         "repaired_from_duplicate": repaired,
+        "capture_source": extras.get("capture_source") or "",
     }
     if cencosud_dual:
         response_body["cencosud_dual"] = cencosud_dual
@@ -3428,6 +3440,7 @@ async def update_constancia(
             mobile_number=mobile_to_save,
             pallets=pallets_to_save,
             cencosud_dual=cencosud_dual,
+            capture_source=payload.get("capture_source") or old_extras.get("capture_source"),
         )
         conn.execute(
             """

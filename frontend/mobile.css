@@ -1,0 +1,260 @@
+:root {
+  --mob-bg: #f1f5f9;
+  --mob-card: #ffffff;
+  --mob-primary: #2563eb;
+  --mob-primary-dark: #1d4ed8;
+  --mob-border: #cbd5e1;
+  --mob-text: #0f172a;
+  --mob-muted: #64748b;
+  --mob-reserve: #d97706;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body.page-mobile {
+  margin: 0;
+  font-family: "Segoe UI", Arial, sans-serif;
+  background: var(--mob-bg);
+  color: var(--mob-text);
+}
+
+body.page-mobile.auth-locked #mobileApp {
+  display: none !important;
+}
+
+#mobileApp {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.mob-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, #0c2340 0%, #143352 100%);
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.15);
+}
+
+.mob-header-title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.mob-header-sub {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.mob-header-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mob-icon-btn {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mob-main {
+  flex: 1;
+  padding: 12px 12px 24px;
+}
+
+.mob-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.mob-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 1;
+}
+
+.mob-btn-primary {
+  background: var(--mob-primary);
+  color: #fff;
+}
+
+.mob-btn-primary:active {
+  background: var(--mob-primary-dark);
+}
+
+.mob-btn-reserve {
+  background: var(--mob-reserve);
+  color: #fff;
+}
+
+.mob-btn-outline {
+  background: #fff;
+  color: var(--mob-primary);
+  border: 1px solid var(--mob-border);
+}
+
+.mob-card {
+  background: var(--mob-card);
+  border: 1px solid var(--mob-border);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+}
+
+.mob-card-title {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.mob-card-meta {
+  font-size: 13px;
+  color: var(--mob-muted);
+  line-height: 1.4;
+}
+
+.mob-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mob-badge-reserve {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.mob-badge-done {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.mob-field {
+  margin-bottom: 12px;
+}
+
+.mob-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mob-muted);
+  margin-bottom: 4px;
+}
+
+.mob-field input {
+  width: 100%;
+  border: 1px solid var(--mob-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 16px;
+  background: #fff;
+}
+
+.mob-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mob-muted);
+  margin: 16px 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mob-product-row {
+  background: #f8fafc;
+  border: 1px solid var(--mob-border);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.mob-product-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.mob-product-row-head span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mob-muted);
+}
+
+.mob-row-del {
+  border: none;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.mob-add-row {
+  width: 100%;
+  border: 2px dashed var(--mob-border);
+  background: #fff;
+  color: var(--mob-primary);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.mob-empty {
+  text-align: center;
+  color: var(--mob-muted);
+  padding: 32px 16px;
+  font-size: 14px;
+}
+
+.mob-toast {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #fff;
+  font-size: 14px;
+  z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.mob-toast.show {
+  opacity: 1;
+}
+
+.hidden {
+  display: none !important;
+}

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Móvil · Control de Calidad</title>
+    <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
+    <link rel="stylesheet" href="/static/mobile.css?v=1" />
+  </head>
+  <body class="page-mobile auth-locked">
+    <div id="authLogin" class="auth-screen auth-login-screen" role="dialog" aria-label="Inicio de sesión">
+      <div class="auth-login-card">
+        <div class="auth-avatar" aria-hidden="true">📱</div>
+        <p style="text-align:center;margin:0 0 12px;font-weight:600;color:#0f172a;">Modo móvil</p>
+        <form id="authLoginForm" autocomplete="off">
+          <div class="auth-field">
+            <span class="auth-field-icon" aria-hidden="true">👤</span>
+            <input id="authUser" type="text" name="username" placeholder="Usuario" autocomplete="username" required />
+          </div>
+          <div class="auth-field">
+            <span class="auth-field-icon" aria-hidden="true">🔒</span>
+            <input id="authPass" type="password" name="password" placeholder="Contraseña" autocomplete="current-password" required />
+          </div>
+          <div class="auth-login-row">
+            <label><input id="authRemember" type="checkbox" /> Recordarme</label>
+          </div>
+          <button type="submit" class="auth-login-btn">LOGIN</button>
+          <p id="authLoginError" class="auth-login-error" role="alert"></p>
+        </form>
+      </div>
+    </div>
+
+    <div id="authLoading" class="auth-screen auth-loading-screen hidden" aria-live="polite">
+      <h1 class="auth-loading-title">LOADING</h1>
+      <div class="auth-progress-wrap">
+        <div class="auth-progress-track">
+          <div id="authProgressFill" class="auth-progress-fill"></div>
+        </div>
+        <span id="authProgressPct" class="auth-progress-pct">0%</span>
+      </div>
+    </div>
+
+    <div id="authWelcome" class="auth-screen auth-welcome-screen hidden">
+      <h1 class="auth-welcome-text">Bienvenido</h1>
+    </div>
+
+    <button type="button" id="sidebarLogoutBtn" class="hidden" aria-hidden="true"></button>
+
+    <div id="mobileApp">
+      <header class="mob-header">
+        <div>
+          <div class="mob-header-title">Ingreso móvil</div>
+          <div class="mob-header-sub" id="mobileUserLabel">Usuario</div>
+        </div>
+        <div class="mob-header-actions">
+          <button type="button" class="mob-icon-btn" id="mobTabletBtn" title="Panel completo">Tablet</button>
+          <button type="button" class="mob-icon-btn" id="mobileLogoutBtn" title="Salir">Salir</button>
+        </div>
+      </header>
+
+      <main class="mob-main">
+        <section id="mobileListView">
+          <div class="mob-toolbar">
+            <button type="button" class="mob-btn mob-btn-primary" id="mobNewBtn">+ Nuevo</button>
+          </div>
+          <div id="mobileConstanciaList"></div>
+        </section>
+
+        <section id="mobileFormView" class="hidden">
+          <div class="mob-toolbar">
+            <button type="button" class="mob-btn mob-btn-outline" id="mobBackBtn">← Lista</button>
+          </div>
+          <div class="mob-toolbar">
+            <button type="button" class="mob-btn mob-btn-primary" id="mobSaveBtn">Grabar</button>
+            <button type="button" class="mob-btn mob-btn-reserve" id="mobReserveBtn">Reservar</button>
+          </div>
+          <input type="hidden" id="mobConstanciaId" value="" />
+
+          <div class="mob-card">
+            <div class="mob-field">
+              <label for="mobNumber">Número</label>
+              <input id="mobNumber" type="text" autocomplete="off" placeholder="N° constancia" />
+            </div>
+            <div class="mob-field">
+              <label for="mobDate">Fecha de emisión</label>
+              <input id="mobDate" type="date" />
+            </div>
+            <div class="mob-field">
+              <label for="mobClient">Cliente</label>
+              <input id="mobClient" type="text" autocomplete="off" placeholder="Nombre del cliente" />
+            </div>
+            <div class="mob-field">
+              <label for="mobPlate">Placa</label>
+              <input id="mobPlate" type="text" autocomplete="off" placeholder="Placa transporte" />
+            </div>
+          </div>
+
+          <div class="mob-section-title">Productos</div>
+          <div id="mobProducts"></div>
+          <button type="button" class="mob-add-row" id="mobAddProductBtn">+ Agregar producto</button>
+        </section>
+      </main>
+    </div>
+
+    <div id="mobileToast" class="mob-toast" role="status" aria-live="polite"></div>
+
+    <script src="/static/auth-api.js?v=auth11"></script>
+    <script>
+      (function () {
+        try {
+          const envParam = new URLSearchParams(window.location.search || "").get("env");
+          if (envParam && window.QCAuth) window.QCAuth.setEnvOwnerId(envParam);
+        } catch (e) {}
+      })();
+    </script>
+    <script src="/static/auth-gate.js?v=auth8"></script>
+    <script src="/static/mobile.js?v=1"></script>
+  </body>
+</html>

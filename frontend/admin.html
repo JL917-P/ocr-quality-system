@@ -3,6 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem("qc_ui_mode") === "tablet") return;
+          if (localStorage.getItem("qc_ui_mode") === "mobile") {
+            location.replace("/mobile" + (location.search || ""));
+            return;
+          }
+          var w = Math.min(window.innerWidth, screen.width || window.innerWidth);
+          var ua = navigator.userAgent || "";
+          if (/iPad|Tablet|PlayBook/i.test(ua)) return;
+          if (w >= 768) return;
+          if (/Mobile|Android|iPhone|iPod/i.test(ua) || w < 640) {
+            location.replace("/mobile" + (location.search || ""));
+          }
+        } catch (e) {}
+      })();
+    </script>
     <title>Panel · Control de Calidad Logística</title>
     <link rel="stylesheet" href="/static/theme-quality.css?v=home95" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
