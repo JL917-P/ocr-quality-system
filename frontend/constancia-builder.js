@@ -101,7 +101,7 @@
           const me = window.QCAuth && window.QCAuth.getUser && window.QCAuth.getUser();
           if (me && me.username) return resolveFirmaSrcForUsername(me.username);
         } catch (e) {}
-        return staticAssetUrl("/static/firma.png?v=1");
+        return staticAssetUrl("/static/firma.png?v=2");
       }
 
       function getActiveConstanciaUsername() {
