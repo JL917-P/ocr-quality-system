@@ -17,29 +17,26 @@ draw = ImageDraw.Draw(img)
 y0, y1 = 114, h
 draw.rectangle((0, y0, w, y1), fill=(255, 255, 255, 255))
 
-text = "Area de Control de Calidad"
+text = "Área de Control de Calidad"
 color = (75, 136, 192, 255)
 
 font = None
 for fp in (
-    r"C:\Windows\Fonts\arialbd.ttf",
     r"C:\Windows\Fonts\arial.ttf",
     r"C:\Windows\Fonts\segoeui.ttf",
+    r"C:\Windows\Fonts\arialbd.ttf",
 ):
     try:
-        font = ImageFont.truetype(fp, 11)
+        font = ImageFont.truetype(fp, 10)
         break
     except OSError:
         pass
 if font is None:
     font = ImageFont.load_default()
 
-bbox = draw.textbbox((0, 0), text, font=font)
-tw = bbox[2] - bbox[0]
-th = bbox[3] - bbox[1]
-x = (w - tw) // 2
-y = y0 + ((y1 - y0) - th) // 2 - 1
-draw.text((x, y), text, fill=color, font=font)
+center_x = w // 2
+center_y = y0 + (y1 - y0) // 2
+draw.text((center_x, center_y), text, fill=color, font=font, anchor="mm")
 
 img.save(out, format="PNG")
 print(f"saved {out} ({w}x{h})")
