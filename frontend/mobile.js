@@ -20,6 +20,50 @@
   };
 
   let editingId = null;
+  let ownerUsername = "";
+
+  async function resolveOwnerUsername() {
+    try {
+      const res = await window.QCAuth.apiFetch("/api/environment");
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.owner?.username) {
+        return String(data.owner.username).trim().toLowerCase();
+      }
+    } catch (e) {}
+    const u = window.QCAuth?.getUser?.();
+    return u?.username ? String(u.username).trim().toLowerCase() : "";
+  }
+
+  function computeRowExpiration(row) {
+    if (!window.QCDateExpiration) return null;
+    const prodInput = row.querySelector(".mob-prod-date");
+    const productInput = row.querySelector(".mob-product");
+    if (!prodInput) return null;
+    return window.QCDateExpiration.computeExpirationFromProduction(
+      prodInput.value,
+      productInput?.value || "",
+      ownerUsername
+    );
+  }
+
+  function applyRowExpiration(row) {
+    const expInput = row.querySelector(".mob-exp-date");
+    if (!expInput) return;
+    const computed = computeRowExpiration(row);
+    if (computed != null) expInput.value = computed;
+  }
+
+  function wireProductRowEvents(row) {
+    const prodInput = row.querySelector(".mob-prod-date");
+    const productInput = row.querySelector(".mob-product");
+    const handler = () => applyRowExpiration(row);
+    prodInput?.addEventListener("change", handler);
+    prodInput?.addEventListener("blur", handler);
+    productInput?.addEventListener("change", handler);
+    productInput?.addEventListener("blur", () => {
+      if ((prodInput?.value || "").trim()) handler();
+    });
+  }
 
   function todayIso() {
     const now = new Date();
@@ -98,9 +142,15 @@
         <label>Lote</label>
         <input type="text" class="mob-lot" placeholder="Lote" autocomplete="off" />
       </div>
-      <div class="mob-field">
-        <label>Fecha de producción</label>
-        <input type="text" class="mob-prod-date" placeholder="Ej: FP01AGO26 o AGO26" autocomplete="off" />
+      <div class="mob-date-row">
+        <div class="mob-field">
+          <label>F. Producción</label>
+          <input type="text" class="mob-prod-date" placeholder="Ej: Ago26" autocomplete="off" />
+        </div>
+        <div class="mob-field">
+          <label>F. Vencimiento</label>
+          <input type="text" class="mob-exp-date" placeholder="Ej: Abr27" autocomplete="off" />
+        </div>
       </div>
       <div class="mob-field">
         <label>Cantidad</label>
@@ -113,12 +163,14 @@
         row.querySelector(".mob-product").value = "";
         row.querySelector(".mob-lot").value = "";
         row.querySelector(".mob-prod-date").value = "";
+        row.querySelector(".mob-exp-date").value = "";
         row.querySelector(".mob-qty").value = "";
         return;
       }
       row.remove();
       reindexProductRows();
     });
+    wireProductRowEvents(row);
     return row;
   }
 
@@ -135,6 +187,7 @@
     if (data.product) row.querySelector(".mob-product").value = data.product;
     if (data.lot) row.querySelector(".mob-lot").value = data.lot;
     if (data.production_text) row.querySelector(".mob-prod-date").value = data.production_text;
+    if (data.expiration_text) row.querySelector(".mob-exp-date").value = data.expiration_text;
     if (data.quantity != null && data.quantity !== "") {
       row.querySelector(".mob-qty").value = String(data.quantity);
     }
@@ -148,8 +201,9 @@
       if (!product) return;
       const lot = (row.querySelector(".mob-lot")?.value || "").trim();
       const production_text = (row.querySelector(".mob-prod-date")?.value || "").trim();
+      const expiration_text = (row.querySelector(".mob-exp-date")?.value || "").trim();
       const qtyRaw = row.querySelector(".mob-qty")?.value;
-      const item = { product, lot, production_text };
+      const item = { product, lot, production_text, expiration_text };
       if (qtyRaw !== "" && qtyRaw != null) {
         const qty = Number(qtyRaw);
         if (!Number.isNaN(qty)) item.quantity = qty;
@@ -244,6 +298,7 @@
             product: itemField(it, "product_name_snapshot", "product"),
             lot: itemField(it, "lote_snapshot", "lot"),
             production_text: itemField(it, "production_date_snapshot", "production_text"),
+            expiration_text: itemField(it, "expiration_date_snapshot", "expiration_text"),
             quantity: it.quantity,
           })
         );
@@ -274,6 +329,7 @@
       showToast("Ingresa el cliente.");
       return;
     }
+    [...(fields.products?.querySelectorAll(".mob-product-row") || [])].forEach(applyRowExpiration);
     const items = collectItems();
     if (!items.length) {
       showToast("Agrega al menos un producto.");
@@ -337,10 +393,11 @@
     }
   }
 
-  function initApp() {
+  async function initApp() {
     try {
       localStorage.setItem(UI_MODE_KEY, "mobile");
     } catch (e) {}
+    ownerUsername = await resolveOwnerUsername();
     refreshUserLabel();
     bindUi();
     resetForm();

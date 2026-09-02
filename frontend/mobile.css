@@ -174,6 +174,17 @@ body.page-mobile.auth-locked #mobileApp {
   background: #fff;
 }
 
+.mob-date-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.mob-date-row .mob-field {
+  margin-bottom: 0;
+}
+
 .mob-section-title {
   font-size: 13px;
   font-weight: 700;
