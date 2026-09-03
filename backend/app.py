@@ -1412,6 +1412,103 @@ def ensure_environment_catalog(
     )
 
 
+@app.post("/api/environment/ensure-loaded")
+def ensure_environment_loaded(
+    request: Request,
+    user: dict = Depends(get_current_user),
+) -> JSONResponse:
+    """Al entrar a un entorno: si ese owner no tiene constancias, importa SOLO las suyas.
+
+    No mezcla datos entre admin / user01 / user02. Filtra siempre por owner_user_id.
+    Si el entorno ya tiene constancias, no vuelve a importar.
+    """
+    owner_id = _env_owner_from_request(request, user)
+    init_db()
+    with sqlite3.connect(DB_PATH) as conn:
+        counts_before = env_counts(conn, owner_id)
+        owner_row = get_user_by_id(conn, owner_id)
+    owner_username = (owner_row or {}).get("username") or f"id:{owner_id}"
+    constancias_before = int(counts_before.get("constancias") or 0)
+
+    if constancias_before > 0:
+        return JSONResponse(
+            {
+                "ok": True,
+                "skipped": True,
+                "imported": 0,
+                "reason": "already_loaded",
+                "message": (
+                    f"Entorno de {owner_username} ya tiene {constancias_before} constancias; "
+                    "no se reimportó."
+                ),
+                "owner_user_id": owner_id,
+                "owner_username": owner_username,
+                "counts": counts_before,
+                "by_tab": {},
+            }
+        )
+
+    try:
+        result = run_import_from_sheets(DB_PATH, owner_user_id=owner_id)
+    except Exception as exc:
+        logging.getLogger(__name__).exception(
+            "[ENSURE-LOADED] Falló auto-import owner=%s", owner_id
+        )
+        msg = str(exc)
+        if "429" in msg or "Quota" in msg or "quota" in msg:
+            msg = (
+                "Google Sheets está limitando peticiones (cuota temporal). "
+                "Espera 1–2 minutos e intenta de nuevo."
+            )
+        with sqlite3.connect(DB_PATH) as conn:
+            counts_now = env_counts(conn, owner_id)
+        return JSONResponse(
+            {
+                "ok": False,
+                "skipped": False,
+                "imported": 0,
+                "reason": "import_error",
+                "message": "No se pudo restaurar el entorno automáticamente.",
+                "error": msg,
+                "owner_user_id": owner_id,
+                "owner_username": owner_username,
+                "counts": counts_now,
+                "by_tab": {},
+            }
+        )
+
+    with sqlite3.connect(DB_PATH) as conn:
+        counts_after = env_counts(conn, owner_id)
+    imported = int(result.get("imported") or result.get("total") or 0)
+    logging.getLogger(__name__).warning(
+        "[ENSURE-LOADED] owner=%s (%s) imported=%s constancias=%s",
+        owner_id,
+        owner_username,
+        imported,
+        counts_after.get("constancias"),
+    )
+    return JSONResponse(
+        {
+            "ok": bool(result.get("ok")),
+            "skipped": False,
+            "imported": imported,
+            "reason": "imported" if imported else "empty_source",
+            "message": (
+                f"Entorno de {owner_username}: se restauraron {imported} registros "
+                "solo de este usuario."
+                if imported
+                else f"Entorno de {owner_username}: no había registros propios en Sheets."
+            ),
+            "error": result.get("error"),
+            "owner_user_id": owner_id,
+            "owner_username": owner_username,
+            "counts": counts_after,
+            "by_tab": result.get("by_tab") or {},
+            "in_db": result.get("in_db") or {},
+        }
+    )
+
+
 @app.post("/api/users/{user_id}/prepare-environment")
 def prepare_user_environment(
     user_id: int,

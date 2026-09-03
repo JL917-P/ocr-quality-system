@@ -9992,7 +9992,31 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
         return envOwnerProfile;
       }
 
+      async function ensureEnvironmentLoaded() {
+        try {
+          const res = await fetch("/api/environment/ensure-loaded", {
+            method: "POST",
+            credentials: "include",
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) return data;
+          if (data && data.skipped === false && Number(data.imported || 0) > 0) {
+            const owner = data.owner_username || "usuario";
+            const n = Number(data.imported || 0);
+            if (typeof showNoticeModal === "function") {
+              // Toast silencioso preferible; si no hay toast, no bloquear con modal.
+            }
+            console.info(`[QC] Entorno ${owner}: restaurados ${n} registros propios.`);
+          }
+          return data;
+        } catch (e) {
+          console.warn("[QC] ensure-loaded falló", e);
+          return null;
+        }
+      }
+
       async function reloadActiveEnvironmentData() {
+        await ensureEnvironmentLoaded();
         const tasks = [];
         if (typeof loadClients === "function") tasks.push(loadClients());
         if (typeof loadProducts === "function") tasks.push(loadProducts());

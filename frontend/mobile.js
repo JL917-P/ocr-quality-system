@@ -248,10 +248,28 @@
     });
   }
 
+  async function ensureEnvironmentLoaded() {
+    try {
+      const res = await window.QCAuth.apiFetch("/api/environment/ensure-loaded", {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data && data.skipped === false && Number(data.imported || 0) > 0) {
+        showToast(
+          `Restauradas ${data.imported} registros de ${data.owner_username || "tu entorno"}.`
+        );
+      }
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
   async function loadList() {
     if (!listEl) return;
     listEl.innerHTML = '<div class="mob-empty">Cargando…</div>';
     try {
+      await ensureEnvironmentLoaded();
       const res = await window.QCAuth.apiFetch("/api/constancias");
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Error al cargar");
