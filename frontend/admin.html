@@ -6127,11 +6127,14 @@
           .trim()
           .replace(/\s+/g, "")
           .slice(0, 2);
-        if (
+        // Solo user01 (Vladimir): Tottus/Cencosud exigen N° móvil y Palets.
+        // Admin y demás usuarios arman esos clientes con formato normal.
+        const requiresTottusExtras =
+          typeof isUser01ConstanciaLayout === "function" &&
+          isUser01ConstanciaLayout() &&
           typeof isTottusStyleConstanciaClient === "function" &&
-          isTottusStyleConstanciaClient(constanciaClienteInput.value.trim()) &&
-          (!mobileToSave || !palletsToSave)
-        ) {
+          isTottusStyleConstanciaClient(constanciaClienteInput.value.trim());
+        if (requiresTottusExtras && (!mobileToSave || !palletsToSave)) {
           showInfoModal("Completa N° móvil y Palets antes de guardar (Tottus / Cencosud CD Principal).", {
             title: "Campos requeridos",
           });
