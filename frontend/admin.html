@@ -2285,6 +2285,13 @@
         if (constanciaPersonalizadoLabel) {
           constanciaPersonalizadoLabel.classList.toggle("hidden", !show);
         }
+        // Ajiles (admin y operadores): Fum. + Cal. + Pers. disponibles.
+        // En constancia nueva, al elegir Ajiles dejar los tres marcados.
+        if (show && !currentConstanciaId) {
+          if (constanciaFumigacion) constanciaFumigacion.checked = true;
+          if (constanciaCalidad) constanciaCalidad.checked = true;
+          if (constanciaPersonalizado) constanciaPersonalizado.checked = true;
+        }
       }
 
       function syncAjilesTransportVisibility() {
@@ -3709,6 +3716,7 @@
       function fillConstanciaItems(items) {
         renderOcrProductsHeader();
         syncAjilesTransportVisibility();
+        syncAjilesPersonalizadoVisibility();
         applyOcrLayoutForClient._lastMode = getOcrClientLayoutMode();
         if (isActiveCencosudDualClient()) {
           fillProductsBody(productsBodyIntl, items, { minRows: cencosudDualMinRows() });
@@ -8277,7 +8285,8 @@
 
       function isAjilesPeruClient(clientName) {
         const key = normalizeSearchText(clientName);
-        return key.includes("ajiles") && key.includes("peru");
+        // Admin y operadores: cualquier cliente "Ajiles" (con o sin "Peru")
+        return key.includes("ajiles");
       }
 
       /** user01: clientes Makro → cabecera PDF de fumigación personalizada. */
@@ -9936,6 +9945,7 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
       globalThis.resolveFirmaSrcForUsername = resolveFirmaSrcForUsername;
       globalThis.getConstanciaFirmaSrc = getConstanciaFirmaSrc;
       globalThis.isUser01ConstanciaLayout = isUser01ConstanciaLayout;
+      globalThis.isAjilesPeruClient = isAjilesPeruClient;
       globalThis.isCencosudCdLimaClient = isCencosudCdLimaClient;
       globalThis.isMakroClient = isMakroClient;
       globalThis.isHipermercadosTottusClient = isHipermercadosTottusClient;

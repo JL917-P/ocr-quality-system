@@ -300,6 +300,33 @@ def init_db() -> None:
                   AND lower(client_name) LIKE '%peru%'
                 """
             )
+        # Ajiles debe emitir Fum. + Cal. (estándar) + Pers. (SKU).
+        # Repara el corte anterior que dejó calidad=0 al activar personalizado.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS schema_patches (
+                id TEXT PRIMARY KEY,
+                applied_at TEXT NOT NULL
+            )
+            """
+        )
+        patch_row = conn.execute(
+            "SELECT 1 FROM schema_patches WHERE id = ?",
+            ("ajiles_triple_types_v1",),
+        ).fetchone()
+        if not patch_row:
+            conn.execute(
+                """
+                UPDATE constancias
+                SET personalizado = 1,
+                    calidad = 1
+                WHERE lower(client_name) LIKE '%ajiles%'
+                """
+            )
+            conn.execute(
+                "INSERT INTO schema_patches (id, applied_at) VALUES (?, ?)",
+                ("ajiles_triple_types_v1", datetime.now(timezone.utc).isoformat()),
+            )
         if "mobile_number" not in columns:
             conn.execute("ALTER TABLE constancias ADD COLUMN mobile_number TEXT")
         if "pallets" not in columns:

@@ -554,7 +554,8 @@
 
       function isAjilesPeruClient(clientName) {
         const key = normalizeSearchText(clientName);
-        return key.includes("ajiles") && key.includes("peru");
+        // Admin y operadores: cualquier cliente "Ajiles" (con o sin "Peru")
+        return key.includes("ajiles");
       }
 
       /** user01: clientes Makro → cabecera PDF de fumigación personalizada. */
