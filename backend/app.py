@@ -68,6 +68,7 @@ from auth_service import (
     resolve_notification,
     resolve_session,
     update_user,
+    update_user_password,
     user_has_permission,
     verify_password,
     write_audit,
@@ -1702,6 +1703,34 @@ async def api_update_user(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return JSONResponse({"user": updated})
+
+
+@app.post("/api/users/{user_id}/password")
+async def api_update_user_password(
+    user_id: int,
+    payload: dict,
+    user: dict = Depends(require_permission("users_manage")),
+) -> JSONResponse:
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            updated = update_user_password(
+                conn,
+                user_id,
+                password=(payload.get("password") or "").strip(),
+            )
+            write_audit(
+                conn,
+                user=user,
+                action="user_password",
+                entity="user",
+                entity_id=user_id,
+                detail=f"Contraseña actualizada de {updated['username']}",
+            )
+            conn.commit()
+            persist_user_row(conn, DATA_DIR, int(user_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return JSONResponse({"ok": True, "user": updated, "message": "Contraseña actualizada."})
 
 
 @app.delete("/api/users/{user_id}")

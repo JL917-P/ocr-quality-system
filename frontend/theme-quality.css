@@ -4975,6 +4975,44 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   overflow: auto;
 }
 
+.password-with-eye {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.password-with-eye input {
+  flex: 1;
+  min-width: 0;
+}
+
+.password-eye-btn {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #c5d4e8;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 16px;
+}
+
+.password-eye-btn:hover {
+  background: #f1f5f9;
+}
+
+.password-update-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.password-update-row .password-with-eye {
+  flex: 1;
+  min-width: 0;
+}
+
 .user-permissions-wrap {
   display: flex;
   flex-direction: column;

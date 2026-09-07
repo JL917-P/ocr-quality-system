@@ -1081,11 +1081,36 @@
                 <input id="userDisplayName" type="text" autocomplete="off" />
               </div>
             </div>
-            <div class="row-2">
+            <div class="row-2" id="userPasswordCreateRow">
               <div class="field">
                 <label>Contraseña</label>
-                <input id="userPassword" type="password" autocomplete="new-password" placeholder="Mín. 4 caracteres" />
+                <div class="password-with-eye">
+                  <input id="userPassword" type="password" autocomplete="new-password" placeholder="Mín. 4 caracteres" />
+                  <button type="button" class="password-eye-btn" id="userPasswordToggle" title="Mostrar / ocultar" aria-label="Mostrar contraseña">👁</button>
+                </div>
               </div>
+              <div class="field"></div>
+            </div>
+            <div class="row-2 hidden" id="userPasswordEditRow">
+              <div class="field">
+                <label>Contraseña actual</label>
+                <div class="password-with-eye">
+                  <input id="userPasswordCurrent" type="password" readonly autocomplete="off" value="" />
+                  <button type="button" class="password-eye-btn" id="userPasswordCurrentToggle" title="Mostrar / ocultar" aria-label="Mostrar contraseña actual">👁</button>
+                </div>
+              </div>
+              <div class="field">
+                <label>Actualizar contraseña</label>
+                <div class="password-update-row">
+                  <div class="password-with-eye">
+                    <input id="userPasswordNew" type="password" autocomplete="new-password" placeholder="Nueva (mín. 4)" />
+                    <button type="button" class="password-eye-btn" id="userPasswordNewToggle" title="Mostrar / ocultar" aria-label="Mostrar nueva contraseña">👁</button>
+                  </div>
+                  <button class="btn btn-primary" id="userPasswordUpdateBtn" type="button">Actualizar</button>
+                </div>
+              </div>
+            </div>
+            <div class="row-2">
               <div class="field" style="display:flex; flex-direction:column; gap:8px; justify-content:center;">
                 <label><input id="userActive" type="checkbox" checked /> Activo</label>
                 <label><input id="userIsAdmin" type="checkbox" /> Administrador (todos los permisos)</label>
@@ -10257,6 +10282,38 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
         wrap.classList.toggle("hidden", isEdit || isAdmin);
       }
 
+      function setPasswordVisible(input, visible) {
+        if (!input) return;
+        input.type = visible ? "text" : "password";
+      }
+
+      function bindPasswordEye(btnId, inputId) {
+        const btn = document.getElementById(btnId);
+        const input = document.getElementById(inputId);
+        if (!btn || !input || btn.dataset.bound === "1") return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", () => {
+          const show = input.type === "password";
+          if (input.id === "userPasswordCurrent" && show && !(input.dataset.reveal || "").trim()) {
+            showInfoModal(
+              "Esta contraseña está cifrada y aún no se puede mostrar. Ingresa una nueva a la derecha y pulsa Actualizar; después sí podrás verla con el ojito.",
+              { title: "Contraseña" }
+            );
+            return;
+          }
+          setPasswordVisible(input, show);
+        });
+      }
+
+      function fillCurrentPasswordField(user) {
+        const input = document.getElementById("userPasswordCurrent");
+        if (!input) return;
+        const reveal = (user && user.password_reveal) || "";
+        input.dataset.reveal = reveal;
+        input.value = reveal || "********";
+        input.type = "password";
+      }
+
       function openUserModal(user = null) {
         currentEditUserId = user ? user.id : null;
         const modal = document.getElementById("userModal");
@@ -10264,6 +10321,9 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
         const username = document.getElementById("userUsername");
         const displayName = document.getElementById("userDisplayName");
         const password = document.getElementById("userPassword");
+        const passwordNew = document.getElementById("userPasswordNew");
+        const createRow = document.getElementById("userPasswordCreateRow");
+        const editRow = document.getElementById("userPasswordEditRow");
         const active = document.getElementById("userActive");
         const isAdmin = document.getElementById("userIsAdmin");
         if (!modal) return;
@@ -10271,8 +10331,18 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
         username.value = user ? user.username : "";
         username.disabled = !!user;
         displayName.value = user ? user.display_name : "";
-        password.value = "";
-        password.placeholder = user ? "Dejar vacío para no cambiar" : "Mín. 4 caracteres";
+        if (password) {
+          password.value = "";
+          password.type = "password";
+          password.placeholder = "Mín. 4 caracteres";
+        }
+        if (passwordNew) {
+          passwordNew.value = "";
+          passwordNew.type = "password";
+        }
+        fillCurrentPasswordField(user);
+        createRow?.classList.toggle("hidden", !!user);
+        editRow?.classList.toggle("hidden", !user);
         active.checked = user ? !!user.active : true;
         isAdmin.checked = user ? !!user.is_admin : false;
         renderPermissionChecks(user ? user.permissions : null, isAdmin.checked);
@@ -10521,6 +10591,38 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
       document.getElementById("addUserBtn")?.addEventListener("click", () => openUserModal(null));
       document.getElementById("refreshUsersBtn")?.addEventListener("click", () => void loadUsersAdmin());
       document.getElementById("closeUserModal")?.addEventListener("click", closeUserModal);
+      bindPasswordEye("userPasswordToggle", "userPassword");
+      bindPasswordEye("userPasswordCurrentToggle", "userPasswordCurrent");
+      bindPasswordEye("userPasswordNewToggle", "userPasswordNew");
+      document.getElementById("userPasswordUpdateBtn")?.addEventListener("click", async () => {
+        if (!currentEditUserId) return;
+        const next = (document.getElementById("userPasswordNew")?.value || "").trim();
+        if (next.length < 4) {
+          showInfoModal("La nueva contraseña debe tener al menos 4 caracteres.", { title: "Contraseña" });
+          return;
+        }
+        const res = await fetch(`/api/users/${currentEditUserId}/password`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: next }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showErrorModal(data.detail || "No se pudo actualizar la contraseña.", { title: "Error" });
+          return;
+        }
+        fillCurrentPasswordField(data.user || { password_reveal: next });
+        const newInput = document.getElementById("userPasswordNew");
+        if (newInput) {
+          newInput.value = "";
+          newInput.type = "password";
+        }
+        showSuccessModal(
+          "Contraseña actualizada. El usuario debe usar esta nueva clave para entrar a su perfil.",
+          { title: "Contraseña" }
+        );
+        void loadUsersAdmin();
+      });
       document.getElementById("userModal")?.addEventListener("click", (e) => {
         if (e.target === document.getElementById("userModal")) closeUserModal();
       });

@@ -167,6 +167,7 @@ def user_row_to_dict(row: tuple, *, include_sensitive: bool = False) -> dict[str
     if include_sensitive:
         data["password_hash"] = row[3]
         data["salt"] = row[9] if len(row) > 9 else ""
+    data["password_reveal"] = (row[10] or "").strip() if len(row) > 10 else ""
     return data
 
 
@@ -233,7 +234,22 @@ def ensure_auth_tables(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(app_users)").fetchall()}
+    if "password_reveal" not in cols:
+        conn.execute("ALTER TABLE app_users ADD COLUMN password_reveal TEXT")
     seed_default_admin(conn)
+    admin_row = conn.execute(
+        """
+        SELECT id, password_hash, password_salt, password_reveal
+        FROM app_users WHERE lower(username) = 'admin'
+        """
+    ).fetchone()
+    if admin_row and not (admin_row[3] or "").strip():
+        if verify_password("123456", admin_row[1] or "", admin_row[2] or ""):
+            conn.execute(
+                "UPDATE app_users SET password_reveal = ? WHERE id = ?",
+                ("123456", admin_row[0]),
+            )
     purge_old_audit_logs(conn)
 
 
@@ -266,7 +282,7 @@ def get_user_by_username(conn: sqlite3.Connection, username: str) -> dict[str, A
     row = conn.execute(
         """
         SELECT id, username, display_name, password_hash, active, is_admin,
-               permissions_json, created_at, updated_at, password_salt
+               permissions_json, created_at, updated_at, password_salt, password_reveal
         FROM app_users WHERE lower(username) = lower(?)
         """,
         (username.strip(),),
@@ -280,7 +296,7 @@ def get_user_by_id(conn: sqlite3.Connection, user_id: int) -> dict[str, Any] | N
     row = conn.execute(
         """
         SELECT id, username, display_name, password_hash, active, is_admin,
-               permissions_json, created_at, updated_at, password_salt
+               permissions_json, created_at, updated_at, password_salt, password_reveal
         FROM app_users WHERE id = ?
         """,
         (user_id,),
@@ -362,12 +378,19 @@ def list_users(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     rows = conn.execute(
         """
         SELECT id, username, display_name, password_hash, active, is_admin,
-               permissions_json, created_at, updated_at, password_salt
+               permissions_json, created_at, updated_at, password_salt, password_reveal
         FROM app_users
         ORDER BY is_admin DESC, username ASC
         """
     ).fetchall()
-    return [public_user(user_row_to_dict(row)) for row in rows]
+    return [admin_user_view(user_row_to_dict(row)) for row in rows]
+
+
+def admin_user_view(user: dict[str, Any]) -> dict[str, Any]:
+    data = public_user(user)
+    data["password_reveal"] = (user.get("password_reveal") or "").strip()
+    data["has_password"] = True
+    return data
 
 
 def create_user(
@@ -399,8 +422,8 @@ def create_user(
         """
         INSERT INTO app_users (
             username, display_name, password_hash, password_salt,
-            active, is_admin, permissions_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            active, is_admin, permissions_json, created_at, updated_at, password_reveal
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             username,
@@ -412,11 +435,12 @@ def create_user(
             permissions_to_json(perms),
             now,
             now,
+            password,
         ),
     )
     user = get_user_by_id(conn, int(cursor.lastrowid))
     assert user is not None
-    return public_user(user)
+    return admin_user_view(user)
 
 
 def update_user(
@@ -451,7 +475,7 @@ def update_user(
             """
             UPDATE app_users
             SET display_name = ?, active = ?, is_admin = ?, permissions_json = ?,
-                password_hash = ?, password_salt = ?, updated_at = ?
+                password_hash = ?, password_salt = ?, updated_at = ?, password_reveal = ?
             WHERE id = ?
             """,
             (
@@ -462,6 +486,7 @@ def update_user(
                 password_hash,
                 salt,
                 now,
+                password,
                 user_id,
             ),
         )
@@ -485,7 +510,29 @@ def update_user(
         conn.execute("DELETE FROM app_sessions WHERE user_id = ?", (user_id,))
     updated = get_user_by_id(conn, user_id)
     assert updated is not None
-    return public_user(updated)
+    return admin_user_view(updated)
+
+
+def update_user_password(conn: sqlite3.Connection, user_id: int, password: str) -> dict[str, Any]:
+    user = get_user_by_id(conn, user_id)
+    if not user:
+        raise ValueError("Usuario no encontrado.")
+    password = (password or "").strip()
+    if len(password) < 4:
+        raise ValueError("La contraseña debe tener al menos 4 caracteres.")
+    password_hash, salt = _hash_password(password)
+    now = utc_now_iso()
+    conn.execute(
+        """
+        UPDATE app_users
+        SET password_hash = ?, password_salt = ?, password_reveal = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (password_hash, salt, password, now, user_id),
+    )
+    updated = get_user_by_id(conn, user_id)
+    assert updated is not None
+    return admin_user_view(updated)
 
 
 def delete_user(conn: sqlite3.Connection, user_id: int, *, actor_id: int) -> None:
