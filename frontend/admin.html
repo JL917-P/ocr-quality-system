@@ -2817,6 +2817,7 @@
           dropdown: null,
           blurTimer: null,
           scrollBound: false,
+          picking: false,
         };
 
         function hide() {
@@ -2935,6 +2936,7 @@
         }
 
         function show(input) {
+          if (state.picking) return;
           config.onBeforeShow?.();
           const matches = config.getMatches(input.value || "");
           if (!matches.length) {
@@ -2970,18 +2972,25 @@
         function selectItem(index) {
           const input = state.input;
           if (!input || index < 0 || index >= state.items.length) return;
-          input.value = state.items[index];
+          const value = state.items[index];
+          state.picking = true;
+          input.value = value;
           hide();
           input.dispatchEvent(new Event("input", { bubbles: true }));
           input.dispatchEvent(new Event("change", { bubbles: true }));
-          config.onSelect?.(input, state.items[index]);
+          config.onSelect?.(input, value);
+          state.picking = false;
         }
 
         function bindInput(input) {
           if (!input) return;
           input.setAttribute("autocomplete", "off");
-          input.addEventListener("input", () => show(input));
-          input.addEventListener("focus", () => show(input));
+          input.addEventListener("input", () => {
+            if (!state.picking) show(input);
+          });
+          input.addEventListener("focus", () => {
+            if (!state.picking) show(input);
+          });
           input.addEventListener("blur", () => {
             state.blurTimer = setTimeout(hide, 120);
           });
