@@ -975,11 +975,14 @@
             <div class="trasiegos-table-wrap">
               <table class="trasiegos-table">
                 <colgroup>
-                  <col class="col-tr-fecha" />
-                  <col class="col-tr-mp" />
-                  <col class="col-tr-fing" />
+                  <col class="col-tr-codigo" />
+                  <col class="col-tr-mpfp" />
+                  <col class="col-tr-mpfv" />
                   <col class="col-tr-estado" />
-                  <col class="col-tr-pfinal" />
+                  <col class="col-tr-fffl" />
+                  <col class="col-tr-fing" />
+                  <col class="col-tr-mpcant" />
+                  <col class="col-tr-obs" />
                   <col class="col-tr-lote" />
                   <col class="col-tr-fp" />
                   <col class="col-tr-fv" />
@@ -988,16 +991,24 @@
                 </colgroup>
                 <thead>
                   <tr>
-                    <th>Fecha</th>
-                    <th>M.P</th>
-                    <th>F.Ing.</th>
-                    <th>Estado</th>
-                    <th>P.final</th>
-                    <th>Lote</th>
-                    <th>F.P</th>
-                    <th>F.V</th>
-                    <th>Cant.</th>
-                    <th></th>
+                    <th class="th-mp" colspan="8">MATERIA PRIMA</th>
+                    <th class="th-pf" colspan="4">PRODUCTO FINAL</th>
+                    <th class="th-del"></th>
+                  </tr>
+                  <tr>
+                    <th class="th-mp">CÓDIGO</th>
+                    <th class="th-mp">F.P</th>
+                    <th class="th-mp">F.V</th>
+                    <th class="th-mp">ESTADO</th>
+                    <th class="th-mp">F.F F.L</th>
+                    <th class="th-mp">FECHA IN CD</th>
+                    <th class="th-mp">CANTIDAD</th>
+                    <th class="th-mp">OBS</th>
+                    <th class="th-pf">LOTE</th>
+                    <th class="th-pf">F.P</th>
+                    <th class="th-pf">F.V</th>
+                    <th class="th-pf">CANTIDAD</th>
+                    <th class="th-del"></th>
                   </tr>
                 </thead>
                 <tbody id="trasiegosBody"></tbody>
@@ -1316,8 +1327,9 @@
                 <label class="trasiego-modal-label" for="constanciaTrasiegoEstado">Estado</label>
                 <select id="constanciaTrasiegoEstado" class="trasiego-modal-input trasiego-modal-input--select">
                   <option value="">Seleccionar</option>
-                  <option value="fumigado">Fumigado</option>
-                  <option value="sin fumigar">Sin fumigar</option>
+                  <option value="FUMIGADO">FUMIGADO</option>
+                  <option value="SIN FUMIGAR">SIN FUMIGAR</option>
+                  <option value="FUMIGADO EN UNIDAD">FUMIGADO EN UNIDAD</option>
                 </select>
               </div>
               <div class="trasiego-modal-sep" aria-hidden="true"></div>
@@ -4145,7 +4157,9 @@
         if (constanciaTrasiegoFIngresoCd) {
           constanciaTrasiegoFIngresoCd.value = toInputDateValue(payload.f_ingreso_cd) || "";
         }
-        if (constanciaTrasiegoEstado) constanciaTrasiegoEstado.value = payload.estado || "";
+        if (constanciaTrasiegoEstado) {
+          constanciaTrasiegoEstado.value = normalizeTrasiegoEstado(payload.estado) || payload.estado || "";
+        }
         if (constanciaTrasiegoFFumigacion) {
           constanciaTrasiegoFFumigacion.value = toInputDateValue(payload.f_fumigacion) || "";
         }
@@ -5092,14 +5106,20 @@
 
       function isTrasiegoRowMeaningful(payload) {
         return !!(
+          payload.codigo ||
           payload.mp ||
           payload.lote ||
           payload.cantidad ||
+          payload.mp_cantidad ||
           payload.estado ||
           payload.p_final ||
           payload.f_ingreso ||
           payload.f_p ||
-          payload.f_v
+          payload.f_v ||
+          payload.mp_fp ||
+          payload.mp_fv ||
+          payload.ff_fl ||
+          payload.obs
         );
       }
 
@@ -5111,10 +5131,22 @@
 
       function readTrasiegoRow(tr) {
         const payload = {};
-        tr.querySelectorAll("input[data-field]").forEach((input) => {
+        tr.querySelectorAll("input[data-field], select[data-field]").forEach((input) => {
           payload[input.dataset.field] = input.value.trim();
         });
+        if (payload.codigo && !payload.mp) payload.mp = payload.codigo;
         return payload;
+      }
+
+      function normalizeTrasiegoEstado(value) {
+        const key = String(value || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+        if (key.includes("unidad")) return "FUMIGADO EN UNIDAD";
+        if (key.includes("sin")) return "SIN FUMIGAR";
+        if (key.includes("fumig")) return "FUMIGADO";
+        return "";
       }
 
       function updateTrasiegosCount() {
@@ -5152,7 +5184,7 @@
         const slice = sliceForPage(allTrasiegosCache, trasiegosPage);
         trasiegosPage = slice.page;
         trasiegosBody.innerHTML = "";
-        const items = slice.items.length ? slice.items : [{ fecha: formatToday() }];
+        const items = slice.items.length ? slice.items : [{}];
         if (!slice.items.length) {
           allTrasiegosCache = items;
         }
@@ -5263,7 +5295,7 @@
       async function deleteTrasiegoRow(tr) {
         const payload = readTrasiegoRow(tr);
         const rowId = tr.dataset.id;
-        const label = payload.mp || payload.lote || payload.p_final || (rowId ? `trasiego #${rowId}` : "este trasiego");
+        const label = payload.codigo || payload.mp || payload.lote || payload.p_final || (rowId ? `trasiego #${rowId}` : "este trasiego");
         confirmDelete(`el trasiego (${label})`, async () => {
           if (rowId) {
             try {
@@ -5353,38 +5385,59 @@
           tr.title = "Generado desde constancia";
         }
         tr.innerHTML = `
-          <td><input type="date" class="trasiego-date" data-field="fecha" title="Fecha" /></td>
-          <td><input type="text" data-field="mp" placeholder="M.P" /></td>
-          <td><input type="date" class="trasiego-date" data-field="f_ingreso" title="F. Ingreso" /></td>
-          <td><input type="text" data-field="estado" placeholder="Estado" /></td>
-          <td><input type="text" data-field="p_final" placeholder="Producto final" title="Ej: Arroz gran chalan extrab x 50kg" /></td>
+          <td><input type="text" data-field="codigo" placeholder="Código" /></td>
+          <td>
+            <div class="trasiego-dual-date">
+              <input type="text" data-field="mp_fp" placeholder="F.P" title="Fecha producción MP" />
+              <input type="date" data-picker="mp_fp" class="trasiego-date-picker" title="Calendario F.P" />
+            </div>
+          </td>
+          <td>
+            <div class="trasiego-dual-date">
+              <input type="text" data-field="mp_fv" placeholder="F.V" title="Fecha vencimiento MP" />
+              <input type="date" data-picker="mp_fv" class="trasiego-date-picker" title="Calendario F.V" />
+            </div>
+          </td>
+          <td>
+            <select data-field="estado" title="Estado">
+              <option value="">Seleccionar</option>
+              <option value="FUMIGADO">FUMIGADO</option>
+              <option value="SIN FUMIGAR">SIN FUMIGAR</option>
+              <option value="FUMIGADO EN UNIDAD">FUMIGADO EN UNIDAD</option>
+            </select>
+          </td>
+          <td><input type="text" data-field="ff_fl" placeholder="F.F / F.L" title="Fumigación / Liberación" /></td>
+          <td><input type="date" class="trasiego-date" data-field="f_ingreso" title="Fecha ingreso CD" /></td>
+          <td><input type="text" data-field="mp_cantidad" placeholder="Cant." /></td>
+          <td><input type="text" data-field="obs" placeholder="Obs." /></td>
           <td><input type="text" data-field="lote" placeholder="Lote" /></td>
           <td>
             <div class="trasiego-dual-date">
-              <input type="text" data-field="f_p" placeholder="May26" title="Fecha completa o solo mes/año" />
-              <input type="date" data-picker="f_p" class="trasiego-date-picker" title="Calendario (día/mes/año)" />
+              <input type="text" data-field="f_p" placeholder="F.P" title="Fecha producción PF" />
+              <input type="date" data-picker="f_p" class="trasiego-date-picker" title="Calendario F.P" />
             </div>
           </td>
           <td>
             <div class="trasiego-dual-date">
-              <input type="text" data-field="f_v" placeholder="Ene27" title="Fecha completa o solo mes/año" />
+              <input type="text" data-field="f_v" placeholder="F.V" title="Fecha vencimiento PF" />
               <input type="date" data-picker="f_v" class="trasiego-date-picker" title="Calendario F.V" />
             </div>
           </td>
-          <td><input type="text" data-field="cantidad" placeholder="Cantidad" /></td>
+          <td><input type="text" data-field="cantidad" placeholder="Cant." /></td>
           <td><button type="button" class="btn btn-danger btn-mini trasiego-delete" title="Eliminar fila">🗑</button></td>
         `;
-        const fields = ["fecha", "mp", "f_ingreso", "estado", "p_final", "lote", "cantidad"];
-        fields.forEach((field) => {
+        const textFields = ["codigo", "ff_fl", "mp_cantidad", "obs", "lote", "cantidad"];
+        textFields.forEach((field) => {
           const input = tr.querySelector(`[data-field="${field}"]`);
           if (!input) return;
-          if (input.type === "date") {
-            input.value = toInputDateValue(data[field]) || (field === "fecha" ? formatToday() : "");
-          } else {
-            input.value = data[field] || "";
-          }
+          if (field === "codigo") input.value = data.codigo || data.mp || "";
+          else input.value = data[field] || "";
         });
-        ["f_p", "f_v"].forEach((field) => {
+        const ingreso = tr.querySelector(`[data-field="f_ingreso"]`);
+        if (ingreso) ingreso.value = toInputDateValue(data.f_ingreso) || "";
+        const estado = tr.querySelector(`[data-field="estado"]`);
+        if (estado) estado.value = normalizeTrasiegoEstado(data.estado);
+        ["mp_fp", "mp_fv", "f_p", "f_v"].forEach((field) => {
           const textInput = tr.querySelector(`[data-field="${field}"]`);
           const picker = tr.querySelector(`[data-picker="${field}"]`);
           if (!textInput || !picker) return;
@@ -5392,7 +5445,7 @@
           syncTrasiegoDatePicker(textInput, picker);
           wireTrasiegoDualDate(tr, field);
         });
-        tr.querySelectorAll("input[data-field]").forEach((input) => {
+        tr.querySelectorAll("input[data-field], select[data-field]").forEach((input) => {
           input.addEventListener("change", () => scheduleTrasiegoSave(tr));
           input.addEventListener("blur", () => scheduleTrasiegoSave(tr));
         });
@@ -5408,11 +5461,11 @@
           const res = await fetch("/api/trasiegos");
           const data = await res.json();
           const rows = res.ok ? data.trasiegos || [] : [];
-          allTrasiegosCache = rows.length ? rows : [{ fecha: formatToday() }];
+          allTrasiegosCache = rows.length ? rows : [{}];
           trasiegosPage = 1;
           await renderTrasiegosPage();
         } catch (err) {
-          allTrasiegosCache = [{ fecha: formatToday() }];
+          allTrasiegosCache = [{}];
           trasiegosPage = 1;
           await renderTrasiegosPage();
         }
@@ -5425,12 +5478,12 @@
             return;
           }
           await flushVisibleTrasiegosSaves();
-          allTrasiegosCache.push({ fecha: formatToday() });
+          allTrasiegosCache.push({});
           trasiegosPage = Math.max(1, Math.ceil(allTrasiegosCache.length / listPageSize));
           await renderTrasiegosPage();
           const rows = [...trasiegosBody.querySelectorAll("tr")];
           const lastRow = rows[rows.length - 1];
-          lastRow?.querySelector('[data-field="fecha"]')?.focus();
+          lastRow?.querySelector('[data-field="codigo"]')?.focus();
         });
       }
 

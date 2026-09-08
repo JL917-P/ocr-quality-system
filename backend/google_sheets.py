@@ -775,6 +775,12 @@ def sync_trasiego_created(
     created_at: str,
     updated_at: str,
     owner_user_id: int | None = None,
+    codigo: str | None = None,
+    mp_fp: str | None = None,
+    mp_fv: str | None = None,
+    ff_fl: str | None = None,
+    mp_cantidad: str | None = None,
+    obs: str | None = None,
 ) -> bool:
     return sync_trasiego_upsert(
         trasiego_id,
@@ -790,6 +796,12 @@ def sync_trasiego_created(
         created_at,
         updated_at,
         owner_user_id=owner_user_id,
+        codigo=codigo,
+        mp_fp=mp_fp,
+        mp_fv=mp_fv,
+        ff_fl=ff_fl,
+        mp_cantidad=mp_cantidad,
+        obs=obs,
     )
 
 
@@ -807,6 +819,12 @@ def sync_trasiego_upsert(
     created_at: str,
     updated_at: str,
     owner_user_id: int | None = None,
+    codigo: str | None = None,
+    mp_fp: str | None = None,
+    mp_fv: str | None = None,
+    ff_fl: str | None = None,
+    mp_cantidad: str | None = None,
+    obs: str | None = None,
 ) -> bool:
     return upsert_row_by_id(
         TAB_TRASIEGOS,
@@ -814,6 +832,7 @@ def sync_trasiego_upsert(
         (
             trasiego_id, fecha, mp, f_ingreso, estado, p_final, lote,
             f_p, f_v, cantidad, created_at, updated_at, owner_user_id,
+            codigo, mp_fp, mp_fv, ff_fl, mp_cantidad, obs,
         ),
     )
 
@@ -887,7 +906,7 @@ HEADERS_CONSTANCIAS = (
 HEADERS_TRASIEGOS = (
     "id", "fecha", "mp", "f_ingreso", "estado", "p_final", "lote",
     "f_p", "f_v", "cantidad", "created_at", "updated_at",
-    "owner_user_id",
+    "owner_user_id", "codigo", "mp_fp", "mp_fv", "ff_fl", "mp_cantidad", "obs",
 )
 
 ENTITY_SPECS: list[tuple[str, str, Sequence[str], str]] = [
@@ -930,7 +949,7 @@ ENTITY_SPECS: list[tuple[str, str, Sequence[str], str]] = [
         HEADERS_TRASIEGOS,
         """
         SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad,
-               created_at, updated_at, owner_user_id
+               created_at, updated_at, owner_user_id, codigo, mp_fp, mp_fv, ff_fl, mp_cantidad, obs
         FROM trasiegos ORDER BY id
         """,
     ),
@@ -1018,7 +1037,7 @@ def entity_specs_for_owner(owner_user_id: int | None = None) -> list[tuple[str, 
             HEADERS_TRASIEGOS,
             f"""
         SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad,
-               created_at, updated_at, owner_user_id
+               created_at, updated_at, owner_user_id, codigo, mp_fp, mp_fv, ff_fl, mp_cantidad, obs
         FROM trasiegos WHERE owner_user_id = {oid} ORDER BY id
         """,
         ),

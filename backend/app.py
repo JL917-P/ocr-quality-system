@@ -269,6 +269,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE trasiegos ADD COLUMN p_final TEXT")
         if "constancia_id" not in trasiego_columns:
             conn.execute("ALTER TABLE trasiegos ADD COLUMN constancia_id INTEGER")
+        for extra_col in ("codigo", "mp_fp", "mp_fv", "ff_fl", "mp_cantidad", "obs"):
+            if extra_col not in trasiego_columns:
+                conn.execute(f"ALTER TABLE trasiegos ADD COLUMN {extra_col} TEXT")
+                trasiego_columns.add(extra_col)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS constancias (
@@ -2764,7 +2768,38 @@ def _trasiego_row_to_dict(row: tuple) -> dict:
     }
     if len(row) > 12:
         rec["constancia_id"] = row[12]
+    rec["codigo"] = ((row[13] or rec["mp"] or "") if len(row) > 13 else rec["mp"])
+    rec["mp_fp"] = (row[14] or "") if len(row) > 14 else ""
+    rec["mp_fv"] = (row[15] or "") if len(row) > 15 else ""
+    rec["ff_fl"] = (row[16] or "") if len(row) > 16 else ""
+    rec["mp_cantidad"] = (row[17] or "") if len(row) > 17 else ""
+    rec["obs"] = (row[18] or "") if len(row) > 18 else ""
     return rec
+
+
+def _trasiego_payload_values(payload: dict) -> dict[str, str | None]:
+    def _txt(key: str) -> str | None:
+        return (payload.get(key) or "").strip() or None
+
+    codigo = _txt("codigo")
+    mp = _txt("mp") or codigo
+    return {
+        "fecha": _txt("fecha"),
+        "mp": mp,
+        "f_ingreso": _txt("f_ingreso"),
+        "estado": _txt("estado"),
+        "p_final": _txt("p_final"),
+        "lote": _txt("lote"),
+        "f_p": _txt("f_p"),
+        "f_v": _txt("f_v"),
+        "cantidad": _txt("cantidad"),
+        "codigo": codigo or mp,
+        "mp_fp": _txt("mp_fp"),
+        "mp_fv": _txt("mp_fv"),
+        "ff_fl": _txt("ff_fl"),
+        "mp_cantidad": _txt("mp_cantidad"),
+        "obs": _txt("obs"),
+    }
 
 
 def _apply_constancia_trasiegos(
@@ -2843,7 +2878,8 @@ def list_trasiegos(
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             """
-            SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at, constancia_id
+            SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at, constancia_id,
+                   codigo, mp_fp, mp_fv, ff_fl, mp_cantidad, obs
             FROM trasiegos
             WHERE owner_user_id = ?
             ORDER BY id ASC
@@ -2857,7 +2893,8 @@ def list_trasiegos(
             if repair_trasiego_in_sqlite(conn, row_id):
                 row = conn.execute(
                     """
-                    SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at, constancia_id
+                    SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at, constancia_id,
+                           codigo, mp_fp, mp_fv, ff_fl, mp_cantidad, obs
                     FROM trasiegos WHERE id = ?
                     """,
                     (row_id,),
@@ -2875,23 +2912,20 @@ async def create_trasiego(
 ) -> JSONResponse:
     owner_id = _env_owner_from_request(request, user)
     now = datetime.now(timezone.utc).isoformat()
-    fecha = (payload.get("fecha") or "").strip() or None
-    mp = (payload.get("mp") or "").strip() or None
-    f_ingreso = (payload.get("f_ingreso") or "").strip() or None
-    estado = (payload.get("estado") or "").strip() or None
-    p_final = (payload.get("p_final") or "").strip() or None
-    lote = (payload.get("lote") or "").strip() or None
-    f_p = (payload.get("f_p") or "").strip() or None
-    f_v = (payload.get("f_v") or "").strip() or None
-    cantidad = (payload.get("cantidad") or "").strip() or None
+    fields = _trasiego_payload_values(payload)
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.execute(
             """
             INSERT INTO trasiegos (
-                fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at, owner_user_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at, owner_user_id,
+                codigo, mp_fp, mp_fv, ff_fl, mp_cantidad, obs
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, now, now, owner_id),
+            (
+                fields["fecha"], fields["mp"], fields["f_ingreso"], fields["estado"], fields["p_final"],
+                fields["lote"], fields["f_p"], fields["f_v"], fields["cantidad"], now, now, owner_id,
+                fields["codigo"], fields["mp_fp"], fields["mp_fv"], fields["ff_fl"], fields["mp_cantidad"], fields["obs"],
+            ),
         )
         conn.commit()
         row_id = cursor.lastrowid
@@ -2899,8 +2933,11 @@ async def create_trasiego(
         TAB_TRASIEGOS,
         row_id,
         lambda: sync_trasiego_created(
-            row_id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, now, now,
+            row_id, fields["fecha"], fields["mp"], fields["f_ingreso"], fields["estado"], fields["p_final"],
+            fields["lote"], fields["f_p"], fields["f_v"], fields["cantidad"], now, now,
             owner_user_id=owner_id,
+            codigo=fields["codigo"], mp_fp=fields["mp_fp"], mp_fv=fields["mp_fv"],
+            ff_fl=fields["ff_fl"], mp_cantidad=fields["mp_cantidad"], obs=fields["obs"],
         ),
     )
     return JSONResponse({"id": row_id})
@@ -2913,15 +2950,7 @@ async def update_trasiego(
     user: dict = Depends(require_permission("trasiegos_write")),
 ) -> JSONResponse:
     now = datetime.now(timezone.utc).isoformat()
-    fecha = (payload.get("fecha") or "").strip() or None
-    mp = (payload.get("mp") or "").strip() or None
-    f_ingreso = (payload.get("f_ingreso") or "").strip() or None
-    estado = (payload.get("estado") or "").strip() or None
-    p_final = (payload.get("p_final") or "").strip() or None
-    lote = (payload.get("lote") or "").strip() or None
-    f_p = (payload.get("f_p") or "").strip() or None
-    f_v = (payload.get("f_v") or "").strip() or None
-    cantidad = (payload.get("cantidad") or "").strip() or None
+    fields = _trasiego_payload_values(payload)
     with sqlite3.connect(DB_PATH) as conn:
         created_row = conn.execute(
             "SELECT created_at, owner_user_id FROM trasiegos WHERE id = ?",
@@ -2932,20 +2961,27 @@ async def update_trasiego(
         conn.execute(
             """
             UPDATE trasiegos
-            SET fecha = ?, mp = ?, f_ingreso = ?, estado = ?, p_final = ?, lote = ?, f_p = ?, f_v = ?, cantidad = ?, updated_at = ?
+            SET fecha = ?, mp = ?, f_ingreso = ?, estado = ?, p_final = ?, lote = ?, f_p = ?, f_v = ?, cantidad = ?, updated_at = ?,
+                codigo = ?, mp_fp = ?, mp_fv = ?, ff_fl = ?, mp_cantidad = ?, obs = ?
             WHERE id = ?
             """,
             (
-                fecha,
-                mp,
-                f_ingreso,
-                estado,
-                p_final,
-                lote,
-                f_p,
-                f_v,
-                cantidad,
+                fields["fecha"],
+                fields["mp"],
+                fields["f_ingreso"],
+                fields["estado"],
+                fields["p_final"],
+                fields["lote"],
+                fields["f_p"],
+                fields["f_v"],
+                fields["cantidad"],
                 now,
+                fields["codigo"],
+                fields["mp_fp"],
+                fields["mp_fv"],
+                fields["ff_fl"],
+                fields["mp_cantidad"],
+                fields["obs"],
                 trasiego_id,
             ),
         )
@@ -2957,18 +2993,24 @@ async def update_trasiego(
         trasiego_id,
         lambda: sync_trasiego_upsert(
             trasiego_id,
-            fecha,
-            mp,
-            f_ingreso,
-            estado,
-            p_final,
-            lote,
-            f_p,
-            f_v,
-            cantidad,
+            fields["fecha"],
+            fields["mp"],
+            fields["f_ingreso"],
+            fields["estado"],
+            fields["p_final"],
+            fields["lote"],
+            fields["f_p"],
+            fields["f_v"],
+            fields["cantidad"],
             created_at,
             now,
             owner_user_id=owner_for_sync,
+            codigo=fields["codigo"],
+            mp_fp=fields["mp_fp"],
+            mp_fv=fields["mp_fv"],
+            ff_fl=fields["ff_fl"],
+            mp_cantidad=fields["mp_cantidad"],
+            obs=fields["obs"],
         ),
     )
     return JSONResponse({"ok": True, "id": trasiego_id, "updated_at": now})

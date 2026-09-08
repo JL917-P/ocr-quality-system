@@ -4496,14 +4496,17 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   min-width: 0;
 }
 
-.trasiegos-table .col-tr-fecha { width: 9%; }
-.trasiegos-table .col-tr-mp { width: 7%; }
-.trasiegos-table .col-tr-fing { width: 9%; }
-.trasiegos-table .col-tr-estado { width: 8%; }
-.trasiegos-table .col-tr-pfinal { width: 20%; }
-.trasiegos-table .col-tr-lote { width: 8%; }
-.trasiegos-table .col-tr-fp { width: 12%; }
-.trasiegos-table .col-tr-fv { width: 12%; }
+.trasiegos-table .col-tr-codigo { width: 8%; }
+.trasiegos-table .col-tr-mpfp { width: 8%; }
+.trasiegos-table .col-tr-mpfv { width: 8%; }
+.trasiegos-table .col-tr-estado { width: 11%; }
+.trasiegos-table .col-tr-fffl { width: 8%; }
+.trasiegos-table .col-tr-fing { width: 8%; }
+.trasiegos-table .col-tr-mpcant { width: 7%; }
+.trasiegos-table .col-tr-obs { width: 8%; }
+.trasiegos-table .col-tr-lote { width: 7%; }
+.trasiegos-table .col-tr-fp { width: 8%; }
+.trasiegos-table .col-tr-fv { width: 8%; }
 .trasiegos-table .col-tr-cant { width: 7%; }
 .trasiegos-table .col-tr-del { width: 4%; }
 
@@ -4511,13 +4514,32 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   position: sticky;
   top: 0;
   z-index: 2;
-  background: linear-gradient(180deg, #e0f2fe, #bae6fd);
   color: #0c2340;
-  font-size: 11px;
+  font-size: 10px;
   white-space: nowrap;
   padding: 6px 3px;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: center;
+  border: 1px solid #94a3b8;
+}
+
+.trasiegos-table thead tr:first-child th {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.trasiegos-table th.th-mp {
+  background: #c8efc0;
+}
+
+.trasiegos-table th.th-pf {
+  background: #9fd6f5;
+}
+
+.trasiegos-table th.th-del {
+  background: #e2e8f0;
 }
 
 .trasiegos-table td {
@@ -4581,7 +4603,19 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   padding: 4px 2px;
 }
 
-.trasiegos-table input:focus {
+.trasiegos-table select {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 2px;
+  font-size: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  box-sizing: border-box;
+  background: #fff;
+}
+
+.trasiegos-table input:focus,
+.trasiegos-table select:focus {
   outline: none;
   border-color: #0e7490;
   box-shadow: 0 0 0 2px rgba(14, 116, 144, 0.15);
@@ -4805,7 +4839,7 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   }
 
   .trasiegos-table {
-    min-width: 880px;
+    min-width: 1100px;
   }
 
   .toolbar {
