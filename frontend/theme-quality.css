@@ -4497,16 +4497,16 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
 }
 
 .trasiegos-table .col-tr-codigo { width: 8%; }
-.trasiegos-table .col-tr-mpfp { width: 8%; }
-.trasiegos-table .col-tr-mpfv { width: 8%; }
+.trasiegos-table .col-tr-mpfp { width: 5%; }
+.trasiegos-table .col-tr-mpfv { width: 5%; }
 .trasiegos-table .col-tr-estado { width: 11%; }
-.trasiegos-table .col-tr-fffl { width: 8%; }
-.trasiegos-table .col-tr-fing { width: 8%; }
+.trasiegos-table .col-tr-fffl { width: 6%; }
+.trasiegos-table .col-tr-fing { width: 6%; }
 .trasiegos-table .col-tr-mpcant { width: 7%; }
-.trasiegos-table .col-tr-obs { width: 8%; }
+.trasiegos-table .col-tr-obs { width: 24%; }
 .trasiegos-table .col-tr-lote { width: 7%; }
-.trasiegos-table .col-tr-fp { width: 8%; }
-.trasiegos-table .col-tr-fv { width: 8%; }
+.trasiegos-table .col-tr-fp { width: 5%; }
+.trasiegos-table .col-tr-fv { width: 5%; }
 .trasiegos-table .col-tr-cant { width: 7%; }
 .trasiegos-table .col-tr-del { width: 4%; }
 
