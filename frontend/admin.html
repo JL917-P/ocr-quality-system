@@ -5386,18 +5386,8 @@
         }
         tr.innerHTML = `
           <td><input type="text" data-field="codigo" placeholder="Código" /></td>
-          <td>
-            <div class="trasiego-dual-date">
-              <input type="text" data-field="mp_fp" placeholder="F.P" title="Fecha producción MP" />
-              <input type="date" data-picker="mp_fp" class="trasiego-date-picker" title="Calendario F.P" />
-            </div>
-          </td>
-          <td>
-            <div class="trasiego-dual-date">
-              <input type="text" data-field="mp_fv" placeholder="F.V" title="Fecha vencimiento MP" />
-              <input type="date" data-picker="mp_fv" class="trasiego-date-picker" title="Calendario F.V" />
-            </div>
-          </td>
+          <td><input type="text" data-field="mp_fp" placeholder="F.P" title="Fecha producción MP" /></td>
+          <td><input type="text" data-field="mp_fv" placeholder="F.V" title="Fecha vencimiento MP" /></td>
           <td>
             <select data-field="estado" title="Estado">
               <option value="">Seleccionar</option>
@@ -5407,44 +5397,25 @@
             </select>
           </td>
           <td><input type="text" data-field="ff_fl" placeholder="F.F / F.L" title="Fumigación / Liberación" /></td>
-          <td><input type="date" class="trasiego-date" data-field="f_ingreso" title="Fecha ingreso CD" /></td>
+          <td><input type="text" data-field="f_ingreso" placeholder="Fecha IN CD" title="Fecha ingreso CD" /></td>
           <td><input type="text" data-field="mp_cantidad" placeholder="Cant." /></td>
           <td><input type="text" data-field="obs" placeholder="Obs." /></td>
           <td><input type="text" data-field="lote" placeholder="Lote" /></td>
-          <td>
-            <div class="trasiego-dual-date">
-              <input type="text" data-field="f_p" placeholder="F.P" title="Fecha producción PF" />
-              <input type="date" data-picker="f_p" class="trasiego-date-picker" title="Calendario F.P" />
-            </div>
-          </td>
-          <td>
-            <div class="trasiego-dual-date">
-              <input type="text" data-field="f_v" placeholder="F.V" title="Fecha vencimiento PF" />
-              <input type="date" data-picker="f_v" class="trasiego-date-picker" title="Calendario F.V" />
-            </div>
-          </td>
+          <td><input type="text" data-field="f_p" placeholder="F.P" title="Fecha producción PF" /></td>
+          <td><input type="text" data-field="f_v" placeholder="F.V" title="Fecha vencimiento PF" /></td>
           <td><input type="text" data-field="cantidad" placeholder="Cant." /></td>
           <td><button type="button" class="btn btn-danger btn-mini trasiego-delete" title="Eliminar fila">🗑</button></td>
         `;
-        const textFields = ["codigo", "ff_fl", "mp_cantidad", "obs", "lote", "cantidad"];
+        const textFields = ["codigo", "mp_fp", "mp_fv", "ff_fl", "f_ingreso", "mp_cantidad", "obs", "lote", "f_p", "f_v", "cantidad"];
         textFields.forEach((field) => {
           const input = tr.querySelector(`[data-field="${field}"]`);
           if (!input) return;
           if (field === "codigo") input.value = data.codigo || data.mp || "";
+          else if (field === "f_ingreso") input.value = formatIsoToDisplayDate(data.f_ingreso) || data.f_ingreso || "";
           else input.value = data[field] || "";
         });
-        const ingreso = tr.querySelector(`[data-field="f_ingreso"]`);
-        if (ingreso) ingreso.value = toInputDateValue(data.f_ingreso) || "";
         const estado = tr.querySelector(`[data-field="estado"]`);
         if (estado) estado.value = normalizeTrasiegoEstado(data.estado);
-        ["mp_fp", "mp_fv", "f_p", "f_v"].forEach((field) => {
-          const textInput = tr.querySelector(`[data-field="${field}"]`);
-          const picker = tr.querySelector(`[data-picker="${field}"]`);
-          if (!textInput || !picker) return;
-          textInput.value = data[field] || "";
-          syncTrasiegoDatePicker(textInput, picker);
-          wireTrasiegoDualDate(tr, field);
-        });
         tr.querySelectorAll("input[data-field], select[data-field]").forEach((input) => {
           input.addEventListener("change", () => scheduleTrasiegoSave(tr));
           input.addEventListener("blur", () => scheduleTrasiegoSave(tr));
