@@ -552,10 +552,33 @@
         },
       ];
 
-      function isAjilesPeruClient(clientName) {
+      function clientLooksLikeAjiles(clientName) {
+        const compact = String(clientName || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "");
+        return compact.includes("ajile");
+      }
+
+      function isAjilesPeruClient(clientName, clients) {
+        if (clientLooksLikeAjiles(clientName)) return true;
         const key = normalizeSearchText(clientName);
-        // Admin y operadores: cualquier cliente "Ajiles" (con o sin "Peru")
-        return key.includes("ajiles");
+        const compact = key.replace(/\s+/g, "");
+        const list = Array.isArray(clients) && clients.length ? clients : [];
+        if (!key || !list.length) return false;
+        const typedRuc = String(clientName || "").replace(/\D/g, "");
+        for (const item of list) {
+          const nameKey = normalizeSearchText(item?.name);
+          const nameCompact = nameKey.replace(/\s+/g, "");
+          const ruc = String(item?.ruc || "").replace(/\D/g, "");
+          const itemIsAjiles = nameCompact.includes("ajile") || ruc === "20612232203";
+          if (!itemIsAjiles) continue;
+          if (nameKey === key || nameCompact === compact) return true;
+          if (compact.length >= 8 && (nameCompact.includes(compact) || compact.includes(nameCompact))) return true;
+          if (typedRuc.length >= 8 && ruc && typedRuc === ruc) return true;
+        }
+        return false;
       }
 
       /** user01: clientes Makro → cabecera PDF de fumigación personalizada. */
@@ -1216,15 +1239,14 @@
         const fumigacion = formatDateMinusDays(fecha, 9);
         const liberacion = formatDateMinusDays(fecha, 2);
         const instalaciones = formatDateMinusDays(fecha, 0);
-        const showFumigacion = constancia.fumigacion !== 0 && constancia.fumigacion !== false;
-        const showCalidad = constancia.calidad !== 0 && constancia.calidad !== false;
-        const isAjilesClient = isAjilesPeruClient(cliente);
-        const showPersonalizado =
-          isAjilesClient &&
-          constancia.personalizado !== 0 &&
-          constancia.personalizado !== false;
+        const isAjilesClient = clientLooksLikeAjiles(cliente) || isAjilesPeruClient(cliente, clientList);
+        const showFumigacion =
+          isAjilesClient || (constancia.fumigacion !== 0 && constancia.fumigacion !== false);
+        const showCalidad =
+          isAjilesClient || (constancia.calidad !== 0 && constancia.calidad !== false);
+        const showPersonalizado = isAjilesClient;
         const user01Layout = isUser01ConstanciaLayout();
-        const isAjilesFumigacion = isAjilesPeruClient(cliente);
+        const isAjilesFumigacion = isAjilesClient;
         const isMakroFumigacion =
           user01Layout && isMakroClient(cliente) && !isAjilesFumigacion;
         const isTottusFumigacion =
@@ -2211,5 +2233,6 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
       }
       globalThis.buildConstanciaHtml = buildConstanciaHtml;
       globalThis.isCencosudCdLimaClient = isCencosudCdLimaClient;
+      globalThis.isAjilesPeruClient = isAjilesPeruClient;
 
 })();

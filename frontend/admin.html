@@ -22,7 +22,7 @@
       })();
     </script>
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home96" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=home97" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -395,7 +395,7 @@
                     <div class="ocr-command-checks">
                       <label><input id="constanciaFumigacion" type="checkbox" checked /> Fum.</label>
                       <label><input id="constanciaCalidad" type="checkbox" checked /> <span id="constanciaCalidadText">Cal.</span></label>
-                      <label id="constanciaPersonalizadoLabel" class="hidden"><input id="constanciaPersonalizado" type="checkbox" checked /> Pers.</label>
+                      <label id="constanciaPersonalizadoLabel" class="ocr-ajiles-only hidden"><input id="constanciaPersonalizado" type="checkbox" checked /> Pers.</label>
                     </div>
                   </div>
                   <div class="ocr-command-sep hidden" id="ocrTottusExtraSep" aria-hidden="true"></div>
@@ -1805,6 +1805,11 @@
         if (constanciaPersonalizado) {
           constanciaPersonalizado.checked = data.personalizado !== 0 && data.personalizado !== false;
         }
+        if (isActiveAjilesClient()) {
+          if (constanciaFumigacion) constanciaFumigacion.checked = true;
+          if (constanciaCalidad) constanciaCalidad.checked = true;
+          if (constanciaPersonalizado) constanciaPersonalizado.checked = true;
+        }
       }
 
       function isOcrHeaderReadyToCollapse() {
@@ -1925,10 +1930,28 @@
         });
       }
 
+      function clientLooksLikeAjiles(clientName) {
+        const compact = String(clientName || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "");
+        return compact.includes("ajile");
+      }
+
       function isActiveAjilesClient() {
-        return typeof isAjilesPeruClient === "function"
-          ? isAjilesPeruClient(constanciaClienteInput?.value || "")
-          : false;
+        const typed = constanciaClienteInput?.value || "";
+        if (clientLooksLikeAjiles(typed)) return true;
+        const list = typeof allClients !== "undefined" && Array.isArray(allClients) ? allClients : [];
+        const key = (typed || "").trim().toLowerCase();
+        if (!key || !list.length) return false;
+        return list.some((client) => {
+          const name = (client?.name || "").trim();
+          if (!name) return false;
+          if (!clientLooksLikeAjiles(name)) return false;
+          const nameLow = name.toLowerCase();
+          return nameLow === key || (key.length >= 5 && (nameLow.includes(key) || key.includes(nameLow)));
+        });
       }
 
       function isActiveTottusClient() {
@@ -2317,18 +2340,21 @@
         if (headCom) headCom.innerHTML = headHtml;
       }
 
+      let ajilesTripleArmed = false;
+
       function syncAjilesPersonalizadoVisibility() {
         const show = isActiveAjilesClient();
         if (constanciaPersonalizadoLabel) {
           constanciaPersonalizadoLabel.classList.toggle("hidden", !show);
         }
-        // Ajiles (admin y operadores): Fum. + Cal. + Pers. disponibles.
-        // En constancia nueva, al elegir Ajiles dejar los tres marcados.
-        if (show && !currentConstanciaId) {
+        // Ajiles (admin y operadores): Fum. + Cal. + Pers. (3 hojas) en todos los Ajiles registrados.
+        if (show && !ajilesTripleArmed) {
           if (constanciaFumigacion) constanciaFumigacion.checked = true;
           if (constanciaCalidad) constanciaCalidad.checked = true;
           if (constanciaPersonalizado) constanciaPersonalizado.checked = true;
+          ajilesTripleArmed = true;
         }
+        if (!show) ajilesTripleArmed = false;
       }
 
       function syncAjilesTransportVisibility() {
@@ -3059,6 +3085,10 @@
         onBeforeShow: () => {
           transportFieldAutocomplete.hide();
           hideProductAutocomplete();
+        },
+        onSelect: () => {
+          applyOcrLayoutForClient({ force: true });
+          syncAjilesPersonalizadoVisibility();
         },
       });
 
@@ -5898,6 +5928,7 @@
         constanciaFumigacion.checked = true;
         constanciaCalidad.checked = true;
         if (constanciaPersonalizado) constanciaPersonalizado.checked = true;
+        ajilesTripleArmed = false;
         clearTottusExtraFields();
         clearCencosudComercialFields();
         cencosudDualSynced = false;
@@ -6033,7 +6064,7 @@
               transport_plate: intl.transport_plate || constanciaTransporteInput.value.trim(),
               fumigacion: constanciaFumigacion.checked,
               calidad: constanciaCalidad.checked,
-              personalizado: isActiveAjilesClient() && constanciaPersonalizado?.checked,
+              personalizado: isActiveAjilesClient(),
               mobile_number: intl.mobile_number || "",
               pallets: intl.pallets || "",
               items: collectConstanciaItemsFromBody(productsBodyIntl),
@@ -6073,7 +6104,7 @@
             transport_plate: constanciaTransporteInput.value.trim(),
             fumigacion: constanciaFumigacion.checked,
             calidad: constanciaCalidad.checked,
-            personalizado: isActiveAjilesClient() && constanciaPersonalizado?.checked,
+            personalizado: isActiveAjilesClient(),
             mobile_number: mobileToPreview,
             pallets: palletsToPreview,
             items,
@@ -6225,7 +6256,7 @@
           transport_plate: constanciaTransporteInput.value.trim(),
           fumigacion: constanciaFumigacion.checked,
           calidad: constanciaCalidad.checked,
-          personalizado: isActiveAjilesClient() && constanciaPersonalizado?.checked,
+          personalizado: isActiveAjilesClient(),
           mobile_number: mobileToSave,
           pallets: palletsToSave,
           status,
@@ -6322,6 +6353,7 @@
         constanciaClienteInput.value = data.client_name || "";
         constanciaTransporteInput.value = data.transport_plate || "";
         applyConstanciaTypeCheckboxesFromData(data);
+        ajilesTripleArmed = false;
         const mobileSaved = (data.mobile_number || data.mobile || "").toString();
         const palletsSaved = (data.pallets || data.palets || "").toString();
         applyOcrLayoutForClient._lastMode = null;
@@ -8341,10 +8373,26 @@
         },
       ];
 
-      function isAjilesPeruClient(clientName) {
+      function isAjilesPeruClient(clientName, clients) {
+        if (clientLooksLikeAjiles(clientName)) return true;
         const key = normalizeSearchText(clientName);
-        // Admin y operadores: cualquier cliente "Ajiles" (con o sin "Peru")
-        return key.includes("ajiles");
+        const compact = key.replace(/\s+/g, "");
+        const list = Array.isArray(clients) && clients.length
+          ? clients
+          : (typeof allClients !== "undefined" && Array.isArray(allClients) ? allClients : []);
+        if (!key || !list.length) return false;
+        const typedRuc = String(clientName || "").replace(/\D/g, "");
+        for (const item of list) {
+          const nameKey = normalizeSearchText(item?.name);
+          const nameCompact = nameKey.replace(/\s+/g, "");
+          const ruc = String(item?.ruc || "").replace(/\D/g, "");
+          const itemIsAjiles = nameCompact.includes("ajile") || ruc === "20612232203";
+          if (!itemIsAjiles) continue;
+          if (nameKey === key || nameCompact === compact) return true;
+          if (compact.length >= 8 && (nameCompact.includes(compact) || compact.includes(nameCompact))) return true;
+          if (typedRuc.length >= 8 && ruc && typedRuc === ruc) return true;
+        }
+        return false;
       }
 
       /** user01: clientes Makro → cabecera PDF de fumigación personalizada. */
@@ -8986,6 +9034,10 @@
         const fecha = constancia.issue_date || "";
         const cliente = constancia.client_name || "";
         const clientList = Array.isArray(clients) ? clients : (Array.isArray(allClients) ? allClients : []);
+        const isAjilesClient =
+          (typeof clientLooksLikeAjiles === "function" && clientLooksLikeAjiles(cliente)) ||
+          (typeof isAjilesPeruClient === "function" && isAjilesPeruClient(cliente, clientList)) ||
+          /ajile/i.test(String(cliente).replace(/[^a-z0-9]/gi, ""));
         const clientKey = normalizeSearchText(cliente);
         const clientMatch = clientList.find((item) => normalizeSearchText(item.name) === clientKey);
         const clientRuc = (clientMatch?.ruc || "").toString().trim();
@@ -9005,15 +9057,13 @@
         const fumigacion = formatDateMinusDays(fecha, 9);
         const liberacion = formatDateMinusDays(fecha, 2);
         const instalaciones = formatDateMinusDays(fecha, 0);
-        const showFumigacion = constancia.fumigacion !== 0 && constancia.fumigacion !== false;
-        const showCalidad = constancia.calidad !== 0 && constancia.calidad !== false;
-        const isAjilesClient = isAjilesPeruClient(cliente);
-        const showPersonalizado =
-          isAjilesClient &&
-          constancia.personalizado !== 0 &&
-          constancia.personalizado !== false;
+        const showFumigacion =
+          isAjilesClient || (constancia.fumigacion !== 0 && constancia.fumigacion !== false);
+        const showCalidad =
+          isAjilesClient || (constancia.calidad !== 0 && constancia.calidad !== false);
+        const showPersonalizado = isAjilesClient;
         const user01Layout = isUser01ConstanciaLayout();
-        const isAjilesFumigacion = isAjilesPeruClient(cliente);
+        const isAjilesFumigacion = isAjilesClient;
         const isMakroFumigacion =
           user01Layout && isMakroClient(cliente) && !isAjilesFumigacion;
         const isTottusFumigacion =

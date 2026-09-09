@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -265,6 +266,17 @@ def normalize_items_for_save(
     return normalized
 
 
+def is_ajiles_client_name(name: Any) -> bool:
+    """True si el cliente es Ajiles (cualquier sucursal/razón social registrada)."""
+    raw = _str(name).lower()
+    if not raw:
+        return False
+    normalized = unicodedata.normalize("NFD", raw)
+    stripped = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    compact = re.sub(r"[^a-z0-9]+", "", stripped)
+    return "ajile" in compact
+
+
 def constancia_header_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
     mobile = _str(payload.get("mobile_number") or payload.get("mobile")) or None
     pallets = _str(payload.get("pallets") or payload.get("palets")) or None
@@ -272,14 +284,23 @@ def constancia_header_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
         mobile = mobile.upper()[:2]
     if pallets:
         pallets = pallets[:2]
+    client_name = _str(payload.get("client_name")) or None
+    fumigacion = 1 if payload.get("fumigacion", True) else 0
+    calidad = 1 if payload.get("calidad", True) else 0
+    personalizado = 1 if payload.get("personalizado", False) else 0
+    # Ajiles: siempre Fum. + Cal. + Pers. (hoja 3A).
+    if is_ajiles_client_name(client_name):
+        fumigacion = 1
+        calidad = 1
+        personalizado = 1
     return {
         "number": _str(payload.get("number")) or None,
         "issue_date": _str(payload.get("issue_date")) or None,
-        "client_name": _str(payload.get("client_name")) or None,
+        "client_name": client_name,
         "transport_plate": _str(payload.get("transport_plate")) or None,
-        "fumigacion": 1 if payload.get("fumigacion", True) else 0,
-        "calidad": 1 if payload.get("calidad", True) else 0,
-        "personalizado": 1 if payload.get("personalizado", False) else 0,
+        "fumigacion": fumigacion,
+        "calidad": calidad,
+        "personalizado": personalizado,
         "mobile_number": mobile,
         "pallets": pallets,
         "status": payload.get("status") or "confirmada",

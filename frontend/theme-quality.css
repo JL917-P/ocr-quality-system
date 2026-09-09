@@ -2073,6 +2073,7 @@ th {
 
 #section-ocr .ocr-header-form.ocr-command-bar {
   max-width: min(98%, 1180px);
+  flex-wrap: wrap;
   padding: 8px 12px 8px 8px;
   border-radius: 14px;
   border: 1px solid #cbd5e1;
@@ -2378,6 +2379,7 @@ th {
   align-items: center;
   gap: 8px;
   white-space: nowrap;
+  flex-wrap: wrap;
 }
 
 #section-ocr .ocr-command-checks label {

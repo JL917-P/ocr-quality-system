@@ -332,6 +332,24 @@ def init_db() -> None:
                 "INSERT INTO schema_patches (id, applied_at) VALUES (?, ?)",
                 ("ajiles_triple_types_v1", datetime.now(timezone.utc).isoformat()),
             )
+        patch_row_v2 = conn.execute(
+            "SELECT 1 FROM schema_patches WHERE id = ?",
+            ("ajiles_triple_types_v2",),
+        ).fetchone()
+        if not patch_row_v2:
+            conn.execute(
+                """
+                UPDATE constancias
+                SET personalizado = 1,
+                    calidad = 1,
+                    fumigacion = 1
+                WHERE lower(replace(replace(client_name, 'Á', 'A'), 'á', 'a')) LIKE '%ajile%'
+                """
+            )
+            conn.execute(
+                "INSERT INTO schema_patches (id, applied_at) VALUES (?, ?)",
+                ("ajiles_triple_types_v2", datetime.now(timezone.utc).isoformat()),
+            )
         if "mobile_number" not in columns:
             conn.execute("ALTER TABLE constancias ADD COLUMN mobile_number TEXT")
         if "pallets" not in columns:
@@ -2275,9 +2293,11 @@ def admin_page() -> HTMLResponse:
 @app.get("/constancia-print", response_class=HTMLResponse)
 def constancia_print_page() -> HTMLResponse:
     builder_v = _constancia_builder_version()
-    html = _read_frontend_html("constancia-print.html").replace(
-        "/static/constancia-builder.js?v=print1",
+    html = re.sub(
+        r"/static/constancia-builder\.js\?v=[^\"']+",
         f"/static/constancia-builder.js?v={builder_v}",
+        _read_frontend_html("constancia-print.html"),
+        count=1,
     )
     return HTMLResponse(
         content=html,
@@ -3044,12 +3064,9 @@ async def create_constancia(
             status_code=403,
             detail="No tienes permiso para confirmar constancias. Usa Reserva o pide el permiso al administrador.",
         )
-    fumigacion = 1 if payload.get("fumigacion", True) else 0
-    calidad = 1 if payload.get("calidad", True) else 0
-    personalizado = 1 if payload.get("personalizado", False) else 0
-    if fumigacion == 0 and calidad == 0 and personalizado == 0:
-        raise HTTPException(status_code=400, detail="Selecciona al menos una constancia.")
     header = constancia_header_snapshot(payload)
+    if header["fumigacion"] == 0 and header["calidad"] == 0 and header["personalizado"] == 0:
+        raise HTTPException(status_code=400, detail="Selecciona al menos una constancia.")
     cencosud_dual = normalize_cencosud_dual(payload.get("cencosud_dual"))
     actor = _actor_label(user)
     created_at = datetime.now(timezone.utc).isoformat()
@@ -3573,12 +3590,9 @@ async def update_constancia(
                 status_code=403,
                 detail="No tienes permiso para confirmar constancias.",
             )
-    fumigacion = 1 if payload.get("fumigacion", True) else 0
-    calidad = 1 if payload.get("calidad", True) else 0
-    personalizado = 1 if payload.get("personalizado", False) else 0
-    if fumigacion == 0 and calidad == 0 and personalizado == 0:
-        raise HTTPException(status_code=400, detail="Selecciona al menos una constancia.")
     header = constancia_header_snapshot(payload)
+    if header["fumigacion"] == 0 and header["calidad"] == 0 and header["personalizado"] == 0:
+        raise HTTPException(status_code=400, detail="Selecciona al menos una constancia.")
     usuario = _actor_label(user)
     with sqlite3.connect(DB_PATH) as conn:
         _require_owned_row(conn, "constancias", constancia_id, owner_id)
