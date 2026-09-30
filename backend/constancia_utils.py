@@ -525,6 +525,7 @@ def find_items_json_for_constancia(
     number: str,
     client_name: str,
     exclude_id: Optional[int] = None,
+    owner_user_id: int | None = None,
 ) -> Optional[str]:
     num = _str(number)
     client = _str(client_name).lower()
@@ -538,6 +539,9 @@ def find_items_json_for_constancia(
           AND trim(items_json) NOT IN ('', '[]')
     """
     params: list[Any] = [num, client]
+    if owner_user_id is not None:
+        sql += " AND owner_user_id = ?"
+        params.append(int(owner_user_id))
     if exclude_id is not None:
         sql += " AND id != ?"
         params.append(exclude_id)

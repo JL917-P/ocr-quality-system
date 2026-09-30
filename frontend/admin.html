@@ -1720,6 +1720,7 @@
       let traceModalFilteredRows = [];
       let traceModalPairOptions = [];
       let allConstancias = [];
+      let traceSourceRows = [];
       let filteredConstancias = [];
       let selectedConstancias = new Set();
       let currentConstanciaStatus = "confirmada";
@@ -2347,7 +2348,7 @@
         if (constanciaPersonalizadoLabel) {
           constanciaPersonalizadoLabel.classList.toggle("hidden", !show);
         }
-        // Ajiles (admin y operadores): Fum. + Cal. + Pers. (3 hojas) en todos los Ajiles registrados.
+        // Ajiles: Fum. + Cal. + Pers. (3 hojas) en admin y en todos los operadores.
         if (show && !ajilesTripleArmed) {
           if (constanciaFumigacion) constanciaFumigacion.checked = true;
           if (constanciaCalidad) constanciaCalidad.checked = true;
@@ -5066,10 +5067,7 @@
           loadTrasiegos();
         }
         if (targetId === "section-trazabilidad") {
-          refreshTraceModalLotDatalist();
-          refreshTraceMonthOptions();
-          updateTraceSearchPlaceholder();
-          applyTraceFilters();
+          void loadTraceSource();
         }
         if (targetId === "section-constancias") {
           requestAnimationFrame(() => paginateConstancias());
@@ -5454,22 +5452,72 @@
         return tr;
       }
 
-      async function loadTrasiegos() {
+      function hasDirtyTrasiegoRows() {
+        if (!trasiegosBody) return false;
+        return [...trasiegosBody.querySelectorAll("tr")].some((tr) => tr.dataset.dirty === "1");
+      }
+
+      function trasiegosFingerprint(rows) {
+        return (rows || [])
+          .map((row) =>
+            [
+              row.id || "",
+              row.updated_at || "",
+              row.codigo || row.mp || "",
+              row.lote || "",
+              row.cantidad || "",
+              row.estado || "",
+              row.obs || "",
+            ].join("|")
+          )
+          .join(";;");
+      }
+
+      async function loadTrasiegos(options = {}) {
         if (!trasiegosBody) return;
-        trasiegosSaveTimers.forEach((timer) => clearTimeout(timer));
-        trasiegosSaveTimers.clear();
+        const keepPage = !!options.keepPage;
+        const silent = !!options.silent;
+        if (silent && hasDirtyTrasiegoRows()) return;
+        if (silent && trasiegosBody) {
+          const hasUnsavedNew = [...trasiegosBody.querySelectorAll("tr")].some((tr) => !tr.dataset.id);
+          const hasSaved = allTrasiegosCache.some((row) => row && row.id);
+          if (hasUnsavedNew && hasSaved) return;
+        }
+        if (!silent) {
+          trasiegosSaveTimers.forEach((timer) => clearTimeout(timer));
+          trasiegosSaveTimers.clear();
+        }
         try {
           const res = await fetch("/api/trasiegos");
           const data = await res.json();
           const rows = res.ok ? data.trasiegos || [] : [];
-          allTrasiegosCache = rows.length ? rows : [{}];
-          trasiegosPage = 1;
+          const next = rows.length ? rows : [{}];
+          if (silent && trasiegosFingerprint(next) === trasiegosFingerprint(allTrasiegosCache)) {
+            return;
+          }
+          const prevPage = trasiegosPage;
+          allTrasiegosCache = next;
+          trasiegosPage = keepPage ? prevPage : 1;
           await renderTrasiegosPage();
         } catch (err) {
+          if (silent) return;
           allTrasiegosCache = [{}];
           trasiegosPage = 1;
           await renderTrasiegosPage();
         }
+      }
+
+      if (!window._qcTrasiegosLiveSyncBound) {
+        window._qcTrasiegosLiveSyncBound = true;
+        setInterval(() => {
+          if (currentSectionId !== "section-trasiegos") return;
+          if (typeof document !== "undefined" && document.hidden) return;
+          void loadTrasiegos({ keepPage: true, silent: true });
+        }, 8000);
+        window.addEventListener("focus", () => {
+          if (currentSectionId !== "section-trasiegos") return;
+          void loadTrasiegos({ keepPage: true, silent: true });
+        });
       }
 
       if (addTrasiegoRowBtn) {
@@ -6062,8 +6110,8 @@
               issue_date: intl.issue_date || constanciaFecha.value.trim(),
               client_name: intl.client_name || constanciaClienteInput.value.trim(),
               transport_plate: intl.transport_plate || constanciaTransporteInput.value.trim(),
-              fumigacion: constanciaFumigacion.checked,
-              calidad: constanciaCalidad.checked,
+              fumigacion: isActiveAjilesClient() ? true : constanciaFumigacion.checked,
+              calidad: isActiveAjilesClient() ? true : constanciaCalidad.checked,
               personalizado: isActiveAjilesClient(),
               mobile_number: intl.mobile_number || "",
               pallets: intl.pallets || "",
@@ -6102,8 +6150,8 @@
             issue_date: constanciaFecha.value.trim(),
             client_name: clientName,
             transport_plate: constanciaTransporteInput.value.trim(),
-            fumigacion: constanciaFumigacion.checked,
-            calidad: constanciaCalidad.checked,
+            fumigacion: isActiveAjilesClient() ? true : constanciaFumigacion.checked,
+            calidad: isActiveAjilesClient() ? true : constanciaCalidad.checked,
             personalizado: isActiveAjilesClient(),
             mobile_number: mobileToPreview,
             pallets: palletsToPreview,
@@ -6254,8 +6302,8 @@
           issue_date: constanciaFecha.value.trim(),
           client_name: constanciaClienteInput.value.trim(),
           transport_plate: constanciaTransporteInput.value.trim(),
-          fumigacion: constanciaFumigacion.checked,
-          calidad: constanciaCalidad.checked,
+          fumigacion: isActiveAjilesClient() ? true : constanciaFumigacion.checked,
+          calidad: isActiveAjilesClient() ? true : constanciaCalidad.checked,
           personalizado: isActiveAjilesClient(),
           mobile_number: mobileToSave,
           pallets: palletsToSave,
@@ -6677,24 +6725,22 @@
       }
 
       function collectTraceRows() {
-        const rows = [];
-        (allConstancias || []).forEach((constancia) => {
-          const fecha = constancia.issue_date || "";
-          const cliente = constancia.client_name || "";
-          const items = Array.isArray(constancia.items) ? constancia.items : [];
-          items.forEach((item) => {
-            rows.push({
-              fecha,
-              cliente,
-              product: itemSnapshotField(item, "product_name_snapshot", "product"),
-              lot: itemSnapshotField(item, "lote_snapshot", "lot"),
-              production: itemSnapshotField(item, "production_date_snapshot", "production_text"),
-              expiration: itemSnapshotField(item, "expiration_date_snapshot", "expiration_text"),
-              quantity: item.quantity ?? "",
-            });
-          });
-        });
-        return rows;
+        return traceSourceRows || [];
+      }
+
+      async function loadTraceSource() {
+        try {
+          const res = await fetch("/api/trazabilidad/filas");
+          const data = await res.json();
+          if (!res.ok) return;
+          traceSourceRows = Array.isArray(data.rows) ? data.rows : [];
+        } catch (err) {
+          return;
+        }
+        refreshTraceModalLotDatalist();
+        refreshTraceMonthOptions();
+        updateTraceSearchPlaceholder();
+        applyTraceFilters();
       }
 
       function traceSelectionKey(lote, producto) {
@@ -7317,11 +7363,8 @@
         if (!res.ok) return;
         allConstancias = sortConstanciasByIssueDate(data.constancias || []);
         applyConstanciaFilters();
-        refreshTraceModalLotDatalist();
-        refreshTraceMonthOptions();
-        updateTraceSearchPlaceholder();
-        applyTraceFilters();
         renderHomeDashboard();
+        void loadTraceSource();
       }
 
       function sliceForPage(list, page, size = listPageSize) {
@@ -8421,10 +8464,8 @@
         const key = normalizeSearchText(productName);
         if (!key) return "";
         const keyCompact = key.replace(/\s+/g, "");
-        const map =
-          typeof isUser01ConstanciaLayout === "function" && isUser01ConstanciaLayout()
-            ? AJILES_PERU_SKU_MAP_USER01
-            : AJILES_PERU_SKU_MAP_ADMIN;
+        // Mismos SKU para admin, user01 y el resto de operadores.
+        const map = [...AJILES_PERU_SKU_MAP_ADMIN, ...AJILES_PERU_SKU_MAP_USER01];
         for (const entry of map) {
           for (const pattern of entry.patterns) {
             const normalizedPattern = normalizeSearchText(pattern);
@@ -9034,10 +9075,13 @@
         const fecha = constancia.issue_date || "";
         const cliente = constancia.client_name || "";
         const clientList = Array.isArray(clients) ? clients : (Array.isArray(allClients) ? allClients : []);
+        const flaggedPersonalizado =
+          constancia.personalizado !== 0 && constancia.personalizado !== false;
         const isAjilesClient =
           (typeof clientLooksLikeAjiles === "function" && clientLooksLikeAjiles(cliente)) ||
           (typeof isAjilesPeruClient === "function" && isAjilesPeruClient(cliente, clientList)) ||
-          /ajile/i.test(String(cliente).replace(/[^a-z0-9]/gi, ""));
+          /ajile/i.test(String(cliente).replace(/[^a-z0-9]/gi, "")) ||
+          flaggedPersonalizado;
         const clientKey = normalizeSearchText(cliente);
         const clientMatch = clientList.find((item) => normalizeSearchText(item.name) === clientKey);
         const clientRuc = (clientMatch?.ruc || "").toString().trim();
@@ -9061,7 +9105,7 @@
           isAjilesClient || (constancia.fumigacion !== 0 && constancia.fumigacion !== false);
         const showCalidad =
           isAjilesClient || (constancia.calidad !== 0 && constancia.calidad !== false);
-        const showPersonalizado = isAjilesClient;
+        const showPersonalizado = isAjilesClient || flaggedPersonalizado;
         const user01Layout = isUser01ConstanciaLayout();
         const isAjilesFumigacion = isAjilesClient;
         const isMakroFumigacion =

@@ -43,6 +43,9 @@ from tenant_env import (
     reclaim_operator_constancias_to_admin_once,
     resolve_env_owner_id,
     row_belongs_to_owner,
+    trace_visible_owner_ids,
+    trasiego_row_visible_to_owner,
+    trasiego_visible_owner_ids,
 )
 from app_config import ADMIN_PATH, ADMIN_URL, app_config_payload
 from auth_service import (
@@ -77,6 +80,7 @@ from constancia_utils import (
     VALID_STATUSES,
     consolidate_constancia_duplicates,
     constancia_header_snapshot,
+    is_ajiles_client_name,
     dedupe_constancia_rows,
     sort_constancia_rows_by_issue_date,
     encode_items_json,
@@ -349,6 +353,25 @@ def init_db() -> None:
             conn.execute(
                 "INSERT INTO schema_patches (id, applied_at) VALUES (?, ?)",
                 ("ajiles_triple_types_v2", datetime.now(timezone.utc).isoformat()),
+            )
+        # Todos los owners (admin + operadores): Fum. + Cal. + Pers. en Ajiles.
+        patch_row_v3 = conn.execute(
+            "SELECT 1 FROM schema_patches WHERE id = ?",
+            ("ajiles_triple_types_all_users_v3",),
+        ).fetchone()
+        if not patch_row_v3:
+            conn.execute(
+                """
+                UPDATE constancias
+                SET personalizado = 1,
+                    calidad = 1,
+                    fumigacion = 1
+                WHERE lower(replace(replace(replace(replace(client_name, 'Á', 'A'), 'á', 'a'), 'Í', 'I'), 'í', 'i')) LIKE '%ajile%'
+                """
+            )
+            conn.execute(
+                "INSERT INTO schema_patches (id, applied_at) VALUES (?, ?)",
+                ("ajiles_triple_types_all_users_v3", datetime.now(timezone.utc).isoformat()),
             )
         if "mobile_number" not in columns:
             conn.execute("ALTER TABLE constancias ADD COLUMN mobile_number TEXT")
@@ -2891,21 +2914,23 @@ def _queue_trasiego_sheet_sync(new_ids: list[int], deleted_ids: list[int]) -> No
 @app.get("/api/trasiegos")
 def list_trasiegos(
     request: Request,
-    limit: int = 500,
+    limit: int = 5000,
     user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
+        visible_ids = trasiego_visible_owner_ids(conn, owner_id)
+        placeholders = ",".join("?" * len(visible_ids))
         rows = conn.execute(
-            """
+            f"""
             SELECT id, fecha, mp, f_ingreso, estado, p_final, lote, f_p, f_v, cantidad, created_at, updated_at, constancia_id,
                    codigo, mp_fp, mp_fv, ff_fl, mp_cantidad, obs
             FROM trasiegos
-            WHERE owner_user_id = ?
+            WHERE owner_user_id IN ({placeholders})
             ORDER BY id ASC
             LIMIT ?
             """,
-            (owner_id, limit),
+            (*visible_ids, limit),
         ).fetchall()
         out: list[dict] = []
         for row in rows:
@@ -2965,13 +2990,17 @@ async def create_trasiego(
 
 @app.put("/api/trasiegos/{trasiego_id}")
 async def update_trasiego(
+    request: Request,
     trasiego_id: int,
     payload: dict,
     user: dict = Depends(require_permission("trasiegos_write")),
 ) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
     now = datetime.now(timezone.utc).isoformat()
     fields = _trasiego_payload_values(payload)
     with sqlite3.connect(DB_PATH) as conn:
+        if not trasiego_row_visible_to_owner(conn, trasiego_id, owner_id):
+            raise HTTPException(status_code=404, detail="Trasiego no encontrado.")
         created_row = conn.execute(
             "SELECT created_at, owner_user_id FROM trasiegos WHERE id = ?",
             (trasiego_id,),
@@ -3038,9 +3067,14 @@ async def update_trasiego(
 
 @app.delete("/api/trasiegos/{trasiego_id}")
 def delete_trasiego(
+    request: Request,
     trasiego_id: int,
     user: dict = Depends(require_permission("trasiegos_write")),
 ) -> JSONResponse:
+    owner_id = _env_owner_from_request(request, user)
+    with sqlite3.connect(DB_PATH) as conn:
+        if not trasiego_row_visible_to_owner(conn, trasiego_id, owner_id):
+            raise HTTPException(status_code=404, detail="Trasiego no encontrado.")
     _audit(user, "trasiego_delete", "trasiego", trasiego_id)
     _delete_with_sheets_sync("trasiegos", TAB_TRASIEGOS, HEADERS_TRASIEGOS, trasiego_id)
     return JSONResponse({"ok": True})
@@ -3217,28 +3251,51 @@ def list_constancias(
     )
 
 
-@app.get("/api/trazabilidad/lotes")
-def list_trace_lots() -> JSONResponse:
+def _trace_rows_for_request(request: Request, user: dict) -> list[dict]:
+    owner_id = _env_owner_from_request(request, user)
     with sqlite3.connect(DB_PATH) as conn:
-        lots = unique_lots(load_trace_rows(conn))
+        visible_ids = trace_visible_owner_ids(conn, owner_id)
+        return load_trace_rows(conn, visible_ids)
+
+
+@app.get("/api/trazabilidad/filas")
+def list_trace_rows(
+    request: Request,
+    user: dict = Depends(require_permission("section_trazabilidad")),
+) -> JSONResponse:
+    """Filas de trazabilidad: admin y user02 ven ambos entornos; el resto, solo el suyo."""
+    return JSONResponse({"rows": _trace_rows_for_request(request, user)})
+
+
+@app.get("/api/trazabilidad/lotes")
+def list_trace_lots(
+    request: Request,
+    user: dict = Depends(require_permission("section_trazabilidad")),
+) -> JSONResponse:
+    lots = unique_lots(_trace_rows_for_request(request, user))
     return JSONResponse({"lotes": lots})
 
 
 @app.get("/api/trazabilidad/productos")
-def list_trace_products_for_lot(lote: str = Query(..., min_length=1)) -> JSONResponse:
-    with sqlite3.connect(DB_PATH) as conn:
-        products = products_for_lot(load_trace_rows(conn), lote)
+def list_trace_products_for_lot(
+    request: Request,
+    lote: str = Query(..., min_length=1),
+    user: dict = Depends(require_permission("section_trazabilidad")),
+) -> JSONResponse:
+    products = products_for_lot(_trace_rows_for_request(request, user), lote)
     return JSONResponse({"lote": lote.strip(), "productos": products})
 
 
 @app.get("/api/trazabilidad/export")
 def export_traceability_excel(
+    request: Request,
     lote: str = Query(..., min_length=1),
     producto: str = Query(""),
-    _user: dict = Depends(require_permission("trace_export")),
+    user: dict = Depends(require_permission("trace_export")),
 ) -> StreamingResponse:
     with sqlite3.connect(DB_PATH) as conn:
-        trace_rows = load_trace_rows(conn)
+        visible_ids = trace_visible_owner_ids(conn, _env_owner_from_request(request, user))
+        trace_rows = load_trace_rows(conn, visible_ids)
         producto_value = producto.strip() or None
         try:
             content = build_traceability_workbook(trace_rows, lote, producto_value)
@@ -3261,8 +3318,9 @@ def export_traceability_excel(
 
 @app.post("/api/trazabilidad/export-batch")
 async def export_traceability_batch(
+    request: Request,
     payload: dict,
-    _user: dict = Depends(require_permission("trace_export")),
+    user: dict = Depends(require_permission("trace_export")),
 ) -> StreamingResponse:
     selections = payload.get("selections") if isinstance(payload, dict) else None
     if not isinstance(selections, list) or not selections:
@@ -3284,7 +3342,8 @@ async def export_traceability_batch(
     if not cleaned:
         raise HTTPException(status_code=400, detail="Selecciones inválidas.")
     with sqlite3.connect(DB_PATH) as conn:
-        trace_rows = load_trace_rows(conn)
+        visible_ids = trace_visible_owner_ids(conn, _env_owner_from_request(request, user))
+        trace_rows = load_trace_rows(conn, visible_ids)
         try:
             content = build_traceability_workbook_batch(trace_rows, cleaned)
         except ValueError as exc:
@@ -3536,15 +3595,16 @@ def get_constancia(
                 owner_user_id=owner_id,
             ),
         )
+    ajiles_client = is_ajiles_client_name(row[3])
     response_body: dict[str, Any] = {
         "id": row[0],
         "number": row[1],
         "issue_date": row[2],
         "client_name": row[3],
         "transport_plate": row[4],
-        "fumigacion": bool(row[5]),
-        "calidad": bool(row[6]),
-        "personalizado": bool(row[12]) if len(row) > 12 else False,
+        "fumigacion": True if ajiles_client else bool(row[5]),
+        "calidad": True if ajiles_client else bool(row[6]),
+        "personalizado": True if ajiles_client else (bool(row[12]) if len(row) > 12 else False),
         "status": normalize_constancia_status(row[7]),
         "items": items,
         "created_at": row[9],

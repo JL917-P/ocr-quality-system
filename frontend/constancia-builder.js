@@ -382,9 +382,10 @@
       }
 
       /**
-       * Admin: dos formatos de producción:
-       * - Con FP (día+mes+año): FP27AGO26 → FV27ABR27
-       * - Solo mes+año: AGO26 / jul26 → ABR27 / mar27 (sin FV)
+       * Admin / user02: formatos de producción:
+       * - Día+mes+año sin FP: 01AGO26 → 01ABR27 (+8) / 01FEB27 integral (+6)
+       * - Con FP: FP01AGO26 → FV01ABR27
+       * - Solo mes+año: AGO26 → ABR27 (sin FV)
        * Integrales: +6 meses; resto: +8 meses.
        */
       function computeAdminExpirationFromProduction(productionText, productName) {
@@ -552,20 +553,13 @@
         },
       ];
 
-      function clientLooksLikeAjiles(clientName) {
-        const compact = String(clientName || "")
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-z0-9]+/g, "");
-        return compact.includes("ajile");
-      }
-
       function isAjilesPeruClient(clientName, clients) {
         if (clientLooksLikeAjiles(clientName)) return true;
         const key = normalizeSearchText(clientName);
         const compact = key.replace(/\s+/g, "");
-        const list = Array.isArray(clients) && clients.length ? clients : [];
+        const list = Array.isArray(clients) && clients.length
+          ? clients
+          : (typeof allClients !== "undefined" && Array.isArray(allClients) ? allClients : []);
         if (!key || !list.length) return false;
         const typedRuc = String(clientName || "").replace(/\D/g, "");
         for (const item of list) {
@@ -607,10 +601,8 @@
         const key = normalizeSearchText(productName);
         if (!key) return "";
         const keyCompact = key.replace(/\s+/g, "");
-        const map =
-          typeof isUser01ConstanciaLayout === "function" && isUser01ConstanciaLayout()
-            ? AJILES_PERU_SKU_MAP_USER01
-            : AJILES_PERU_SKU_MAP_ADMIN;
+        // Mismos SKU para admin, user01 y el resto de operadores.
+        const map = [...AJILES_PERU_SKU_MAP_ADMIN, ...AJILES_PERU_SKU_MAP_USER01];
         for (const entry of map) {
           for (const pattern of entry.patterns) {
             const normalizedPattern = normalizeSearchText(pattern);
@@ -1220,6 +1212,13 @@
         const fecha = constancia.issue_date || "";
         const cliente = constancia.client_name || "";
         const clientList = Array.isArray(clients) ? clients : (Array.isArray(allClients) ? allClients : []);
+        const flaggedPersonalizado =
+          constancia.personalizado !== 0 && constancia.personalizado !== false;
+        const isAjilesClient =
+          (typeof clientLooksLikeAjiles === "function" && clientLooksLikeAjiles(cliente)) ||
+          (typeof isAjilesPeruClient === "function" && isAjilesPeruClient(cliente, clientList)) ||
+          /ajile/i.test(String(cliente).replace(/[^a-z0-9]/gi, "")) ||
+          flaggedPersonalizado;
         const clientKey = normalizeSearchText(cliente);
         const clientMatch = clientList.find((item) => normalizeSearchText(item.name) === clientKey);
         const clientRuc = (clientMatch?.ruc || "").toString().trim();
@@ -1239,12 +1238,11 @@
         const fumigacion = formatDateMinusDays(fecha, 9);
         const liberacion = formatDateMinusDays(fecha, 2);
         const instalaciones = formatDateMinusDays(fecha, 0);
-        const isAjilesClient = clientLooksLikeAjiles(cliente) || isAjilesPeruClient(cliente, clientList);
         const showFumigacion =
           isAjilesClient || (constancia.fumigacion !== 0 && constancia.fumigacion !== false);
         const showCalidad =
           isAjilesClient || (constancia.calidad !== 0 && constancia.calidad !== false);
-        const showPersonalizado = isAjilesClient;
+        const showPersonalizado = isAjilesClient || flaggedPersonalizado;
         const user01Layout = isUser01ConstanciaLayout();
         const isAjilesFumigacion = isAjilesClient;
         const isMakroFumigacion =
@@ -2233,6 +2231,5 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
       }
       globalThis.buildConstanciaHtml = buildConstanciaHtml;
       globalThis.isCencosudCdLimaClient = isCencosudCdLimaClient;
-      globalThis.isAjilesPeruClient = isAjilesPeruClient;
 
 })();

@@ -104,10 +104,18 @@ def env_counts(conn: sqlite3.Connection, owner_user_id: int) -> dict[str, int]:
         if "owner_user_id" not in cols:
             out[table] = 0
             continue
-        row = conn.execute(
-            f"SELECT COUNT(*) FROM {table} WHERE owner_user_id = ?",
-            (owner_user_id,),
-        ).fetchone()
+        if table == "trasiegos":
+            visible = trasiego_visible_owner_ids(conn, owner_user_id)
+            placeholders = ",".join("?" * len(visible))
+            row = conn.execute(
+                f"SELECT COUNT(*) FROM trasiegos WHERE owner_user_id IN ({placeholders})",
+                tuple(visible),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE owner_user_id = ?",
+                (owner_user_id,),
+            ).fetchone()
         out[table] = int(row[0] if row else 0)
     return out
 
@@ -252,6 +260,57 @@ def row_belongs_to_owner(conn: sqlite3.Connection, table: str, record_id: int, o
     row = conn.execute(
         f"SELECT 1 FROM {table} WHERE id = ? AND owner_user_id = ?",
         (record_id, owner_user_id),
+    ).fetchone()
+    return bool(row)
+
+
+# Solo trasiegos: admin y user02 ven y editan el mismo listado.
+TRASIEGO_SHARED_USERNAMES = frozenset({"admin", "user02"})
+
+
+def trasiego_shared_owner_ids(conn: sqlite3.Connection) -> list[int]:
+    rows = conn.execute(
+        """
+        SELECT id FROM app_users
+        WHERE lower(username) IN ('admin', 'user02')
+        """
+    ).fetchall()
+    ids = [int(r[0]) for r in rows]
+    admin_id = get_master_admin_id(conn)
+    if admin_id is not None and int(admin_id) not in ids:
+        ids.append(int(admin_id))
+    return ids
+
+
+def trasiego_visible_owner_ids(conn: sqlite3.Connection, owner_user_id: int) -> list[int]:
+    """Owners cuyos trasiegos debe ver el entorno activo.
+
+    admin y user02 comparten; el resto (p. ej. user01) sigue aislado.
+    """
+    current = int(owner_user_id)
+    shared = trasiego_shared_owner_ids(conn)
+    if current in {int(x) for x in shared}:
+        return shared or [current]
+    return [current]
+
+
+def trace_visible_owner_ids(conn: sqlite3.Connection, owner_user_id: int) -> list[int]:
+    """Constancias que entran en trazabilidad.
+
+    admin y user02 ven las de ambos. El listado de constancias almacenadas
+    sigue siendo solo el del entorno activo. Otros usuarios ven solo las suyas.
+    """
+    return trasiego_visible_owner_ids(conn, owner_user_id)
+
+
+def trasiego_row_visible_to_owner(
+    conn: sqlite3.Connection, record_id: int, owner_user_id: int
+) -> bool:
+    visible = trasiego_visible_owner_ids(conn, owner_user_id)
+    placeholders = ",".join("?" * len(visible))
+    row = conn.execute(
+        f"SELECT 1 FROM trasiegos WHERE id = ? AND owner_user_id IN ({placeholders})",
+        (int(record_id), *visible),
     ).fetchone()
     return bool(row)
 

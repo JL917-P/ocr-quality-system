@@ -88,19 +88,47 @@ def parse_fecha_sort_key(fecha: str) -> float:
         return 0.0
 
 
-def load_trace_rows(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+def load_trace_rows(
+    conn: sqlite3.Connection,
+    owner_user_ids: list[int] | None = None,
+) -> list[dict[str, Any]]:
+    params: list[Any] = []
+    where = ""
+    if owner_user_ids is not None:
+        ids = [int(owner_id) for owner_id in owner_user_ids]
+        if not ids:
+            return []
+        placeholders = ",".join("?" * len(ids))
+        where = f" WHERE owner_user_id IN ({placeholders})"
+        params = ids
     rows = conn.execute(
-        """
-        SELECT id, number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json, created_at
+        f"""
+        SELECT id, number, issue_date, client_name, transport_plate, fumigacion, calidad, status, items_json, created_at, owner_user_id
         FROM constancias
-        """
+        {where}
+        """,
+        params,
     ).fetchall()
-    rows = sort_constancia_rows_by_issue_date(dedupe_constancia_rows(list(rows)))
+    by_owner: dict[int, list[Any]] = defaultdict(list)
+    for row in rows:
+        owner = int(row[10]) if row[10] is not None else 0
+        by_owner[owner].append(row)
+    merged: list[Any] = []
+    for owner_rows in by_owner.values():
+        merged.extend(dedupe_constancia_rows(list(owner_rows)))
+    rows = sort_constancia_rows_by_issue_date(merged)
     trace_rows: list[dict[str, Any]] = []
     for row in rows:
         items = parse_items_json(row[8])
         if not items:
-            alt_json = find_items_json_for_constancia(conn, row[1] or "", row[3] or "", exclude_id=row[0])
+            owner_for_lookup = int(row[10]) if len(row) > 10 and row[10] is not None else None
+            alt_json = find_items_json_for_constancia(
+                conn,
+                row[1] or "",
+                row[3] or "",
+                exclude_id=row[0],
+                owner_user_id=owner_for_lookup,
+            )
             if alt_json:
                 items = parse_items_json(alt_json)
         fecha = row[2] or ""

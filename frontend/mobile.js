@@ -362,6 +362,12 @@
       showToast("Agrega al menos un producto.");
       return;
     }
+    const isAjiles = /ajile/i.test(
+      String(client_name)
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]/gi, "")
+    );
     const payload = {
       number: (fields.number?.value || "").trim(),
       issue_date: fields.date?.value || todayIso(),
@@ -369,7 +375,7 @@
       transport_plate: (fields.plate?.value || "").trim(),
       fumigacion: true,
       calidad: true,
-      personalizado: false,
+      personalizado: isAjiles,
       status,
       items,
       capture_source: CAPTURE_SOURCE,
