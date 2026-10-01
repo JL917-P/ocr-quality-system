@@ -553,6 +553,15 @@
         },
       ];
 
+      function clientLooksLikeAjiles(clientName) {
+        const compact = String(clientName || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "");
+        return compact.includes("ajile");
+      }
+
       function isAjilesPeruClient(clientName, clients) {
         if (clientLooksLikeAjiles(clientName)) return true;
         const key = normalizeSearchText(clientName);
@@ -2230,6 +2239,8 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
         `;
       }
       globalThis.buildConstanciaHtml = buildConstanciaHtml;
+      globalThis.isAjilesPeruClient = isAjilesPeruClient;
+      globalThis.resolveFirmaSrcForUsername = resolveFirmaSrcForUsername;
       globalThis.isCencosudCdLimaClient = isCencosudCdLimaClient;
 
 })();
