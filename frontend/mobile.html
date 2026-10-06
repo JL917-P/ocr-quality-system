@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>Móvil · Control de Calidad</title>
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
-    <link rel="stylesheet" href="/static/mobile.css?v=2" />
+    <link rel="stylesheet" href="/static/mobile.css?v=3" />
   </head>
   <body class="page-mobile auth-locked">
     <div id="authLogin" class="auth-screen auth-login-screen" role="dialog" aria-label="Inicio de sesión">
@@ -49,7 +49,7 @@
     <div id="mobileApp">
       <header class="mob-header">
         <div>
-          <div class="mob-header-title">Ingreso móvil</div>
+          <div class="mob-header-title" id="mobHeaderTitle">Ingreso móvil</div>
           <div class="mob-header-sub" id="mobileUserLabel">Usuario</div>
         </div>
         <div class="mob-header-actions">
@@ -61,6 +61,7 @@
       <main class="mob-main">
         <section id="mobileListView">
           <div class="mob-toolbar">
+            <button type="button" class="mob-btn mob-btn-outline" id="mobConsultOpenBtn">Consultar</button>
             <button type="button" class="mob-btn mob-btn-primary" id="mobNewBtn">+ Nuevo</button>
           </div>
           <div id="mobileConstanciaList"></div>
@@ -99,6 +100,21 @@
           <div id="mobProducts"></div>
           <button type="button" class="mob-add-row" id="mobAddProductBtn">+ Agregar producto</button>
         </section>
+
+        <section id="mobileConsultView" class="hidden">
+          <div class="mob-toolbar">
+            <button type="button" class="mob-btn mob-btn-outline" id="mobConsultBackBtn">← Lista</button>
+          </div>
+          <div class="mob-card">
+            <div class="mob-field">
+              <label for="mobConsultClient">Cliente</label>
+              <input id="mobConsultClient" type="text" list="mobConsultClients" placeholder="Escribe el cliente" autocomplete="off" enterkeyhint="search" />
+              <datalist id="mobConsultClients"></datalist>
+            </div>
+            <button type="button" class="mob-btn mob-btn-primary" id="mobConsultBtn">Ver despachos</button>
+          </div>
+          <div id="mobConsultResults"></div>
+        </section>
       </main>
     </div>
 
@@ -115,6 +131,6 @@
       })();
     </script>
     <script src="/static/auth-gate.js?v=auth8"></script>
-    <script src="/static/mobile.js?v=3"></script>
+    <script src="/static/mobile.js?v=4"></script>
   </body>
 </html>

@@ -6,7 +6,12 @@
 
   const listView = document.getElementById("mobileListView");
   const formView = document.getElementById("mobileFormView");
+  const consultView = document.getElementById("mobileConsultView");
   const listEl = document.getElementById("mobileConstanciaList");
+  const consultResults = document.getElementById("mobConsultResults");
+  const consultClientInput = document.getElementById("mobConsultClient");
+  const consultClientList = document.getElementById("mobConsultClients");
+  const headerTitle = document.getElementById("mobHeaderTitle");
   const userLabel = document.getElementById("mobileUserLabel");
   const toastEl = document.getElementById("mobileToast");
 
@@ -21,6 +26,8 @@
 
   let editingId = null;
   let ownerUsername = "";
+  let consultRows = null;
+  let consultClientKey = "";
 
   async function resolveOwnerUsername() {
     try {
@@ -103,9 +110,15 @@
     return u ? u.display_name || u.username || "usuario" : "usuario";
   }
 
+  function setHeaderTitle(text) {
+    if (headerTitle) headerTitle.textContent = text;
+  }
+
   function showListView() {
     listView?.classList.remove("hidden");
     formView?.classList.add("hidden");
+    consultView?.classList.add("hidden");
+    setHeaderTitle("Ingreso móvil");
     editingId = null;
     loadList();
   }
@@ -113,6 +126,15 @@
   function showFormView() {
     listView?.classList.add("hidden");
     formView?.classList.remove("hidden");
+    consultView?.classList.add("hidden");
+    setHeaderTitle("Ingreso móvil");
+  }
+
+  function showConsultView() {
+    listView?.classList.add("hidden");
+    formView?.classList.add("hidden");
+    consultView?.classList.remove("hidden");
+    setHeaderTitle("Consulta");
   }
 
   function resetForm() {
@@ -398,7 +420,257 @@
     }
   }
 
+  function normalizeClientKey(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function formatDispatchDate(raw) {
+    const value = String(raw || "").trim();
+    const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+    return value;
+  }
+
+  function formatQty(value) {
+    if (value == null || value === "") return "—";
+    const n = Number(value);
+    if (Number.isNaN(n)) return String(value);
+    return String(n);
+  }
+
+  function dispatchSortKey(raw) {
+    const value = String(raw || "").trim();
+    const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[1]}${iso[2]}${iso[3]}`;
+    const slash = value.match(/^(\d{2})\s*\/\s*(\d{2})\s*\/\s*(\d{4})$/);
+    if (slash) return `${slash[3]}${slash[2]}${slash[1]}`;
+    return value;
+  }
+
+  function consultStatusLabel(status) {
+    return status === "por_confirmar" ? "Reserva" : "Emitida";
+  }
+
+  function issuedOrReserved(rows) {
+    return (rows || []).filter(
+      (row) => row.status === "confirmada" || row.status === "por_confirmar"
+    );
+  }
+
+  function clientChoices(query) {
+    const q = normalizeClientKey(query);
+    const byKey = new Map();
+    issuedOrReserved(consultRows).forEach((row) => {
+      const name = String(row.client_name || "").trim();
+      const key = normalizeClientKey(name);
+      if (!key) return;
+      if (q && !key.includes(q)) return;
+      if (!byKey.has(key)) byKey.set(key, name);
+    });
+    return [...byKey.entries()].map(([key, name]) => ({ key, name }));
+  }
+
+  function linesForClient(clientKey) {
+    const lines = [];
+    issuedOrReserved(consultRows).forEach((row) => {
+      if (normalizeClientKey(row.client_name) !== clientKey) return;
+      (row.items || []).forEach((it) => {
+        const product = String(itemField(it, "product_name_snapshot", "product") || "").trim();
+        if (!product) return;
+        lines.push({
+          product,
+          lot: String(itemField(it, "lote_snapshot", "lot") || "").trim(),
+          production: String(
+            itemField(it, "production_date_snapshot", "production_text") || ""
+          ).trim(),
+          expiration: String(
+            itemField(it, "expiration_date_snapshot", "expiration_text") || ""
+          ).trim(),
+          issue_date: row.issue_date || "",
+          quantity: it.quantity,
+          status: row.status,
+        });
+      });
+    });
+    lines.sort((a, b) => {
+      const byDate = dispatchSortKey(b.issue_date).localeCompare(dispatchSortKey(a.issue_date));
+      if (byDate) return byDate;
+      return a.product.localeCompare(b.product, "es");
+    });
+    return lines;
+  }
+
+  function consultField(label, value) {
+    const wrap = document.createElement("div");
+    const lab = document.createElement("div");
+    lab.className = "mob-consult-label";
+    lab.textContent = label;
+    const val = document.createElement("div");
+    val.className = "mob-consult-value";
+    val.textContent = value || "—";
+    wrap.append(lab, val);
+    return wrap;
+  }
+
+  function renderConsultMessage(text) {
+    if (!consultResults) return;
+    consultResults.innerHTML = "";
+    const msg = document.createElement("div");
+    msg.className = "mob-consult-hint";
+    msg.textContent = text;
+    consultResults.appendChild(msg);
+  }
+
+  function renderClientPicker(choices) {
+    if (!consultResults) return;
+    consultResults.innerHTML = "";
+    const hint = document.createElement("div");
+    hint.className = "mob-consult-hint";
+    hint.textContent = "Hay varios clientes. Elige uno.";
+    consultResults.appendChild(hint);
+    choices.forEach((choice) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "mob-card mob-client-pick";
+      btn.textContent = choice.name;
+      btn.addEventListener("click", () => {
+        consultClientKey = choice.key;
+        if (consultClientInput) consultClientInput.value = choice.name;
+        renderConsultLines(choice.key);
+      });
+      consultResults.appendChild(btn);
+    });
+  }
+
+  function renderConsultLines(clientKey) {
+    if (!consultResults) return;
+    const lines = linesForClient(clientKey);
+    consultResults.innerHTML = "";
+    if (!lines.length) {
+      renderConsultMessage("Ese cliente no tiene productos en constancias emitidas ni en reserva.");
+      return;
+    }
+    lines.forEach((line) => {
+      const card = document.createElement("article");
+      card.className = "mob-card mob-consult-card";
+      const head = document.createElement("div");
+      head.className = "mob-consult-head";
+      const title = document.createElement("div");
+      title.className = "mob-consult-product";
+      title.textContent = line.product;
+      const badge = document.createElement("span");
+      badge.className = statusClass(line.status);
+      badge.textContent = consultStatusLabel(line.status);
+      head.append(title, badge);
+      const grid = document.createElement("div");
+      grid.className = "mob-consult-grid";
+      grid.append(
+        consultField("Lote", line.lot),
+        consultField("Despacho", formatDispatchDate(line.issue_date)),
+        consultField("Producción", line.production),
+        consultField("Vencimiento", line.expiration)
+      );
+      const qty = document.createElement("div");
+      qty.className = "mob-consult-qty";
+      qty.textContent = `Cantidad: ${formatQty(line.quantity)}`;
+      card.append(head, grid, qty);
+      consultResults.appendChild(card);
+    });
+  }
+
+  function fillConsultClients(rows) {
+    if (!consultClientList) return;
+    const names = new Map();
+    issuedOrReserved(rows).forEach((row) => {
+      const name = String(row.client_name || "").trim();
+      const key = normalizeClientKey(name);
+      if (key && !names.has(key)) names.set(key, name);
+    });
+    consultClientList.innerHTML = "";
+    [...names.values()]
+      .sort((a, b) => a.localeCompare(b, "es"))
+      .forEach((name) => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        consultClientList.appendChild(opt);
+      });
+  }
+
+  function runConsult() {
+    const query = consultClientInput?.value || "";
+    if (!normalizeClientKey(query)) {
+      consultClientKey = "";
+      renderConsultMessage("Escribe un cliente para ver producto, lote, fechas y cantidad.");
+      return;
+    }
+    const choices = clientChoices(query);
+    const exact = choices.find((choice) => choice.key === normalizeClientKey(query));
+    if (exact) {
+      consultClientKey = exact.key;
+      renderConsultLines(exact.key);
+      return;
+    }
+    if (!choices.length) {
+      consultClientKey = "";
+      renderConsultMessage("No hay constancias emitidas ni en reserva para ese cliente.");
+      return;
+    }
+    if (choices.length === 1) {
+      consultClientKey = choices[0].key;
+      if (consultClientInput) consultClientInput.value = choices[0].name;
+      renderConsultLines(choices[0].key);
+      return;
+    }
+    consultClientKey = "";
+    renderClientPicker(choices);
+  }
+
+  async function openConsult() {
+    showConsultView();
+    renderConsultMessage("Cargando…");
+    try {
+      await ensureEnvironmentLoaded();
+      const res = await window.QCAuth.apiFetch("/api/constancias");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Error al cargar");
+      consultRows = data.constancias || [];
+      fillConsultClients(consultRows);
+      if (consultClientKey) {
+        renderConsultLines(consultClientKey);
+      } else if ((consultClientInput?.value || "").trim()) {
+        runConsult();
+      } else {
+        renderConsultMessage("Escribe un cliente para ver producto, lote, fechas y cantidad.");
+      }
+    } catch (err) {
+      consultRows = [];
+      renderConsultMessage(err.message || "No se pudo cargar la consulta");
+    }
+  }
+
   function bindUi() {
+    document.getElementById("mobConsultOpenBtn")?.addEventListener("click", () => {
+      openConsult();
+    });
+    document.getElementById("mobConsultBackBtn")?.addEventListener("click", showListView);
+    document.getElementById("mobConsultBtn")?.addEventListener("click", () => {
+      if (!consultRows) {
+        openConsult();
+        return;
+      }
+      runConsult();
+    });
+    consultClientInput?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        runConsult();
+      }
+    });
     document.getElementById("mobNewBtn")?.addEventListener("click", () => {
       resetForm();
       showFormView();
