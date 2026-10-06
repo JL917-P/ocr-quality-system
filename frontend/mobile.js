@@ -467,14 +467,9 @@
 
   function folderRows(query) {
     const q = normalizeClientKey(query);
+    if (!q) return [];
     return issuedOrReserved(consultRows)
-      .filter((row) => {
-        if (!q) return true;
-        const blob = normalizeClientKey(
-          `${row.client_name || ""} ${formatDispatchDate(row.issue_date)} ${row.issue_date || ""}`
-        );
-        return blob.includes(q);
-      })
+      .filter((row) => normalizeClientKey(row.client_name || "").includes(q))
       .sort((a, b) => {
         const byDate = dispatchSortKey(b.issue_date).localeCompare(dispatchSortKey(a.issue_date));
         if (byDate) return byDate;
@@ -534,7 +529,7 @@
       renderConsultMessage(
         normalizeClientKey(consultClientInput?.value || "")
           ? "No hay constancias emitidas ni en reserva para ese cliente."
-          : "No hay constancias emitidas ni en reserva."
+          : "Escribe un cliente. Solo aparecen las constancias de esa búsqueda."
       );
       return;
     }
