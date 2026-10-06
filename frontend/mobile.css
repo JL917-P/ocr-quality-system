@@ -326,12 +326,79 @@ body.page-mobile.auth-locked #mobileApp {
   font-weight: 700;
 }
 
-.mob-client-pick {
+.mob-folder {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   width: 100%;
   text-align: left;
   cursor: pointer;
   font: inherit;
   color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mob-folder:active {
+  background: #f8fafc;
+}
+
+.mob-folder-icon {
+  position: relative;
+  width: 44px;
+  height: 32px;
+  margin-top: 6px;
+  flex-shrink: 0;
+  background: #fbbf24;
+  border-radius: 3px 6px 6px 6px;
+}
+
+.mob-folder-icon::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 0;
+  width: 18px;
+  height: 8px;
+  background: #f59e0b;
+  border-radius: 4px 4px 0 0;
+}
+
+.mob-folder-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.mob-folder-date {
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.mob-folder-client {
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--mob-text);
+  word-break: break-word;
+}
+
+.mob-folder-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mob-folder-side .mob-badge {
+  margin-top: 0;
+}
+
+.mob-folder-chevron {
+  color: var(--mob-muted);
+  font-size: 18px;
+  line-height: 1;
 }
 
 .hidden {

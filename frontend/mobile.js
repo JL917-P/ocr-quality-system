@@ -8,7 +8,11 @@
   const formView = document.getElementById("mobileFormView");
   const consultView = document.getElementById("mobileConsultView");
   const listEl = document.getElementById("mobileConstanciaList");
+  const consultFolders = document.getElementById("mobConsultFolders");
   const consultResults = document.getElementById("mobConsultResults");
+  const consultDetail = document.getElementById("mobConsultDetail");
+  const consultDetailHead = document.getElementById("mobConsultDetailHead");
+  const consultDetailItems = document.getElementById("mobConsultDetailItems");
   const consultClientInput = document.getElementById("mobConsultClient");
   const consultClientList = document.getElementById("mobConsultClients");
   const headerTitle = document.getElementById("mobHeaderTitle");
@@ -27,7 +31,6 @@
   let editingId = null;
   let ownerUsername = "";
   let consultRows = null;
-  let consultClientKey = "";
 
   async function resolveOwnerUsername() {
     try {
@@ -462,47 +465,37 @@
     );
   }
 
-  function clientChoices(query) {
+  function folderRows(query) {
     const q = normalizeClientKey(query);
-    const byKey = new Map();
-    issuedOrReserved(consultRows).forEach((row) => {
-      const name = String(row.client_name || "").trim();
-      const key = normalizeClientKey(name);
-      if (!key) return;
-      if (q && !key.includes(q)) return;
-      if (!byKey.has(key)) byKey.set(key, name);
-    });
-    return [...byKey.entries()].map(([key, name]) => ({ key, name }));
+    return issuedOrReserved(consultRows)
+      .filter((row) => {
+        if (!q) return true;
+        const blob = normalizeClientKey(
+          `${row.client_name || ""} ${formatDispatchDate(row.issue_date)} ${row.issue_date || ""}`
+        );
+        return blob.includes(q);
+      })
+      .sort((a, b) => {
+        const byDate = dispatchSortKey(b.issue_date).localeCompare(dispatchSortKey(a.issue_date));
+        if (byDate) return byDate;
+        return (Number(b.id) || 0) - (Number(a.id) || 0);
+      });
   }
 
-  function linesForClient(clientKey) {
-    const lines = [];
-    issuedOrReserved(consultRows).forEach((row) => {
-      if (normalizeClientKey(row.client_name) !== clientKey) return;
-      (row.items || []).forEach((it) => {
-        const product = String(itemField(it, "product_name_snapshot", "product") || "").trim();
-        if (!product) return;
-        lines.push({
-          product,
-          lot: String(itemField(it, "lote_snapshot", "lot") || "").trim(),
-          production: String(
-            itemField(it, "production_date_snapshot", "production_text") || ""
-          ).trim(),
-          expiration: String(
-            itemField(it, "expiration_date_snapshot", "expiration_text") || ""
-          ).trim(),
-          issue_date: row.issue_date || "",
-          quantity: it.quantity,
-          status: row.status,
-        });
-      });
-    });
-    lines.sort((a, b) => {
-      const byDate = dispatchSortKey(b.issue_date).localeCompare(dispatchSortKey(a.issue_date));
-      if (byDate) return byDate;
-      return a.product.localeCompare(b.product, "es");
-    });
-    return lines;
+  function linesForConstancia(row) {
+    return (row?.items || [])
+      .map((it) => ({
+        product: String(itemField(it, "product_name_snapshot", "product") || "").trim(),
+        lot: String(itemField(it, "lote_snapshot", "lot") || "").trim(),
+        production: String(
+          itemField(it, "production_date_snapshot", "production_text") || ""
+        ).trim(),
+        expiration: String(
+          itemField(it, "expiration_date_snapshot", "expiration_text") || ""
+        ).trim(),
+        quantity: it.quantity,
+      }))
+      .filter((line) => line.product);
   }
 
   function consultField(label, value) {
@@ -526,60 +519,102 @@
     consultResults.appendChild(msg);
   }
 
-  function renderClientPicker(choices) {
+  function showConsultFolders() {
+    consultFolders?.classList.remove("hidden");
+    consultDetail?.classList.add("hidden");
+    setHeaderTitle("Consulta");
+  }
+
+  function renderConsultFolders() {
+    showConsultFolders();
     if (!consultResults) return;
+    const rows = folderRows(consultClientInput?.value || "");
     consultResults.innerHTML = "";
-    const hint = document.createElement("div");
-    hint.className = "mob-consult-hint";
-    hint.textContent = "Hay varios clientes. Elige uno.";
-    consultResults.appendChild(hint);
-    choices.forEach((choice) => {
+    if (!rows.length) {
+      renderConsultMessage(
+        normalizeClientKey(consultClientInput?.value || "")
+          ? "No hay constancias emitidas ni en reserva para ese cliente."
+          : "No hay constancias emitidas ni en reserva."
+      );
+      return;
+    }
+    rows.forEach((row) => {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "mob-card mob-client-pick";
-      btn.textContent = choice.name;
-      btn.addEventListener("click", () => {
-        consultClientKey = choice.key;
-        if (consultClientInput) consultClientInput.value = choice.name;
-        renderConsultLines(choice.key);
-      });
+      btn.className = "mob-card mob-folder";
+      const icon = document.createElement("span");
+      icon.className = "mob-folder-icon";
+      icon.setAttribute("aria-hidden", "true");
+      const body = document.createElement("span");
+      body.className = "mob-folder-body";
+      const date = document.createElement("span");
+      date.className = "mob-folder-date";
+      date.textContent = formatDispatchDate(row.issue_date) || "Sin fecha";
+      const client = document.createElement("span");
+      client.className = "mob-folder-client";
+      client.textContent = row.client_name || "Sin cliente";
+      body.append(date, client);
+      const side = document.createElement("span");
+      side.className = "mob-folder-side";
+      const badge = document.createElement("span");
+      badge.className = statusClass(row.status);
+      badge.textContent = consultStatusLabel(row.status);
+      const chevron = document.createElement("span");
+      chevron.className = "mob-folder-chevron";
+      chevron.setAttribute("aria-hidden", "true");
+      chevron.textContent = "›";
+      side.append(badge, chevron);
+      btn.append(icon, body, side);
+      btn.addEventListener("click", () => openConsultFolder(row));
       consultResults.appendChild(btn);
     });
   }
 
-  function renderConsultLines(clientKey) {
-    if (!consultResults) return;
-    const lines = linesForClient(clientKey);
-    consultResults.innerHTML = "";
+  function openConsultFolder(row) {
+    consultFolders?.classList.add("hidden");
+    consultDetail?.classList.remove("hidden");
+    setHeaderTitle(row.client_name || "Constancia");
+    if (consultDetailHead) {
+      consultDetailHead.innerHTML = "";
+      const card = document.createElement("div");
+      card.className = "mob-card";
+      const date = document.createElement("div");
+      date.className = "mob-folder-date";
+      date.textContent = formatDispatchDate(row.issue_date) || "Sin fecha";
+      const client = document.createElement("div");
+      client.className = "mob-folder-client";
+      client.textContent = row.client_name || "Sin cliente";
+      card.append(date, client);
+      consultDetailHead.appendChild(card);
+    }
+    if (!consultDetailItems) return;
+    consultDetailItems.innerHTML = "";
+    const lines = linesForConstancia(row);
     if (!lines.length) {
-      renderConsultMessage("Ese cliente no tiene productos en constancias emitidas ni en reserva.");
+      const empty = document.createElement("div");
+      empty.className = "mob-consult-hint";
+      empty.textContent = "Esta constancia no tiene productos despachados.";
+      consultDetailItems.appendChild(empty);
       return;
     }
     lines.forEach((line) => {
       const card = document.createElement("article");
       card.className = "mob-card mob-consult-card";
-      const head = document.createElement("div");
-      head.className = "mob-consult-head";
       const title = document.createElement("div");
       title.className = "mob-consult-product";
       title.textContent = line.product;
-      const badge = document.createElement("span");
-      badge.className = statusClass(line.status);
-      badge.textContent = consultStatusLabel(line.status);
-      head.append(title, badge);
       const grid = document.createElement("div");
       grid.className = "mob-consult-grid";
       grid.append(
         consultField("Lote", line.lot),
-        consultField("Despacho", formatDispatchDate(line.issue_date)),
         consultField("Producción", line.production),
         consultField("Vencimiento", line.expiration)
       );
       const qty = document.createElement("div");
       qty.className = "mob-consult-qty";
       qty.textContent = `Cantidad: ${formatQty(line.quantity)}`;
-      card.append(head, grid, qty);
-      consultResults.appendChild(card);
+      card.append(title, grid, qty);
+      consultDetailItems.appendChild(card);
     });
   }
 
@@ -601,37 +636,9 @@
       });
   }
 
-  function runConsult() {
-    const query = consultClientInput?.value || "";
-    if (!normalizeClientKey(query)) {
-      consultClientKey = "";
-      renderConsultMessage("Escribe un cliente para ver producto, lote, fechas y cantidad.");
-      return;
-    }
-    const choices = clientChoices(query);
-    const exact = choices.find((choice) => choice.key === normalizeClientKey(query));
-    if (exact) {
-      consultClientKey = exact.key;
-      renderConsultLines(exact.key);
-      return;
-    }
-    if (!choices.length) {
-      consultClientKey = "";
-      renderConsultMessage("No hay constancias emitidas ni en reserva para ese cliente.");
-      return;
-    }
-    if (choices.length === 1) {
-      consultClientKey = choices[0].key;
-      if (consultClientInput) consultClientInput.value = choices[0].name;
-      renderConsultLines(choices[0].key);
-      return;
-    }
-    consultClientKey = "";
-    renderClientPicker(choices);
-  }
-
   async function openConsult() {
     showConsultView();
+    showConsultFolders();
     renderConsultMessage("Cargando…");
     try {
       await ensureEnvironmentLoaded();
@@ -640,13 +647,7 @@
       if (!res.ok) throw new Error(data.detail || "Error al cargar");
       consultRows = data.constancias || [];
       fillConsultClients(consultRows);
-      if (consultClientKey) {
-        renderConsultLines(consultClientKey);
-      } else if ((consultClientInput?.value || "").trim()) {
-        runConsult();
-      } else {
-        renderConsultMessage("Escribe un cliente para ver producto, lote, fechas y cantidad.");
-      }
+      renderConsultFolders();
     } catch (err) {
       consultRows = [];
       renderConsultMessage(err.message || "No se pudo cargar la consulta");
@@ -658,18 +659,9 @@
       openConsult();
     });
     document.getElementById("mobConsultBackBtn")?.addEventListener("click", showListView);
-    document.getElementById("mobConsultBtn")?.addEventListener("click", () => {
-      if (!consultRows) {
-        openConsult();
-        return;
-      }
-      runConsult();
-    });
-    consultClientInput?.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        runConsult();
-      }
+    document.getElementById("mobConsultDetailBackBtn")?.addEventListener("click", renderConsultFolders);
+    consultClientInput?.addEventListener("input", () => {
+      if (consultRows) renderConsultFolders();
     });
     document.getElementById("mobNewBtn")?.addEventListener("click", () => {
       resetForm();

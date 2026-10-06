@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>Móvil · Control de Calidad</title>
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
-    <link rel="stylesheet" href="/static/mobile.css?v=3" />
+    <link rel="stylesheet" href="/static/mobile.css?v=5" />
   </head>
   <body class="page-mobile auth-locked">
     <div id="authLogin" class="auth-screen auth-login-screen" role="dialog" aria-label="Inicio de sesión">
@@ -102,18 +102,26 @@
         </section>
 
         <section id="mobileConsultView" class="hidden">
-          <div class="mob-toolbar">
-            <button type="button" class="mob-btn mob-btn-outline" id="mobConsultBackBtn">← Lista</button>
-          </div>
-          <div class="mob-card">
-            <div class="mob-field">
-              <label for="mobConsultClient">Cliente</label>
-              <input id="mobConsultClient" type="text" list="mobConsultClients" placeholder="Escribe el cliente" autocomplete="off" enterkeyhint="search" />
-              <datalist id="mobConsultClients"></datalist>
+          <div id="mobConsultFolders">
+            <div class="mob-toolbar">
+              <button type="button" class="mob-btn mob-btn-outline" id="mobConsultBackBtn">← Lista</button>
             </div>
-            <button type="button" class="mob-btn mob-btn-primary" id="mobConsultBtn">Ver despachos</button>
+            <div class="mob-card">
+              <div class="mob-field">
+                <label for="mobConsultClient">Buscar cliente</label>
+                <input id="mobConsultClient" type="search" list="mobConsultClients" placeholder="Escribe el cliente" autocomplete="off" enterkeyhint="search" />
+                <datalist id="mobConsultClients"></datalist>
+              </div>
+            </div>
+            <div id="mobConsultResults"></div>
           </div>
-          <div id="mobConsultResults"></div>
+          <div id="mobConsultDetail" class="hidden">
+            <div class="mob-toolbar">
+              <button type="button" class="mob-btn mob-btn-outline" id="mobConsultDetailBackBtn">← Constancias</button>
+            </div>
+            <div id="mobConsultDetailHead"></div>
+            <div id="mobConsultDetailItems"></div>
+          </div>
         </section>
       </main>
     </div>
@@ -131,6 +139,6 @@
       })();
     </script>
     <script src="/static/auth-gate.js?v=auth8"></script>
-    <script src="/static/mobile.js?v=4"></script>
+    <script src="/static/mobile.js?v=5"></script>
   </body>
 </html>
