@@ -5350,6 +5350,7 @@ body.perm-no-trace-export #traceModalReportBtn {
   border-radius: 10px;
   background: #0c2340;
   touch-action: none;
+  cursor: crosshair;
 }
 
 .modal.modal-fumigacion .fumigacion-zoom-stage img {

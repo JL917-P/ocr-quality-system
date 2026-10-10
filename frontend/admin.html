@@ -22,7 +22,7 @@
       })();
     </script>
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=fumig3" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=fumig4" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -5239,6 +5239,7 @@
       let fumigacionPanX = 0;
       let fumigacionPanY = 0;
       let fumigacionDrag = null;
+      let fumigacionFocus = null;
 
       function fumigacionViewerIsOpen() {
         const backdrop = document.getElementById("fumigacionViewer");
@@ -5275,13 +5276,35 @@
         fumigacionPanX = 0;
         fumigacionPanY = 0;
         fumigacionDrag = null;
+        fumigacionFocus = null;
         applyFumigacionZoom();
       }
 
-      function setFumigacionScale(next) {
-        fumigacionScale = Math.min(5, Math.max(1, Math.round(next * 100) / 100));
+      function fumigacionPoint(event) {
+        const stage = document.getElementById("fumigacionZoomStage");
+        if (!stage) return null;
+        const rect = stage.getBoundingClientRect();
+        return {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
+        };
+      }
+
+      function setFumigacionScale(next, focus) {
+        const stage = document.getElementById("fumigacionZoomStage");
+        const oldScale = fumigacionScale;
+        let newScale = Math.min(5, Math.max(1, Math.round(next * 100) / 100));
+        if (newScale <= 1) newScale = 1;
+        if (stage && oldScale > 0 && newScale !== oldScale) {
+          const cx = stage.clientWidth / 2;
+          const cy = stage.clientHeight / 2;
+          const point = focus || fumigacionFocus || { x: cx, y: cy };
+          const ratio = newScale / oldScale;
+          fumigacionPanX = (point.x - cx) * (1 - ratio) + fumigacionPanX * ratio;
+          fumigacionPanY = (point.y - cy) * (1 - ratio) + fumigacionPanY * ratio;
+        }
+        fumigacionScale = newScale;
         if (fumigacionScale <= 1) {
-          fumigacionScale = 1;
           fumigacionPanX = 0;
           fumigacionPanY = 0;
         }
@@ -5299,13 +5322,30 @@
         document.getElementById("fumigacionZoomReset")?.addEventListener("click", () => {
           resetFumigacionZoom();
         });
+        fumigacionZoomStage.addEventListener("pointermove", (event) => {
+          if (!event.target.closest("button")) fumigacionFocus = fumigacionPoint(event);
+          if (!fumigacionDrag || fumigacionDrag.id !== event.pointerId) return;
+          fumigacionPanX = fumigacionDrag.px + (event.clientX - fumigacionDrag.x);
+          fumigacionPanY = fumigacionDrag.py + (event.clientY - fumigacionDrag.y);
+          applyFumigacionZoom();
+        });
         fumigacionZoomStage.addEventListener("wheel", (event) => {
           if (!fumigacionViewerIsOpen()) return;
           event.preventDefault();
-          setFumigacionScale(fumigacionScale * (event.deltaY < 0 ? 1.12 : 1 / 1.12));
+          const focus = fumigacionPoint(event);
+          fumigacionFocus = focus;
+          setFumigacionScale(fumigacionScale * (event.deltaY < 0 ? 1.12 : 1 / 1.12), focus);
         }, { passive: false });
+        fumigacionZoomStage.addEventListener("dblclick", (event) => {
+          if (event.target.closest("button")) return;
+          const focus = fumigacionPoint(event);
+          fumigacionFocus = focus;
+          setFumigacionScale(fumigacionScale * 1.5, focus);
+        });
         fumigacionZoomStage.addEventListener("pointerdown", (event) => {
-          if (event.target.closest("button") || fumigacionScale <= 1) return;
+          if (event.target.closest("button")) return;
+          fumigacionFocus = fumigacionPoint(event);
+          if (fumigacionScale <= 1) return;
           fumigacionDrag = {
             id: event.pointerId,
             x: event.clientX,
@@ -5315,12 +5355,6 @@
           };
           fumigacionZoomStage.classList.add("is-panning");
           fumigacionZoomStage.setPointerCapture(event.pointerId);
-        });
-        fumigacionZoomStage.addEventListener("pointermove", (event) => {
-          if (!fumigacionDrag || fumigacionDrag.id !== event.pointerId) return;
-          fumigacionPanX = fumigacionDrag.px + (event.clientX - fumigacionDrag.x);
-          fumigacionPanY = fumigacionDrag.py + (event.clientY - fumigacionDrag.y);
-          applyFumigacionZoom();
         });
         const endFumigacionDrag = (event) => {
           if (!fumigacionDrag || fumigacionDrag.id !== event.pointerId) return;
