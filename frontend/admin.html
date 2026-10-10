@@ -1031,8 +1031,7 @@
 
         <section id="section-fumigaciones" class="hidden">
           <div class="card">
-            <div class="title">Fumigaciones del almacén</div>
-            <div class="sub">Fotos JPG del almacén. Se guarda la fecha y hora de cada subida. El historial conserva siempre las 50 más recientes: al subir la número 51, se elimina la más antigua.</div>
+            <div class="title">Fumigaciones</div>
             <div class="actions fumigacion-toolbar">
               <label class="btn btn-primary fumigacion-upload-btn" id="fumigacionUploadLabel" data-requires-perm="fumigaciones_write">
                 Subir foto JPG
@@ -4509,7 +4508,7 @@
         "section-constancias": { title: "Constancias", subtitle: "Lista, filtros y confirmación de emisiones" },
         "section-trazabilidad": { title: "Trazabilidad", subtitle: "Historial por producto, lote, tienda o mes" },
         "section-trasiegos": { title: "Trasiegos", subtitle: "Registro y seguimiento de trasiegos" },
-        "section-fumigaciones": { title: "Fumigaciones", subtitle: "Historial fotográfico del almacén, máximo 50 fotos" },
+        "section-fumigaciones": { title: "Fumigaciones", subtitle: "" },
         "section-analisis": { title: "Análisis", subtitle: "Importación CSV y aplicación a constancias" },
         "section-users": { title: "Usuarios", subtitle: "Cuentas, roles y permisos de acceso" },
         "section-audit": { title: "Bitácora", subtitle: "Registro de acciones por usuario" },
@@ -4527,7 +4526,8 @@
         }
         header.classList.remove("hidden");
         titleEl.textContent = meta.title;
-        subtitleEl.textContent = meta.subtitle;
+        subtitleEl.textContent = meta.subtitle || "";
+        subtitleEl.classList.toggle("hidden", !meta.subtitle);
       }
 
       function updateNavConstanciasBadge() {
