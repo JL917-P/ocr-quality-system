@@ -1985,6 +1985,13 @@ select {
   font-size: 14px;
 }
 
+/* DM Sans es variable (eje opsz). En el <select> nativo de Windows la última
+   letra se dibuja al inicio y más abajo: "Lote" se ve como "¿Lot". */
+select,
+option {
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
 input:focus,
 select:focus {
   outline: none;
@@ -5304,5 +5311,42 @@ body.perm-no-trace-export #traceModalReportBtn {
   display: flex;
   gap: 6px;
   margin-top: 8px;
+}
+
+.fumigacion-toolbar {
+  margin-top: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.fumigacion-upload-btn input {
+  display: none;
+}
+
+.fumigacion-thumb {
+  width: 64px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #e8eef2;
+  cursor: pointer;
+  display: block;
+  border: 1px solid var(--qc-border);
+}
+
+.modal.modal-fumigacion {
+  width: min(960px, 94vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal.modal-fumigacion img {
+  width: 100%;
+  max-height: calc(92vh - 120px);
+  object-fit: contain;
+  background: #0c2340;
+  border-radius: 10px;
 }
 

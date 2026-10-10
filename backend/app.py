@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import shutil
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -20,9 +21,9 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     easyocr = None
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from PIL import Image
+from PIL import Image, ImageOps
 from pytesseract import Output
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -66,6 +67,7 @@ from auth_service import (
     list_audit,
     list_notifications,
     list_users,
+    local_now_iso,
     parse_app_datetime,
     public_user,
     resolve_notification,
@@ -141,6 +143,10 @@ APP_ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.getenv("DATA_DIR", str(APP_ROOT / "data")))
 DB_PATH = Path(os.getenv("DATABASE_PATH", str(APP_ROOT / "results.db")))
 PRODUCTS_PATH = DATA_DIR / "products.txt"
+FUMIGACIONES_DIR = DATA_DIR / "fumigaciones"
+FUMIGACION_LIMIT = 50
+FUMIGACION_MAX_UPLOAD_BYTES = 12 * 1024 * 1024
+FUMIGACION_MAX_EDGE = 1600
 FRONTEND_DIR = APP_ROOT.parent / "frontend"
 
 app = FastAPI(title="Control de Calidad OCR")
@@ -400,12 +406,26 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fumigaciones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                stored_name TEXT NOT NULL,
+                original_name TEXT NOT NULL DEFAULT '',
+                uploaded_by TEXT NOT NULL DEFAULT '',
+                uploaded_by_id INTEGER,
+                size_bytes INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
         ensure_auth_tables(conn)
         ensure_owner_columns(conn)
         migrate_existing_rows_to_admin(conn)
         reclaim_operator_constancias_to_admin_once(conn)
         conn.commit()
         repair_all_trasiegos_in_sqlite(conn)
+        _sweep_orphan_fumigacion_files(conn)
         conn.commit()
         # El catálogo de operadores solo se copia al CREAR el usuario (elección del admin).
 
@@ -3794,6 +3814,220 @@ async def update_constancia(
         "mobile_number": header.get("mobile_number") or "",
         "pallets": header.get("pallets") or "",
     })
+
+
+def _jpeg_resample():
+    resampling = getattr(Image, "Resampling", None)
+    if resampling is not None:
+        return resampling.LANCZOS
+    return Image.LANCZOS
+
+
+def _prepare_fumigacion_jpeg(data: bytes) -> bytes:
+    if not data:
+        raise HTTPException(status_code=400, detail="La foto está vacía.")
+    if len(data) > FUMIGACION_MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="La foto supera 12 MB. Toma otra más liviana.",
+        )
+    if not data.startswith(b"\xff\xd8"):
+        raise HTTPException(status_code=400, detail="Solo se aceptan imágenes JPG.")
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            img = ImageOps.exif_transpose(img)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            img.thumbnail((FUMIGACION_MAX_EDGE, FUMIGACION_MAX_EDGE), _jpeg_resample())
+            out = io.BytesIO()
+            img.save(out, format="JPEG", quality=75, optimize=True)
+            prepared = out.getvalue()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail="No se pudo leer la imagen JPG.")
+    if not prepared.startswith(b"\xff\xd8"):
+        raise HTTPException(status_code=400, detail="No se pudo guardar la imagen JPG.")
+    return prepared
+
+
+def _fumigacion_file_path(stored_name: str) -> Path:
+    name = Path(str(stored_name or "")).name
+    if not name or name != stored_name or not name.endswith(".jpg"):
+        raise HTTPException(status_code=404, detail="Foto no encontrada.")
+    root = FUMIGACIONES_DIR.resolve()
+    path = (root / name).resolve()
+    if root != path.parent:
+        raise HTTPException(status_code=404, detail="Foto no encontrada.")
+    return path
+
+
+def _sweep_orphan_fumigacion_files(conn: sqlite3.Connection) -> None:
+    FUMIGACIONES_DIR.mkdir(parents=True, exist_ok=True)
+    keep = {
+        str(row[0])
+        for row in conn.execute("SELECT stored_name FROM fumigaciones").fetchall()
+        if row and row[0]
+    }
+    for path in FUMIGACIONES_DIR.glob("*.jpg"):
+        if path.name not in keep:
+            try:
+                path.unlink()
+            except OSError:
+                logging.getLogger(__name__).exception("No se pudo borrar foto huérfana %s", path.name)
+
+
+def _prune_fumigaciones(conn: sqlite3.Connection) -> list[str]:
+    rows = conn.execute(
+        "SELECT id, stored_name FROM fumigaciones ORDER BY created_at ASC, id ASC"
+    ).fetchall()
+    overflow = len(rows) - FUMIGACION_LIMIT
+    if overflow <= 0:
+        return []
+    removed: list[str] = []
+    for row in rows[:overflow]:
+        conn.execute("DELETE FROM fumigaciones WHERE id = ?", (int(row[0]),))
+        if row[1]:
+            removed.append(str(row[1]))
+    return removed
+
+
+def _delete_fumigacion_files(names: list[str]) -> None:
+    for name in names:
+        try:
+            path = _fumigacion_file_path(name)
+        except HTTPException:
+            continue
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            logging.getLogger(__name__).exception("No se pudo borrar foto %s", name)
+
+
+def _fumigacion_public_row(row: sqlite3.Row | tuple) -> dict[str, Any]:
+    return {
+        "id": int(row[0]),
+        "created_at": row[1],
+        "uploaded_by": row[2] or "",
+        "size_bytes": int(row[3] or 0),
+    }
+
+
+@app.get("/api/fumigaciones")
+def api_list_fumigaciones(
+    _user: dict = Depends(require_permission("section_fumigaciones")),
+) -> JSONResponse:
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute(
+            """
+            SELECT id, created_at, uploaded_by, size_bytes
+            FROM fumigaciones
+            ORDER BY created_at DESC, id DESC
+            """
+        ).fetchall()
+    return JSONResponse(
+        {
+            "items": [_fumigacion_public_row(row) for row in rows],
+            "total": len(rows),
+            "limit": FUMIGACION_LIMIT,
+        }
+    )
+
+
+@app.get("/api/fumigaciones/{fumigacion_id}/imagen")
+def api_fumigacion_image(
+    fumigacion_id: int,
+    _user: dict = Depends(require_permission("section_fumigaciones")),
+) -> FileResponse:
+    with sqlite3.connect(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT stored_name FROM fumigaciones WHERE id = ?",
+            (fumigacion_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Foto no encontrada.")
+    path = _fumigacion_file_path(str(row[0]))
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Foto no encontrada.")
+    return FileResponse(
+        path,
+        media_type="image/jpeg",
+        headers={"Content-Disposition": f'inline; filename="fumigacion-{fumigacion_id}.jpg"'},
+    )
+
+
+@app.post("/api/fumigaciones")
+async def api_upload_fumigacion(
+    file: UploadFile = File(...),
+    user: dict = Depends(require_permission("fumigaciones_write")),
+) -> JSONResponse:
+    original_name = Path(file.filename or "foto.jpg").name
+    lower_name = original_name.lower()
+    content_type = (file.content_type or "").lower()
+    if not (lower_name.endswith(".jpg") or lower_name.endswith(".jpeg") or content_type in {"image/jpeg", "image/jpg", "image/pjpeg"}):
+        raise HTTPException(status_code=400, detail="Solo se aceptan imágenes JPG.")
+    data = await file.read()
+    prepared = _prepare_fumigacion_jpeg(data)
+    FUMIGACIONES_DIR.mkdir(parents=True, exist_ok=True)
+    stored_name = f"{secrets.token_hex(12)}.jpg"
+    path = FUMIGACIONES_DIR / stored_name
+    path.write_bytes(prepared)
+    created_at = local_now_iso()
+    uploaded_by = _actor_label(user)
+    removed_names: list[str] = []
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO fumigaciones (
+                    created_at, stored_name, original_name, uploaded_by, uploaded_by_id, size_bytes
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    created_at,
+                    stored_name,
+                    original_name[:180],
+                    uploaded_by,
+                    int(user["id"]),
+                    len(prepared),
+                ),
+            )
+            new_id = int(cur.lastrowid)
+            removed_names = _prune_fumigaciones(conn)
+            detail = "Subió foto de fumigación"
+            if removed_names:
+                detail += ". Se depuró la foto más antigua para mantener 50."
+            write_audit(
+                conn,
+                user=user,
+                action="fumigacion_upload",
+                entity="fumigacion",
+                entity_id=new_id,
+                detail=detail,
+            )
+            conn.commit()
+            total = int(conn.execute("SELECT COUNT(*) FROM fumigaciones").fetchone()[0])
+    except Exception:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+    _delete_fumigacion_files(removed_names)
+    return JSONResponse(
+        {
+            "ok": True,
+            "item": {
+                "id": new_id,
+                "created_at": created_at,
+                "uploaded_by": uploaded_by,
+                "size_bytes": len(prepared),
+            },
+            "purged": len(removed_names),
+            "total": total,
+            "limit": FUMIGACION_LIMIT,
+        }
+    )
 
 
 if __name__ == "__main__":

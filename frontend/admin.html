@@ -22,7 +22,7 @@
       })();
     </script>
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=home97" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=fumig1" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -170,6 +170,9 @@
             <a href="#" data-target="section-trasiegos">
               <span class="sidebar-nav-label">Trasiegos</span>
             </a>
+            <a href="#" data-target="section-fumigaciones">
+              <span class="sidebar-nav-label">Fumigaciones</span>
+            </a>
             <a href="#" data-target="section-users" data-perm="users_manage" class="nav-perm-item hidden">
               <span class="sidebar-nav-label">Usuarios</span>
             </a>
@@ -316,6 +319,10 @@
                   <button type="button" class="home-action-btn" id="homeTraceBtn">
                     <span class="home-action-icon">T</span>
                     <span class="home-action-text">Trazabilidad</span>
+                  </button>
+                  <button type="button" class="home-action-btn" id="homeFumigacionesBtn" data-requires-perm="section_fumigaciones">
+                    <span class="home-action-icon">F</span>
+                    <span class="home-action-text">Fumigaciones</span>
                   </button>
                 </div>
               </div>
@@ -1022,6 +1029,36 @@
           </div>
         </section>
 
+        <section id="section-fumigaciones" class="hidden">
+          <div class="card">
+            <div class="title">Fumigaciones del almacén</div>
+            <div class="sub">Fotos JPG del almacén. Se guarda la fecha y hora de cada subida. El historial conserva siempre las 50 más recientes: al subir la número 51, se elimina la más antigua.</div>
+            <div class="actions fumigacion-toolbar">
+              <label class="btn btn-primary fumigacion-upload-btn" id="fumigacionUploadLabel" data-requires-perm="fumigaciones_write">
+                Subir foto JPG
+                <input id="fumigacionFile" type="file" accept="image/jpeg,.jpg,.jpeg" />
+              </label>
+              <span class="tag-muted" id="fumigacionesCount">0 / 50</span>
+              <span class="tag-muted" id="fumigacionUploadStatus"></span>
+            </div>
+          </div>
+          <div class="card">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:84px;">Foto</th>
+                  <th>Fecha y hora</th>
+                  <th>Subida por</th>
+                  <th style="width:90px;">Ver</th>
+                </tr>
+              </thead>
+              <tbody id="fumigacionesList">
+                <tr><td colspan="4">Cargando…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <section id="section-users" class="hidden">
           <div class="card">
             <div class="title">Usuarios y permisos</div>
@@ -1281,6 +1318,21 @@
           </div>
         </div>
 
+        <div class="modal-backdrop hidden" id="fumigacionViewer" role="dialog" aria-modal="true" aria-labelledby="fumigacionViewerTitle">
+          <div class="modal modal-fumigacion">
+            <div class="toolbar">
+              <div>
+                <div class="tag-muted" id="fumigacionViewerTitle">Foto de fumigación</div>
+                <div class="sub" id="fumigacionViewerMeta"></div>
+              </div>
+              <div class="toolbar-right">
+                <button class="btn btn-outline" id="closeFumigacionViewer" type="button">Cerrar</button>
+              </div>
+            </div>
+            <img id="fumigacionViewerImg" alt="Foto de fumigación del almacén" />
+          </div>
+        </div>
+
         <div class="modal-backdrop hidden" id="transportModal">
           <div class="modal">
             <div class="toolbar">
@@ -1360,7 +1412,7 @@
       <div id="ocrBandejaPanel" class="dropdown-panel hidden"></div>
     </div>
 
-    <script src="/static/auth-api.js?v=auth11"></script>
+    <script src="/static/auth-api.js?v=auth12"></script>
     <script>
       // Activar entorno de la URL ANTES de cualquier carga de datos.
       (function earlyEnvFromUrl() {
@@ -4455,6 +4507,7 @@
         "section-constancias": { title: "Constancias", subtitle: "Lista, filtros y confirmación de emisiones" },
         "section-trazabilidad": { title: "Trazabilidad", subtitle: "Historial por producto, lote, tienda o mes" },
         "section-trasiegos": { title: "Trasiegos", subtitle: "Registro y seguimiento de trasiegos" },
+        "section-fumigaciones": { title: "Fumigaciones", subtitle: "Historial fotográfico del almacén, máximo 50 fotos" },
         "section-analisis": { title: "Análisis", subtitle: "Importación CSV y aplicación a constancias" },
         "section-users": { title: "Usuarios", subtitle: "Cuentas, roles y permisos de acceso" },
         "section-audit": { title: "Bitácora", subtitle: "Registro de acciones por usuario" },
@@ -5066,6 +5119,9 @@
         if (targetId === "section-trasiegos") {
           loadTrasiegos();
         }
+        if (targetId === "section-fumigaciones") {
+          void loadFumigaciones();
+        }
         if (targetId === "section-trazabilidad") {
           void loadTraceSource();
         }
@@ -5098,6 +5154,197 @@
       if (homeTraceBtn) {
         homeTraceBtn.addEventListener("click", () => showSection("section-trazabilidad"));
       }
+      const homeFumigacionesBtn = document.getElementById("homeFumigacionesBtn");
+      if (homeFumigacionesBtn) {
+        homeFumigacionesBtn.addEventListener("click", () => showSection("section-fumigaciones"));
+      }
+
+      const fumigacionThumbUrls = new Map();
+      let fumigacionLoadGen = 0;
+
+      function escapeFumigacionText(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function formatFumigacionDate(iso) {
+        const date = new Date(iso);
+        if (Number.isNaN(date.getTime())) return iso || "—";
+        return new Intl.DateTimeFormat("es-PE", {
+          dateStyle: "short",
+          timeStyle: "short",
+        }).format(date);
+      }
+
+      function revokeFumigacionThumbs() {
+        fumigacionThumbUrls.forEach((url) => URL.revokeObjectURL(url));
+        fumigacionThumbUrls.clear();
+      }
+
+      function closeFumigacionViewer() {
+        const backdrop = document.getElementById("fumigacionViewer");
+        const img = document.getElementById("fumigacionViewerImg");
+        if (backdrop) {
+          backdrop.classList.add("hidden");
+          backdrop.classList.remove("show");
+        }
+        if (img) img.removeAttribute("src");
+      }
+
+      async function openFumigacionViewer(item) {
+        const backdrop = document.getElementById("fumigacionViewer");
+        const img = document.getElementById("fumigacionViewerImg");
+        const meta = document.getElementById("fumigacionViewerMeta");
+        if (!backdrop || !img || !item) return;
+        let url = fumigacionThumbUrls.get(item.id);
+        if (!url) {
+          const res = await fetch(`/api/fumigaciones/${item.id}/imagen`);
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            showErrorModal(data.detail || "No se pudo abrir la foto.");
+            return;
+          }
+          const blob = await res.blob();
+          url = URL.createObjectURL(blob);
+          fumigacionThumbUrls.set(item.id, url);
+        }
+        img.src = url;
+        if (meta) {
+          const when = formatFumigacionDate(item.created_at);
+          const who = item.uploaded_by ? ` · ${item.uploaded_by}` : "";
+          meta.textContent = `${when}${who}`;
+        }
+        backdrop.classList.remove("hidden");
+        backdrop.classList.add("show");
+      }
+
+      async function attachFumigacionThumb(item, gen) {
+        const img = document.querySelector(`img[data-fumigacion-thumb="${item.id}"]`);
+        if (!img || gen !== fumigacionLoadGen) return;
+        try {
+          const res = await fetch(`/api/fumigaciones/${item.id}/imagen`);
+          if (!res.ok || gen !== fumigacionLoadGen) return;
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          if (gen !== fumigacionLoadGen) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          fumigacionThumbUrls.set(item.id, url);
+          const current = document.querySelector(`img[data-fumigacion-thumb="${item.id}"]`);
+          if (current) current.src = url;
+          else URL.revokeObjectURL(url);
+        } catch (e) {}
+      }
+
+      async function loadFumigaciones() {
+        const body = document.getElementById("fumigacionesList");
+        const countEl = document.getElementById("fumigacionesCount");
+        if (!body) return;
+        const gen = ++fumigacionLoadGen;
+        const res = await fetch("/api/fumigaciones");
+        const data = await res.json().catch(() => ({}));
+        if (gen !== fumigacionLoadGen) return;
+        if (!res.ok) {
+          body.innerHTML = `<tr><td colspan="4">${escapeFumigacionText(data.detail || "No se pudo cargar el historial.")}</td></tr>`;
+          return;
+        }
+        const items = Array.isArray(data.items) ? data.items : [];
+        const limit = Number(data.limit || 50);
+        if (countEl) countEl.textContent = `${items.length} / ${limit}`;
+        revokeFumigacionThumbs();
+        if (!items.length) {
+          body.innerHTML = `<tr><td colspan="4">Aún no hay fotos de fumigación.</td></tr>`;
+          return;
+        }
+        body.innerHTML = items
+          .map((item) => {
+            const when = escapeFumigacionText(formatFumigacionDate(item.created_at));
+            const who = escapeFumigacionText(item.uploaded_by || "—");
+            return `<tr>
+              <td><img class="fumigacion-thumb" data-fumigacion-thumb="${item.id}" alt="Miniatura de fumigación" /></td>
+              <td>${when}</td>
+              <td>${who}</td>
+              <td><button type="button" class="btn btn-outline btn-mini" data-fumigacion-view="${item.id}">Ver</button></td>
+            </tr>`;
+          })
+          .join("");
+        body._fumigacionItems = items;
+        items.forEach((item) => {
+          void attachFumigacionThumb(item, gen);
+        });
+      }
+
+      document.getElementById("fumigacionesList")?.addEventListener("click", (event) => {
+        const body = document.getElementById("fumigacionesList");
+        const items = body && body._fumigacionItems ? body._fumigacionItems : [];
+        const button = event.target.closest("[data-fumigacion-view]");
+        const thumb = event.target.closest("[data-fumigacion-thumb]");
+        const id = Number((button && button.dataset.fumigacionView) || (thumb && thumb.dataset.fumigacionThumb));
+        if (!id) return;
+        const item = items.find((row) => Number(row.id) === id);
+        if (item) void openFumigacionViewer(item);
+      });
+
+      document.getElementById("closeFumigacionViewer")?.addEventListener("click", closeFumigacionViewer);
+      document.getElementById("fumigacionViewer")?.addEventListener("click", (event) => {
+        if (event.target && event.target.id === "fumigacionViewer") closeFumigacionViewer();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        const backdrop = document.getElementById("fumigacionViewer");
+        if (backdrop && !backdrop.classList.contains("hidden")) closeFumigacionViewer();
+      });
+
+      document.getElementById("fumigacionFile")?.addEventListener("change", async (event) => {
+        const input = event.target;
+        const file = input.files && input.files[0];
+        const status = document.getElementById("fumigacionUploadStatus");
+        if (!file) return;
+        const name = (file.name || "").toLowerCase();
+        const isJpegName = name.endsWith(".jpg") || name.endsWith(".jpeg");
+        const isJpegType = !file.type || file.type === "image/jpeg" || file.type === "image/jpg";
+        if (!isJpegName || !isJpegType) {
+          showErrorModal("Solo se aceptan fotos en formato JPG.");
+          input.value = "";
+          return;
+        }
+        if (file.size > 12 * 1024 * 1024) {
+          showErrorModal("La foto supera 12 MB. Toma otra más liviana.");
+          input.value = "";
+          return;
+        }
+        const label = document.getElementById("fumigacionUploadLabel");
+        if (label) label.style.pointerEvents = "none";
+        if (status) status.textContent = "Subiendo…";
+        try {
+          const form = new FormData();
+          form.append("file", file, file.name);
+          const res = await fetch("/api/fumigaciones", { method: "POST", body: form });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            const detail = typeof data.detail === "string" ? data.detail : "No se pudo subir la foto.";
+            showErrorModal(detail);
+            if (status) status.textContent = "";
+            return;
+          }
+          if (status) {
+            status.textContent = data.purged
+              ? "Guardada. Se eliminó la foto más antigua para mantener 50."
+              : "Foto guardada.";
+          }
+          await loadFumigaciones();
+        } catch (e) {
+          showErrorModal("No se pudo subir la foto.");
+          if (status) status.textContent = "";
+        } finally {
+          input.value = "";
+          if (label) label.style.pointerEvents = "";
+        }
+      });
       if (pageHeaderHomeBtn) {
         pageHeaderHomeBtn.addEventListener("click", () => showHomeDashboard());
       }
@@ -10117,6 +10364,7 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
         "section-constancias": "section_constancias",
         "section-trazabilidad": "section_trazabilidad",
         "section-trasiegos": "section_trasiegos",
+        "section-fumigaciones": "section_fumigaciones",
         "section-users": "users_manage",
         "section-audit": "audit_view",
       };
@@ -10215,6 +10463,7 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
           "section-transports",
           "section-trazabilidad",
           "section-trasiegos",
+          "section-fumigaciones",
           "section-users",
           "section-audit",
         ];
@@ -10494,6 +10743,7 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
           "section_constancias",
           "section_trazabilidad",
           "section_trasiegos",
+          "section_fumigaciones",
           "constancia_create",
           "constancia_edit",
           "constancia_confirm",
@@ -10501,6 +10751,7 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
           "products_write",
           "transports_write",
           "trasiegos_write",
+          "fumigaciones_write",
           "trace_export",
           "sheets_sync",
         ]);
@@ -10826,6 +11077,7 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
           const labels = {
             section_home: "Inicio",
             section_trasiegos: "Trasiegos",
+            section_fumigaciones: "Fumigaciones",
             section_clients: "Clientes",
             section_products: "Productos",
             section_transports: "Transporte",

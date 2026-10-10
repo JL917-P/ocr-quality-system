@@ -18,6 +18,9 @@ backend/results.db
 backend/*.db
 *.db-journal
 
+# Fotos de fumigación del almacén
+backend/data/fumigaciones/
+
 # Secretos y entorno
 .env
 .env.local

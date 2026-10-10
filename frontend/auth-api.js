@@ -12,6 +12,7 @@
     section_constancias: "Ver Constancias",
     section_trazabilidad: "Ver Trazabilidad",
     section_trasiegos: "Ver Trasiegos",
+    section_fumigaciones: "Ver Fumigaciones",
     constancia_create: "Crear constancias",
     constancia_edit: "Editar constancias",
     constancia_delete: "Eliminar constancias",
@@ -20,6 +21,7 @@
     products_write: "Crear/editar/eliminar productos",
     transports_write: "Crear/editar/eliminar transportes",
     trasiegos_write: "Crear/editar/eliminar trasiegos",
+    fumigaciones_write: "Subir fotos de fumigación",
     trace_export: "Exportar trazabilidad",
     users_manage: "Administrar usuarios",
     audit_view: "Ver bitácora",
@@ -38,6 +40,7 @@
         "section_constancias",
         "section_trazabilidad",
         "section_trasiegos",
+        "section_fumigaciones",
       ],
     },
     {
@@ -56,6 +59,7 @@
         "products_write",
         "transports_write",
         "trasiegos_write",
+        "fumigaciones_write",
       ],
     },
     {
