@@ -5342,11 +5342,56 @@ body.perm-no-trace-export #traceModalReportBtn {
   gap: 12px;
 }
 
-.modal.modal-fumigacion img {
+.fumigacion-zoom-stage {
+  position: relative;
+  width: 100%;
+  touch-action: none;
+}
+
+.modal.modal-fumigacion .fumigacion-zoom-stage img {
   width: 100%;
   max-height: calc(92vh - 120px);
   object-fit: contain;
   background: #0c2340;
   border-radius: 10px;
+  display: block;
+}
+
+.fumigacion-zoom-stage.is-zooming {
+  cursor: none;
+}
+
+.fumigacion-lupa {
+  display: none;
+  position: absolute;
+  width: 176px;
+  height: 176px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow:
+    0 10px 24px rgba(12, 35, 64, 0.35),
+    inset 0 0 0 1px rgba(12, 35, 64, 0.2);
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-color: #0c2340;
+  z-index: 3;
+}
+
+.fumigacion-lupa::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 42px;
+  right: 22px;
+  bottom: -6px;
+  border-radius: 6px;
+  background: #fff;
+  transform: rotate(-38deg);
+  transform-origin: top center;
+  box-shadow: 0 2px 6px rgba(12, 35, 64, 0.28);
+}
+
+.fumigacion-zoom-stage.is-zooming .fumigacion-lupa {
+  display: block;
 }
 
