@@ -1050,10 +1050,11 @@
                   <th>Fecha y hora</th>
                   <th>Subida por</th>
                   <th style="width:90px;">Ver</th>
+                  <th style="width:100px;">Eliminar</th>
                 </tr>
               </thead>
               <tbody id="fumigacionesList">
-                <tr><td colspan="4">Cargando…</td></tr>
+                <tr><td colspan="5">Cargando…</td></tr>
               </tbody>
             </table>
           </div>
@@ -1326,6 +1327,7 @@
                 <div class="sub" id="fumigacionViewerMeta"></div>
               </div>
               <div class="toolbar-right">
+                <button class="btn btn-danger" id="deleteFumigacionViewer" type="button" data-requires-perm="fumigaciones_write">Eliminar</button>
                 <button class="btn btn-outline" id="closeFumigacionViewer" type="button">Cerrar</button>
               </div>
             </div>
@@ -5161,6 +5163,7 @@
 
       const fumigacionThumbUrls = new Map();
       let fumigacionLoadGen = 0;
+      let fumigacionViewerItem = null;
 
       function escapeFumigacionText(value) {
         return String(value ?? "")
@@ -5192,6 +5195,7 @@
           backdrop.classList.remove("show");
         }
         if (img) img.removeAttribute("src");
+        fumigacionViewerItem = null;
       }
 
       async function openFumigacionViewer(item) {
@@ -5199,6 +5203,7 @@
         const img = document.getElementById("fumigacionViewerImg");
         const meta = document.getElementById("fumigacionViewerMeta");
         if (!backdrop || !img || !item) return;
+        fumigacionViewerItem = item;
         let url = fumigacionThumbUrls.get(item.id);
         if (!url) {
           const res = await fetch(`/api/fumigaciones/${item.id}/imagen`);
@@ -5249,7 +5254,7 @@
         const data = await res.json().catch(() => ({}));
         if (gen !== fumigacionLoadGen) return;
         if (!res.ok) {
-          body.innerHTML = `<tr><td colspan="4">${escapeFumigacionText(data.detail || "No se pudo cargar el historial.")}</td></tr>`;
+          body.innerHTML = `<tr><td colspan="5">${escapeFumigacionText(data.detail || "No se pudo cargar el historial.")}</td></tr>`;
           return;
         }
         const items = Array.isArray(data.items) ? data.items : [];
@@ -5257,18 +5262,23 @@
         if (countEl) countEl.textContent = `${items.length} / ${limit}`;
         revokeFumigacionThumbs();
         if (!items.length) {
-          body.innerHTML = `<tr><td colspan="4">Aún no hay fotos de fumigación.</td></tr>`;
+          body.innerHTML = `<tr><td colspan="5">Aún no hay fotos de fumigación.</td></tr>`;
           return;
         }
+        const canDelete = typeof can === "function" && can("fumigaciones_write");
         body.innerHTML = items
           .map((item) => {
             const when = escapeFumigacionText(formatFumigacionDate(item.created_at));
             const who = escapeFumigacionText(item.uploaded_by || "—");
+            const deleteCell = canDelete
+              ? `<button type="button" class="btn btn-danger btn-mini" data-fumigacion-delete="${item.id}">Eliminar</button>`
+              : "";
             return `<tr>
               <td><img class="fumigacion-thumb" data-fumigacion-thumb="${item.id}" alt="Miniatura de fumigación" /></td>
               <td>${when}</td>
               <td>${who}</td>
               <td><button type="button" class="btn btn-outline btn-mini" data-fumigacion-view="${item.id}">Ver</button></td>
+              <td>${deleteCell}</td>
             </tr>`;
           })
           .join("");
@@ -5278,15 +5288,54 @@
         });
       }
 
+      function confirmDeleteFumigacion(item) {
+        if (!item) return;
+        const when = formatFumigacionDate(item.created_at);
+        showConfirmModal(
+          `Se eliminará la foto del ${when}.`,
+          () => {
+            void deleteFumigacion(item.id);
+          },
+          null,
+          { title: "Eliminar foto", confirmText: "Eliminar", cancelText: "Cancelar" }
+        );
+      }
+
+      async function deleteFumigacion(id) {
+        const status = document.getElementById("fumigacionUploadStatus");
+        const res = await fetch(`/api/fumigaciones/${id}`, { method: "DELETE" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showErrorModal(typeof data.detail === "string" ? data.detail : "No se pudo eliminar la foto.");
+          return;
+        }
+        if (fumigacionViewerItem && Number(fumigacionViewerItem.id) === Number(id)) {
+          closeFumigacionViewer();
+        }
+        if (status) status.textContent = "Foto eliminada.";
+        await loadFumigaciones();
+      }
+
       document.getElementById("fumigacionesList")?.addEventListener("click", (event) => {
         const body = document.getElementById("fumigacionesList");
         const items = body && body._fumigacionItems ? body._fumigacionItems : [];
+        const deleteButton = event.target.closest("[data-fumigacion-delete]");
+        if (deleteButton) {
+          const deleteId = Number(deleteButton.dataset.fumigacionDelete);
+          const deleteItem = items.find((row) => Number(row.id) === deleteId);
+          if (deleteItem) confirmDeleteFumigacion(deleteItem);
+          return;
+        }
         const button = event.target.closest("[data-fumigacion-view]");
         const thumb = event.target.closest("[data-fumigacion-thumb]");
         const id = Number((button && button.dataset.fumigacionView) || (thumb && thumb.dataset.fumigacionThumb));
         if (!id) return;
         const item = items.find((row) => Number(row.id) === id);
         if (item) void openFumigacionViewer(item);
+      });
+
+      document.getElementById("deleteFumigacionViewer")?.addEventListener("click", () => {
+        if (fumigacionViewerItem) confirmDeleteFumigacion(fumigacionViewerItem);
       });
 
       document.getElementById("closeFumigacionViewer")?.addEventListener("click", closeFumigacionViewer);

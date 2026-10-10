@@ -3956,6 +3956,36 @@ def api_fumigacion_image(
     )
 
 
+@app.delete("/api/fumigaciones/{fumigacion_id}")
+def api_delete_fumigacion(
+    fumigacion_id: int,
+    user: dict = Depends(require_permission("fumigaciones_write")),
+) -> JSONResponse:
+    with sqlite3.connect(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT stored_name, created_at FROM fumigaciones WHERE id = ?",
+            (fumigacion_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Foto no encontrada.")
+        stored_name = str(row[0] or "")
+        created_at = row[1] or ""
+        conn.execute("DELETE FROM fumigaciones WHERE id = ?", (fumigacion_id,))
+        write_audit(
+            conn,
+            user=user,
+            action="fumigacion_delete",
+            entity="fumigacion",
+            entity_id=fumigacion_id,
+            detail=f"Eliminó foto de fumigación del {created_at}",
+        )
+        conn.commit()
+        total = int(conn.execute("SELECT COUNT(*) FROM fumigaciones").fetchone()[0])
+    if stored_name:
+        _delete_fumigacion_files([stored_name])
+    return JSONResponse({"ok": True, "total": total, "limit": FUMIGACION_LIMIT})
+
+
 @app.post("/api/fumigaciones")
 async def api_upload_fumigacion(
     file: UploadFile = File(...),
