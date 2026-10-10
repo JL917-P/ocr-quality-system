@@ -22,7 +22,7 @@
       })();
     </script>
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=fumig2" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=fumig3" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -1332,7 +1332,11 @@
             </div>
             <div class="fumigacion-zoom-stage" id="fumigacionZoomStage">
               <img id="fumigacionViewerImg" alt="Foto de fumigación del almacén" />
-              <div class="fumigacion-lupa" id="fumigacionLupa" aria-hidden="true"></div>
+              <div class="fumigacion-zoom-tools">
+                <button type="button" id="fumigacionZoomOut" aria-label="Alejar">−</button>
+                <button type="button" id="fumigacionZoomReset">100%</button>
+                <button type="button" id="fumigacionZoomIn" aria-label="Acercar">+</button>
+              </div>
             </div>
           </div>
         </div>
@@ -5199,7 +5203,7 @@
         }
         if (img) img.removeAttribute("src");
         fumigacionViewerItem = null;
-        hideFumigacionLupa();
+        resetFumigacionZoom();
       }
 
       async function openFumigacionViewer(item) {
@@ -5228,76 +5232,103 @@
         }
         backdrop.classList.remove("hidden");
         backdrop.classList.add("show");
-        fumigacionZoom = 3;
-        hideFumigacionLupa();
+        resetFumigacionZoom();
       }
 
-      let fumigacionZoom = 3;
-      const FUMIGACION_LUPA_SIZE = 176;
-
-      function hideFumigacionLupa() {
-        const stage = document.getElementById("fumigacionZoomStage");
-        const lupa = document.getElementById("fumigacionLupa");
-        stage?.classList.remove("is-zooming");
-        if (lupa) {
-          lupa.style.backgroundImage = "";
-          lupa.setAttribute("aria-hidden", "true");
-        }
-      }
+      let fumigacionScale = 1;
+      let fumigacionPanX = 0;
+      let fumigacionPanY = 0;
+      let fumigacionDrag = null;
 
       function fumigacionViewerIsOpen() {
         const backdrop = document.getElementById("fumigacionViewer");
         return !!(backdrop && !backdrop.classList.contains("hidden"));
       }
 
-      function positionFumigacionLupa(event) {
+      function clampFumigacionPan() {
+        const stage = document.getElementById("fumigacionZoomStage");
+        if (!stage || fumigacionScale <= 1) {
+          fumigacionPanX = 0;
+          fumigacionPanY = 0;
+          return;
+        }
+        const extraX = (stage.clientWidth * (fumigacionScale - 1)) / 2;
+        const extraY = (stage.clientHeight * (fumigacionScale - 1)) / 2;
+        fumigacionPanX = Math.max(-extraX, Math.min(extraX, fumigacionPanX));
+        fumigacionPanY = Math.max(-extraY, Math.min(extraY, fumigacionPanY));
+      }
+
+      function applyFumigacionZoom() {
         const stage = document.getElementById("fumigacionZoomStage");
         const img = document.getElementById("fumigacionViewerImg");
-        const lupa = document.getElementById("fumigacionLupa");
-        if (!stage || !img || !lupa || !fumigacionViewerIsOpen() || !img.naturalWidth) {
-          hideFumigacionLupa();
-          return;
+        const label = document.getElementById("fumigacionZoomReset");
+        clampFumigacionPan();
+        if (img) {
+          img.style.transform = `translate(${fumigacionPanX}px, ${fumigacionPanY}px) scale(${fumigacionScale})`;
         }
-        const imgRect = img.getBoundingClientRect();
-        const fit = Math.min(imgRect.width / img.naturalWidth, imgRect.height / img.naturalHeight);
-        const drawnW = img.naturalWidth * fit;
-        const drawnH = img.naturalHeight * fit;
-        const drawnLeft = imgRect.left + (imgRect.width - drawnW) / 2;
-        const drawnTop = imgRect.top + (imgRect.height - drawnH) / 2;
-        const x = event.clientX;
-        const y = event.clientY;
-        if (x < drawnLeft || y < drawnTop || x > drawnLeft + drawnW || y > drawnTop + drawnH) {
-          hideFumigacionLupa();
-          return;
+        if (label) label.textContent = `${Math.round(fumigacionScale * 100)}%`;
+        stage?.classList.toggle("is-zoomed", fumigacionScale > 1);
+      }
+
+      function resetFumigacionZoom() {
+        fumigacionScale = 1;
+        fumigacionPanX = 0;
+        fumigacionPanY = 0;
+        fumigacionDrag = null;
+        applyFumigacionZoom();
+      }
+
+      function setFumigacionScale(next) {
+        fumigacionScale = Math.min(5, Math.max(1, Math.round(next * 100) / 100));
+        if (fumigacionScale <= 1) {
+          fumigacionScale = 1;
+          fumigacionPanX = 0;
+          fumigacionPanY = 0;
         }
-        const size = FUMIGACION_LUPA_SIZE;
-        const zoom = fumigacionZoom;
-        const stageRect = stage.getBoundingClientRect();
-        const lift = event.pointerType === "touch" ? size * 0.72 : 0;
-        lupa.style.left = `${x - stageRect.left - size / 2}px`;
-        lupa.style.top = `${y - stageRect.top - size / 2 - lift}px`;
-        lupa.style.backgroundImage = `url("${img.src}")`;
-        lupa.style.backgroundSize = `${drawnW * zoom}px ${drawnH * zoom}px`;
-        lupa.style.backgroundPosition = `${-( (x - drawnLeft) * zoom - size / 2 )}px ${-( (y - drawnTop) * zoom - size / 2 )}px`;
-        lupa.setAttribute("aria-hidden", "false");
-        stage.classList.add("is-zooming");
+        applyFumigacionZoom();
       }
 
       const fumigacionZoomStage = document.getElementById("fumigacionZoomStage");
       if (fumigacionZoomStage) {
-        fumigacionZoomStage.addEventListener("pointermove", positionFumigacionLupa);
-        fumigacionZoomStage.addEventListener("pointerdown", positionFumigacionLupa);
-        fumigacionZoomStage.addEventListener("pointerleave", hideFumigacionLupa);
-        fumigacionZoomStage.addEventListener("pointerup", (event) => {
-          if (event.pointerType === "touch") hideFumigacionLupa();
+        document.getElementById("fumigacionZoomIn")?.addEventListener("click", () => {
+          setFumigacionScale(fumigacionScale * 1.25);
         });
-        fumigacionZoomStage.addEventListener("pointercancel", hideFumigacionLupa);
+        document.getElementById("fumigacionZoomOut")?.addEventListener("click", () => {
+          setFumigacionScale(fumigacionScale / 1.25);
+        });
+        document.getElementById("fumigacionZoomReset")?.addEventListener("click", () => {
+          resetFumigacionZoom();
+        });
         fumigacionZoomStage.addEventListener("wheel", (event) => {
           if (!fumigacionViewerIsOpen()) return;
           event.preventDefault();
-          fumigacionZoom = Math.min(6, Math.max(2, fumigacionZoom + (event.deltaY < 0 ? 0.35 : -0.35)));
-          positionFumigacionLupa(event);
+          setFumigacionScale(fumigacionScale * (event.deltaY < 0 ? 1.12 : 1 / 1.12));
         }, { passive: false });
+        fumigacionZoomStage.addEventListener("pointerdown", (event) => {
+          if (event.target.closest("button") || fumigacionScale <= 1) return;
+          fumigacionDrag = {
+            id: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+            px: fumigacionPanX,
+            py: fumigacionPanY,
+          };
+          fumigacionZoomStage.classList.add("is-panning");
+          fumigacionZoomStage.setPointerCapture(event.pointerId);
+        });
+        fumigacionZoomStage.addEventListener("pointermove", (event) => {
+          if (!fumigacionDrag || fumigacionDrag.id !== event.pointerId) return;
+          fumigacionPanX = fumigacionDrag.px + (event.clientX - fumigacionDrag.x);
+          fumigacionPanY = fumigacionDrag.py + (event.clientY - fumigacionDrag.y);
+          applyFumigacionZoom();
+        });
+        const endFumigacionDrag = (event) => {
+          if (!fumigacionDrag || fumigacionDrag.id !== event.pointerId) return;
+          fumigacionDrag = null;
+          fumigacionZoomStage.classList.remove("is-panning");
+        };
+        fumigacionZoomStage.addEventListener("pointerup", endFumigacionDrag);
+        fumigacionZoomStage.addEventListener("pointercancel", endFumigacionDrag);
       }
 
       async function attachFumigacionThumb(item, gen) {
