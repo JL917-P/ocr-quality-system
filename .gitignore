@@ -20,6 +20,7 @@ backend/*.db
 
 # Fotos de fumigación del almacén
 backend/data/fumigaciones/
+backend/data/fumigaciones_backup.json
 
 # Secretos y entorno
 .env

@@ -425,7 +425,6 @@ def init_db() -> None:
         reclaim_operator_constancias_to_admin_once(conn)
         conn.commit()
         repair_all_trasiegos_in_sqlite(conn)
-        _sweep_orphan_fumigacion_files(conn)
         conn.commit()
         # El catálogo de operadores solo se copia al CREAR el usuario (elección del admin).
 
@@ -1335,6 +1334,21 @@ def on_startup() -> None:
         )
     except Exception:
         logging.getLogger(__name__).exception("[STARTUP] No se pudieron restaurar usuarios/bitácora")
+    try:
+        from fumigacion_persist import restore_fumigaciones_on_startup
+
+        with sqlite3.connect(DB_PATH) as conn:
+            photos_restored = restore_fumigaciones_on_startup(conn, DATA_DIR, FUMIGACIONES_DIR)
+            conn.commit()
+        logging.getLogger(__name__).warning(
+            "[STARTUP] Fumigaciones: before=%s file=%s sheets=%s total=%s",
+            photos_restored.get("before"),
+            photos_restored.get("from_file"),
+            photos_restored.get("from_sheets"),
+            photos_restored.get("total"),
+        )
+    except Exception:
+        logging.getLogger(__name__).exception("[STARTUP] No se pudieron restaurar fotos de fumigación")
     run_startup_sheets_backup_check(DB_PATH)
     # Tras redeploy a veces la BD queda vacía: restaurar automáticamente desde Sheets.
     try:
@@ -3862,34 +3876,35 @@ def _fumigacion_file_path(stored_name: str) -> Path:
     return path
 
 
-def _sweep_orphan_fumigacion_files(conn: sqlite3.Connection) -> None:
-    FUMIGACIONES_DIR.mkdir(parents=True, exist_ok=True)
-    keep = {
-        str(row[0])
-        for row in conn.execute("SELECT stored_name FROM fumigaciones").fetchall()
-        if row and row[0]
-    }
-    for path in FUMIGACIONES_DIR.glob("*.jpg"):
-        if path.name not in keep:
-            try:
-                path.unlink()
-            except OSError:
-                logging.getLogger(__name__).exception("No se pudo borrar foto huérfana %s", path.name)
-
-
-def _prune_fumigaciones(conn: sqlite3.Connection) -> list[str]:
+def _prune_fumigaciones(conn: sqlite3.Connection) -> list[tuple[int, str]]:
     rows = conn.execute(
         "SELECT id, stored_name FROM fumigaciones ORDER BY created_at ASC, id ASC"
     ).fetchall()
     overflow = len(rows) - FUMIGACION_LIMIT
     if overflow <= 0:
         return []
-    removed: list[str] = []
+    removed: list[tuple[int, str]] = []
     for row in rows[:overflow]:
         conn.execute("DELETE FROM fumigaciones WHERE id = ?", (int(row[0]),))
-        if row[1]:
-            removed.append(str(row[1]))
+        removed.append((int(row[0]), str(row[1] or "")))
     return removed
+
+
+def _backup_fumigaciones(drop_ids: list[int] | None = None, push_id: int | None = None) -> None:
+    """Copia las fotos al respaldo. Un reinicio del servidor no debe borrarlas."""
+    try:
+        from fumigacion_persist import sync_fumigacion_backup
+
+        with sqlite3.connect(DB_PATH) as conn:
+            sync_fumigacion_backup(
+                conn,
+                DATA_DIR,
+                FUMIGACIONES_DIR,
+                drop_ids=drop_ids or [],
+                push_id=push_id,
+            )
+    except Exception:
+        logging.getLogger(__name__).exception("No se pudo respaldar fotos de fumigación")
 
 
 def _delete_fumigacion_files(names: list[str]) -> None:
@@ -3983,6 +3998,7 @@ def api_delete_fumigacion(
         total = int(conn.execute("SELECT COUNT(*) FROM fumigaciones").fetchone()[0])
     if stored_name:
         _delete_fumigacion_files([stored_name])
+    _backup_fumigaciones(drop_ids=[fumigacion_id])
     return JSONResponse({"ok": True, "total": total, "limit": FUMIGACION_LIMIT})
 
 
@@ -4004,7 +4020,6 @@ async def api_upload_fumigacion(
     path.write_bytes(prepared)
     created_at = local_now_iso()
     uploaded_by = _actor_label(user)
-    removed_names: list[str] = []
     try:
         with sqlite3.connect(DB_PATH) as conn:
             cur = conn.execute(
@@ -4023,9 +4038,9 @@ async def api_upload_fumigacion(
                 ),
             )
             new_id = int(cur.lastrowid)
-            removed_names = _prune_fumigaciones(conn)
+            removed = _prune_fumigaciones(conn)
             detail = "Subió foto de fumigación"
-            if removed_names:
+            if removed:
                 detail += ". Se depuró la foto más antigua para mantener 50."
             write_audit(
                 conn,
@@ -4043,7 +4058,8 @@ async def api_upload_fumigacion(
         except OSError:
             pass
         raise
-    _delete_fumigacion_files(removed_names)
+    _delete_fumigacion_files([name for _rid, name in removed if name])
+    _backup_fumigaciones(drop_ids=[rid for rid, _name in removed], push_id=new_id)
     return JSONResponse(
         {
             "ok": True,
@@ -4053,7 +4069,7 @@ async def api_upload_fumigacion(
                 "uploaded_by": uploaded_by,
                 "size_bytes": len(prepared),
             },
-            "purged": len(removed_names),
+            "purged": len(removed),
             "total": total,
             "limit": FUMIGACION_LIMIT,
         }
