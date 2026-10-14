@@ -22,8 +22,8 @@
 
 /** Firma por entorno: admin y Carlos (user02) usan la firma de Lima; user01 la suya. */
       const FIRMA_BY_USERNAME = {
-        admin: "/static/firma-carlos.png?v=1",
-        user02: "/static/firma-carlos.png?v=1",
+        admin: "/static/firma-carlos.png?v=2",
+        user02: "/static/firma-carlos.png?v=2",
         user01: "/static/firma-user01.png?v=1",
       };
 
