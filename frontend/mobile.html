@@ -3,6 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <script src="/static/ui-mode.js?v=device1"></script>
+    <script>
+      (function () {
+        try {
+          if (window.QCUiMode && !window.QCUiMode.shouldUseMobile()) {
+            location.replace("/admin" + (location.search || ""));
+          }
+        } catch (e) {}
+      })();
+    </script>
     <title>Móvil · Control de Calidad</title>
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <link rel="stylesheet" href="/static/mobile.css?v=5" />
@@ -139,6 +149,6 @@
       })();
     </script>
     <script src="/static/auth-gate.js?v=auth8"></script>
-    <script src="/static/mobile.js?v=6"></script>
+    <script src="/static/mobile.js?v=7"></script>
   </body>
 </html>

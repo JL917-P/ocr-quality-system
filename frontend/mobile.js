@@ -667,9 +667,12 @@
     document.getElementById("mobSaveBtn")?.addEventListener("click", () => saveConstancia("confirmada"));
     document.getElementById("mobReserveBtn")?.addEventListener("click", () => saveConstancia("por_confirmar"));
     document.getElementById("mobTabletBtn")?.addEventListener("click", () => {
-      try {
-        localStorage.setItem(UI_MODE_KEY, "tablet");
-      } catch (e) {}
+      if (window.QCUiMode) window.QCUiMode.setMode("tablet");
+      else {
+        try {
+          localStorage.setItem(UI_MODE_KEY, "tablet");
+        } catch (e) {}
+      }
       const q = window.location.search || "";
       window.location.href = `/admin${q}`;
     });
@@ -686,9 +689,6 @@
   }
 
   async function initApp() {
-    try {
-      localStorage.setItem(UI_MODE_KEY, "mobile");
-    } catch (e) {}
     ownerUsername = await resolveOwnerUsername();
     refreshUserLabel();
     bindUi();

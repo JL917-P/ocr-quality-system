@@ -3,19 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="/static/ui-mode.js?v=device1"></script>
     <script>
       (function () {
         try {
-          if (localStorage.getItem("qc_ui_mode") === "tablet") return;
-          if (localStorage.getItem("qc_ui_mode") === "mobile") {
-            location.replace("/mobile" + (location.search || ""));
-            return;
-          }
-          var w = Math.min(window.innerWidth, screen.width || window.innerWidth);
-          var ua = navigator.userAgent || "";
-          if (/iPad|Tablet|PlayBook/i.test(ua)) return;
-          if (w >= 768) return;
-          if (/Mobile|Android|iPhone|iPod/i.test(ua) || w < 640) {
+          if (window.QCUiMode && window.QCUiMode.shouldUseMobile()) {
             location.replace("/mobile" + (location.search || ""));
           }
         } catch (e) {}
