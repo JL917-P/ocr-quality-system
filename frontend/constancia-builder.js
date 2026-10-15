@@ -22,8 +22,8 @@
 
 /** Firma por entorno: admin y Carlos (user02) usan la firma de Lima; user01 la suya. */
       const FIRMA_BY_USERNAME = {
-        admin: "/static/firma-carlos.png?v=2",
-        user02: "/static/firma-carlos.png?v=2",
+        admin: "/static/firma-carlos.png?v=3",
+        user02: "/static/firma-carlos.png?v=3",
         user01: "/static/firma-user01.png?v=1",
       };
 
@@ -2066,8 +2066,8 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
                 }
                 .empty { text-align: center; padding: 6px; }
                 .footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 4px; gap: 12px; }
-                .firma-wrap { width: 55%; min-height: 104px; display: flex; align-items: flex-end; }
-                .firma { max-height: 104px; max-width: 100%; object-fit: contain; }
+                .firma-wrap { width: 55%; min-height: 168px; display: flex; align-items: flex-end; }
+                .firma { max-height: 168px; max-width: 100%; object-fit: contain; }
                 .footer-text { width: 45%; font-size: 10px; text-align: right; line-height: 1.3; }
                 .footer-text .email { color: #2563eb; text-decoration: underline; }
                 .ajiles-quality-page { padding: 9mm 11mm 7mm; font-family: Arial, Helvetica, sans-serif; color: #000; box-sizing: border-box; height: 297mm; overflow: hidden; }
@@ -2117,8 +2117,8 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
                 .aj-obs-note { font-size: 6pt; margin: 2px 0 0; flex-shrink: 0; }
                 .aj-sign-row { display: flex; gap: 0; margin: 4px 0 6px; flex-shrink: 0; }
                 .aj-sign-col { flex: 1; padding: 0 10px; position: relative; }
-                .aj-sign-img-wrap { min-height: 72px; display: flex; align-items: flex-end; justify-content: center; padding: 0 12px 2px 28px; }
-                .aj-firma { max-height: 82px; max-width: 280px; width: auto; object-fit: contain; }
+                .aj-sign-img-wrap { min-height: 132px; display: flex; align-items: flex-end; justify-content: center; padding: 0 12px 2px 28px; }
+                .aj-firma { max-height: 132px; max-width: 320px; width: auto; object-fit: contain; }
                 .aj-sign-spacer { min-height: 72px; }
                 .aj-sign-line { border-bottom: 1px solid #000; margin: 0 6px 3px; }
                 .aj-sign-lbl { font-weight: 700; font-size: 6.5pt; text-align: center; padding-top: 2px; }
