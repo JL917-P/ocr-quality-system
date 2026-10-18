@@ -14,7 +14,7 @@
       })();
     </script>
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=fumig4" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=review1" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -557,7 +557,7 @@
                   <table class="ocr-products-table" id="ocrProductsTable">
                     <thead>
                       <tr id="productsHeadRow">
-                        <th style="width:50px;">Item</th>
+                        <th style="width:68px;">Item</th>
                         <th style="width:28%;">Producto *</th>
                         <th style="width:90px;">Lote</th>
                         <th style="width:100px;">F. Producción</th>
@@ -2359,7 +2359,7 @@
         let headHtml;
         if (isActiveAjilesClient()) {
           headHtml = `
-            <th style="width:45px;">Item</th>
+            <th style="width:68px;">Item</th>
             <th style="width:95px;">Fecha envío</th>
             <th style="width:22%;">Producto *</th>
             <th style="width:80px;">Lote</th>
@@ -2374,7 +2374,7 @@
           `;
         } else {
           headHtml = `
-            <th style="width:50px;">Item</th>
+            <th style="width:68px;">Item</th>
             <th style="width:28%;">Producto *</th>
             <th style="width:90px;">Lote</th>
             <th style="width:100px;">F. Producción</th>
@@ -2485,9 +2485,24 @@
         `;
       }
 
+      function setRowPendingReview(row, pending) {
+        if (!row) return;
+        const on = !!pending;
+        row.classList.toggle("ocr-row-pending-review", on);
+        const mark = row.querySelector(".item-review-mark");
+        if (!mark) return;
+        mark.setAttribute("aria-pressed", on ? "true" : "false");
+        mark.title = on ? "Quitar pendiente de revisar" : "Marcar pendiente de revisar";
+      }
+
       function wireProductRow(row, bodyEl) {
         const itemCell = row.querySelector(".itemCell");
-        itemCell.innerHTML = `<span class="row-number"></span> <button class="btn btn-success btn-mini" type="button">+</button>`;
+        itemCell.innerHTML = `<span class="row-number"></span><button class="item-review-mark" type="button" aria-pressed="false" title="Marcar pendiente de revisar"></button><button class="btn btn-success btn-mini" type="button">+</button>`;
+        itemCell.querySelector(".item-review-mark").addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setRowPendingReview(row, !row.classList.contains("ocr-row-pending-review"));
+        });
         itemCell.querySelector(".btn-mini").addEventListener("click", () => {
           insertRowAfter(row, bodyEl);
         });
@@ -2588,6 +2603,11 @@
           const fos = itemSnapshotField(itm, "nivel_fosfina", "fosfina");
           if (fos !== "") fosfinaInput.value = fos;
         }
+        const pending = itm?.pendiente_revision;
+        setRowPendingReview(
+          row,
+          pending === true || pending === 1 || pending === "1" || pending === "true"
+        );
       }
 
       function fillProductsBody(bodyEl, items, { minRows = 0 } = {}) {
@@ -6359,6 +6379,7 @@
             if (match?.id) row.product_id = match.id;
             appendCatalogQualityFields(row, match);
             if (qty !== null && !Number.isNaN(qty)) row.quantity = qty;
+            row.pendiente_revision = tr.classList.contains("ocr-row-pending-review");
             items.push(row);
           }
         });

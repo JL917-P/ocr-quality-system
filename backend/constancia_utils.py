@@ -53,6 +53,22 @@ def _str(value: Any) -> str:
     return str(value).strip()
 
 
+def _pending_review_flag(value: Any) -> bool | None:
+    """True/False si el valor es explícito; None si no se puede interpretar."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return bool(value)
+    text = _str(value).lower()
+    if text in ("1", "true", "si", "sí", "yes"):
+        return True
+    if text in ("0", "false", "no"):
+        return False
+    return None
+
+
 def item_field(item: dict[str, Any], *keys: str) -> Any:
     """Lee un campo del ítem priorizando snapshots."""
     for key in keys:
@@ -234,6 +250,12 @@ def build_item_snapshot(
             val = previous.get(key)
         if val not in (None, ""):
             snap[key] = val
+
+    pending = _pending_review_flag(item.get("pendiente_revision")) if "pendiente_revision" in item else None
+    if pending is None and previous and "pendiente_revision" in previous:
+        pending = _pending_review_flag(previous.get("pendiente_revision"))
+    if pending:
+        snap["pendiente_revision"] = True
 
     for cat_key, snap_key in QUALITY_SNAPSHOT_MAP:
         if catalog and catalog.get(cat_key) is not None:

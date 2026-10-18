@@ -2815,6 +2815,55 @@ th {
   box-shadow: inset 3px 0 0 #f59e0b;
 }
 
+#section-ocr .ocr-products-table tbody tr.ocr-row-pending-review,
+#section-ocr .ocr-products-table tbody tr.ocr-row-pending-review:nth-child(even),
+#section-ocr .ocr-products-table tbody tr.ocr-row-incomplete.ocr-row-pending-review {
+  background: #f6c9c9;
+  box-shadow: inset 3px 0 0 #e57373;
+}
+
+#section-ocr .ocr-products-table tbody tr.ocr-row-pending-review:hover {
+  background: #f0b6b6;
+}
+
+#section-ocr .itemCell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#section-ocr .item-review-mark {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  margin: 0;
+  border: 1.5px solid #94a3b8;
+  border-radius: 2px;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+#section-ocr tr.ocr-row-pending-review .item-review-mark {
+  background: #e57373;
+  border-color: #c62828;
+}
+
+@media print {
+  #section-ocr .item-review-mark {
+    display: none !important;
+  }
+
+  #section-ocr .ocr-products-table tbody tr.ocr-row-pending-review,
+  #section-ocr .ocr-products-table tbody tr.ocr-row-pending-review:nth-child(even),
+  #section-ocr .ocr-products-table tbody tr.ocr-row-pending-review:hover,
+  #section-ocr .ocr-products-table tbody tr.ocr-row-incomplete.ocr-row-pending-review {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+}
+
 /* —— Trazabilidad: panel + modal reporte —— */
 #section-trazabilidad > .card:first-child {
   padding: 10px 12px 12px;
