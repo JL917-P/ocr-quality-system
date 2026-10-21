@@ -3745,6 +3745,74 @@
           .join(" ");
       }
 
+      function makroWeightToken(value) {
+        const compact = normalizeSearchText(value).replace(/\s+/g, "");
+        const withKg = [...compact.matchAll(/(?:scx|sc|bl|x)?(\d+)kg/g)];
+        if (withKg.length) return `${withKg[withKg.length - 1][1]}kg`;
+        const bare = compact.match(/(?:scx|sc|bl|x)(\d+)$/);
+        return bare ? `${bare[1]}kg` : "";
+      }
+
+      function makroBrand(value) {
+        const tokens = new Set(normalizeSearchText(value).split(" ").filter(Boolean));
+        if (tokens.has("cusi") && tokens.has("cusa")) return "cusi";
+        if (tokens.has("gran") && tokens.has("chalan")) return "chalan";
+        if (tokens.has("aro")) return "aro";
+        return "";
+      }
+
+      function makroGradeTokens(value) {
+        const tokens = new Set(normalizeSearchText(value).split(" ").filter(Boolean));
+        return ["despuntado", "negro", "gourmet", "anejo", "extra", "superior"].filter((token) => tokens.has(token));
+      }
+
+      function makroScoreCatalogName(csvName, catalogName) {
+        const csvWeight = makroWeightToken(csvName);
+        const catalogWeight = makroWeightToken(catalogName);
+        if (!csvWeight || csvWeight !== catalogWeight) return null;
+        const csvBrand = makroBrand(csvName);
+        const catalogBrand = makroBrand(catalogName);
+        if (!csvBrand || csvBrand !== catalogBrand) return null;
+        let csvGrades = makroGradeTokens(csvName);
+        const catalogGrades = makroGradeTokens(catalogName);
+        if (csvGrades.includes("gourmet") && !csvGrades.includes("anejo")) csvGrades = csvGrades.concat(["anejo"]);
+        let score = 0;
+        csvGrades.forEach((token) => {
+          if (token === "gourmet") return;
+          score += catalogGrades.includes(token) ? 3 : -1;
+        });
+        catalogGrades.forEach((token) => {
+          if (!csvGrades.includes(token)) score -= 2;
+        });
+        return score;
+      }
+
+      function makroCatalogRichness(prod) {
+        return ["lot", "production_text", "expiration_text", "humidity", "broken_grains", "chalky_1", "chalky_2", "damaged_grains", "whiteness"].filter(
+          (key) => prod && prod[key] !== undefined && prod[key] !== null && String(prod[key]).trim() !== ""
+        ).length;
+      }
+
+      function makroBestByCatalogName(csvName) {
+        let best = null;
+        let bestScore = 0;
+        let bestRichness = -1;
+        (allProducts || []).forEach((prod) => {
+          if (!prod || prod.active === false) return;
+          const byName = makroScoreCatalogName(csvName, prod.name || "");
+          const byOrigin = makroScoreCatalogName(csvName, prod.origin || "");
+          const score = Math.max(byName === null ? -99 : byName, byOrigin === null ? -99 : byOrigin);
+          if (score < 1) return;
+          const richness = makroCatalogRichness(prod);
+          if (!best || score > bestScore || (score === bestScore && richness > bestRichness)) {
+            best = prod;
+            bestScore = score;
+            bestRichness = richness;
+          }
+        });
+        return best;
+      }
+
       function makroMatchProduct(csvName) {
         const target = normalizeProductKey(csvName);
         if (!target || !allProducts.length) return null;
@@ -3757,15 +3825,7 @@
           const bySignature = allProducts.find((prod) => makroSignature(prod.origin || prod.name || "") === signature);
           if (bySignature) return bySignature;
         }
-        return makroGourmetFiveKilo(csvName);
-      }
-
-      function makroWeightToken(value) {
-        const text = normalizeSearchText(value);
-        const packed = text.match(/\b(?:scx|sc|bl|x)\s*(\d+)\s*kg\b/);
-        if (packed) return `${packed[1]}kg`;
-        const plain = text.match(/\b(\d+)\s*kg\b/);
-        return plain ? `${plain[1]}kg` : "";
+        return makroBestByCatalogName(csvName) || makroGourmetFiveKilo(csvName);
       }
 
       function makroGourmetFiveKilo(csvName) {
