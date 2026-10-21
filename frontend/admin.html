@@ -14,7 +14,7 @@
       })();
     </script>
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=makro2" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=makro3" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -738,7 +738,10 @@
               </div>
               <div class="field">
                 <label>Panel</label>
-                <button class="btn btn-primary" id="makroUploadBtn" type="button" disabled>Subir a panel</button>
+                <div class="makro-panel-actions">
+                  <button class="btn btn-primary" id="makroUploadBtn" type="button" disabled>Subir a panel</button>
+                  <button class="btn btn-outline" id="makroClearBtn" type="button" disabled>Limpiar</button>
+                </div>
               </div>
             </div>
           </div>
@@ -3705,6 +3708,7 @@
       const makroFile = document.getElementById("makroFile");
       const makroSummary = document.getElementById("makroSummary");
       const makroUploadBtn = document.getElementById("makroUploadBtn");
+      const makroClearBtn = document.getElementById("makroClearBtn");
       const makroPreviewBtn = document.getElementById("makroPreviewBtn");
       const makroRows = document.getElementById("makroRows");
       const MAKRO_STORE_ORDER = [
@@ -3872,6 +3876,7 @@
           if (makroSummary) makroSummary.textContent = "Sin archivo cargado.";
           if (makroUploadBtn) makroUploadBtn.disabled = true;
           if (makroPreviewBtn) makroPreviewBtn.disabled = true;
+          if (makroClearBtn) makroClearBtn.disabled = true;
           return;
         }
         let total = 0;
@@ -3921,6 +3926,13 @@
         }
         if (makroUploadBtn) makroUploadBtn.disabled = false;
         if (makroPreviewBtn) makroPreviewBtn.disabled = false;
+        if (makroClearBtn) makroClearBtn.disabled = false;
+      }
+
+      function clearMakroAnalysis() {
+        makroStores = [];
+        if (makroFile) makroFile.value = "";
+        renderMakroOrders();
       }
 
       function makroItemPayload(item, issueIso) {
@@ -4185,6 +4197,10 @@
 
       if (makroPreviewBtn) {
         makroPreviewBtn.addEventListener("click", () => openMakroAnalysisPreview());
+      }
+
+      if (makroClearBtn) {
+        makroClearBtn.addEventListener("click", () => clearMakroAnalysis());
       }
 
       function fillProducts(lines) {
