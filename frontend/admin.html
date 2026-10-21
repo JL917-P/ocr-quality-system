@@ -14,7 +14,7 @@
       })();
     </script>
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=review1" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=makro2" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -164,6 +164,9 @@
             </a>
             <a href="#" data-target="section-fumigaciones">
               <span class="sidebar-nav-label">Fumigaciones</span>
+            </a>
+            <a href="#" data-target="section-makro" data-perm="constancia_create">
+              <span class="sidebar-nav-label">Cargar archivo Makro</span>
             </a>
             <a href="#" data-target="section-users" data-perm="users_manage" class="nav-perm-item hidden">
               <span class="sidebar-nav-label">Usuarios</span>
@@ -712,6 +715,46 @@
                 </tr>
               </thead>
               <tbody id="analysisRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="section-makro" class="hidden">
+          <div class="card">
+            <div class="title">Cargar archivo Makro</div>
+            <div class="makro-actions">
+              <div class="field">
+                <label>Archivo</label>
+                <button class="btn btn-primary" id="makroLoadBtn" type="button">Cargar archivo</button>
+                <input id="makroFile" type="file" accept=".csv,text/csv" hidden />
+              </div>
+              <div class="field">
+                <label>Resultado</label>
+                <div class="tag-muted" id="makroSummary">Sin archivo cargado.</div>
+              </div>
+              <div class="field">
+                <label>Vista</label>
+                <button class="btn btn-outline" id="makroPreviewBtn" type="button" disabled>Vista previa</button>
+              </div>
+              <div class="field">
+                <label>Panel</label>
+                <button class="btn btn-primary" id="makroUploadBtn" type="button" disabled>Subir a panel</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <table class="makro-table">
+              <thead>
+                <tr>
+                  <th>Etiquetas de fila</th>
+                  <th class="makro-qty-head">Suma de unidades</th>
+                </tr>
+              </thead>
+              <tbody id="makroRows">
+                <tr>
+                  <td colspan="2">Carga un archivo para ver las tiendas.</td>
+                </tr>
+              </tbody>
             </table>
           </div>
         </section>
@@ -3658,6 +3701,492 @@
         });
       }
 
+      const makroLoadBtn = document.getElementById("makroLoadBtn");
+      const makroFile = document.getElementById("makroFile");
+      const makroSummary = document.getElementById("makroSummary");
+      const makroUploadBtn = document.getElementById("makroUploadBtn");
+      const makroPreviewBtn = document.getElementById("makroPreviewBtn");
+      const makroRows = document.getElementById("makroRows");
+      const MAKRO_STORE_ORDER = [
+        "venezuela",
+        "comas",
+        "santa anita",
+        "huaylas",
+        "surco",
+        "san juan de lurigancho",
+        "zarate",
+      ];
+      let makroStores = [];
+
+      function makroQty(value) {
+        const num = Number(String(value || "").trim().replace(",", "."));
+        return Number.isFinite(num) ? Math.round(num) : 0;
+      }
+
+      function makroStoreRank(name) {
+        const key = normalizeSearchText(name);
+        const index = MAKRO_STORE_ORDER.findIndex((part) => key.includes(part));
+        return index === -1 ? 100 : index;
+      }
+
+      function makroSignature(value) {
+        let text = normalizeSearchText(value);
+        text = text.replace(/\b(?:scx|sc|bl|x)\s*(\d+)\s*kg\b/g, "$1kg");
+        text = text.replace(/\b(\d+)\s*kg\b/g, "$1kg");
+        const drop = new Set(["arroz", "pilado", "sc", "bl", "x"]);
+        return text
+          .split(" ")
+          .filter((token) => token && !drop.has(token))
+          .sort()
+          .join(" ");
+      }
+
+      function makroMatchProduct(csvName) {
+        const target = normalizeProductKey(csvName);
+        if (!target || !allProducts.length) return null;
+        const exact = allProducts.find((prod) => {
+          return normalizeProductKey(prod.origin || "") === target || normalizeProductKey(prod.name || "") === target;
+        });
+        if (exact) return exact;
+        const signature = makroSignature(csvName);
+        if (signature) {
+          const bySignature = allProducts.find((prod) => makroSignature(prod.origin || prod.name || "") === signature);
+          if (bySignature) return bySignature;
+        }
+        return makroGourmetFiveKilo(csvName);
+      }
+
+      function makroWeightToken(value) {
+        const text = normalizeSearchText(value);
+        const packed = text.match(/\b(?:scx|sc|bl|x)\s*(\d+)\s*kg\b/);
+        if (packed) return `${packed[1]}kg`;
+        const plain = text.match(/\b(\d+)\s*kg\b/);
+        return plain ? `${plain[1]}kg` : "";
+      }
+
+      function makroGourmetFiveKilo(csvName) {
+        const text = normalizeSearchText(csvName);
+        const weight = makroWeightToken(csvName);
+        if (!weight || !text.includes("gourmet") || !text.includes("gran") || !text.includes("chalan")) return null;
+        return (
+          allProducts.find((prod) => {
+            const name = normalizeSearchText(prod.name || "");
+            return (
+              name.includes("gran") &&
+              name.includes("chalan") &&
+              name.includes("extra") &&
+              name.includes("anejo") &&
+              makroWeightToken(name) === weight
+            );
+          }) || null
+        );
+      }
+
+      function makroClientName(storeName) {
+        const label = normalizeSearchText(storeName);
+        let best = "";
+        let bestLen = 0;
+        (allClients || []).forEach((client) => {
+          const name = (client?.name || "").trim();
+          const key = normalizeSearchText(name);
+          if (!key.includes("makro")) return;
+          const place = key.replace(/^makro\s*/, "").replace(/\bspsa\b/g, "").replace(/\s+/g, " ").trim();
+          if (!place || !label.includes(place)) return;
+          if (place.length > bestLen) {
+            best = name;
+            bestLen = place.length;
+          }
+        });
+        if (best) return best;
+        if (label.includes("zarate")) return "MAKRO - ZARATE - SPSA";
+        return formatClientFromStore(storeName);
+      }
+
+      function makroIssueIso(raw) {
+        const text = (raw || "").trim();
+        const dashed = text.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+        if (dashed) return `${dashed[3]}-${dashed[2]}-${dashed[1]}`;
+        return toInputDateValue(text) || formatToday();
+      }
+
+      function parseMakroOrders(text) {
+        const rows = parseCSV(String(text || "").replace(/^\uFEFF/, ""));
+        if (!rows.length) return [];
+        const headers = rows[0].map((cell) => normalizeHeader(cell));
+        const findCol = (name) => headers.findIndex((header) => header === name);
+        const storeIdx = findCol("nom_local_destino") >= 0 ? findCol("nom_local_destino") : findCol("nom_local_entrega");
+        const productIdx = findCol("descripcion_producto");
+        const qtyIdx = findCol("unidades_solicitadas");
+        const dateIdx = findCol("fecha_emision");
+        if (storeIdx < 0 || productIdx < 0 || qtyIdx < 0) {
+          throw new Error("El archivo no trae tienda, producto y unidades solicitadas.");
+        }
+        const grouped = new Map();
+        for (let i = 1; i < rows.length; i += 1) {
+          const row = rows[i] || [];
+          const store = (row[storeIdx] || "").trim();
+          const product = (row[productIdx] || "").trim();
+          if (!store || !product) continue;
+          if (!grouped.has(store)) {
+            grouped.set(store, {
+              name: store,
+              issueDate: dateIdx >= 0 ? (row[dateIdx] || "").trim() : "",
+              items: new Map(),
+            });
+          }
+          const bucket = grouped.get(store);
+          if (!bucket.issueDate && dateIdx >= 0) bucket.issueDate = (row[dateIdx] || "").trim();
+          bucket.items.set(product, (bucket.items.get(product) || 0) + makroQty(row[qtyIdx]));
+        }
+        return Array.from(grouped.values())
+          .map((store) => ({
+            name: store.name,
+            issueDate: store.issueDate,
+            clientName: makroClientName(store.name),
+            items: Array.from(store.items.entries())
+              .map(([product, qty]) => ({
+                product,
+                qty,
+                catalog: makroMatchProduct(product),
+              }))
+              .sort((a, b) =>
+                a.product.localeCompare(b.product, "es", { numeric: true, sensitivity: "base" })
+              ),
+          }))
+          .sort((a, b) => {
+            const rank = makroStoreRank(a.name) - makroStoreRank(b.name);
+            if (rank !== 0) return rank;
+            return a.name.localeCompare(b.name, "es", { sensitivity: "base" });
+          });
+      }
+
+      function makroCatalogLabel(item) {
+        return (item?.catalog?.name || "").trim();
+      }
+
+      function renderMakroOrders() {
+        if (!makroRows) return;
+        makroRows.innerHTML = "";
+        if (!makroStores.length) {
+          makroRows.innerHTML = `<tr><td colspan="2">Carga un archivo para ver las tiendas.</td></tr>`;
+          if (makroSummary) makroSummary.textContent = "Sin archivo cargado.";
+          if (makroUploadBtn) makroUploadBtn.disabled = true;
+          if (makroPreviewBtn) makroPreviewBtn.disabled = true;
+          return;
+        }
+        let total = 0;
+        let lines = 0;
+        const addRow = (label, qty, options = {}) => {
+          const row = document.createElement("tr");
+          const nameCell = document.createElement("td");
+          const qtyCell = document.createElement("td");
+          nameCell.textContent = label;
+          qtyCell.textContent = String(qty);
+          qtyCell.className = "makro-qty";
+          if (options.strong) {
+            nameCell.style.fontWeight = "700";
+            qtyCell.style.fontWeight = "700";
+          }
+          if (options.store) {
+            nameCell.style.background = "#eef2ff";
+            qtyCell.style.background = "#eef2ff";
+          }
+          if (options.indent) nameCell.style.paddingLeft = "22px";
+          if (options.missing) {
+            nameCell.style.color = "#9a3412";
+            nameCell.title = "Este texto del archivo no está en el catálogo.";
+          }
+          row.append(nameCell, qtyCell);
+          makroRows.appendChild(row);
+        };
+        let missing = 0;
+        makroStores.forEach((store) => {
+          const sum = store.items.reduce((acc, item) => acc + item.qty, 0);
+          total += sum;
+          lines += store.items.length;
+          addRow(store.name, sum, { strong: true, store: true });
+          store.items.forEach((item) => {
+            const catalogName = makroCatalogLabel(item);
+            if (!catalogName) missing += 1;
+            addRow(catalogName || `${item.product} · sin catálogo`, item.qty, {
+              indent: true,
+              missing: !catalogName,
+            });
+          });
+        });
+        addRow("Total general", total, { strong: true });
+        if (makroSummary) {
+          const missingText = missing ? ` · Sin catálogo: ${missing}` : "";
+          makroSummary.textContent = `Tiendas: ${makroStores.length} · Productos: ${lines} · Unidades: ${total}${missingText}`;
+        }
+        if (makroUploadBtn) makroUploadBtn.disabled = false;
+        if (makroPreviewBtn) makroPreviewBtn.disabled = false;
+      }
+
+      function makroItemPayload(item, issueIso) {
+        const match = item.catalog;
+        const productName = (match?.name || item.product || "").trim();
+        const row = {
+          product: productName,
+          quantity: item.qty,
+          lot: match?.lot || "",
+          production_text: match?.production_text || "",
+          expiration_text: match?.expiration_text || "",
+          f_fumigacion: formatDateMinusDays(issueIso, 9),
+          f_liberacion: formatDateMinusDays(issueIso, 2),
+          f_instalaciones: formatDateMinusDays(issueIso, 0),
+        };
+        if (match?.id) row.product_id = match.id;
+        appendCatalogQualityFields(row, match);
+        return row;
+      }
+
+      async function uploadMakroConstancias() {
+        if (!makroStores.length) return;
+        if (!can("constancia_create")) {
+          showErrorModal("No tienes permiso para crear constancias.", { title: "Sin permiso" });
+          return;
+        }
+        const status = "por_confirmar";
+        if (makroUploadBtn) makroUploadBtn.disabled = true;
+        const created = [];
+        const failed = [];
+        for (const store of makroStores) {
+          const issueIso = makroIssueIso(store.issueDate);
+          const payload = {
+            number: "",
+            issue_date: issueIso,
+            client_name: store.clientName || makroClientName(store.name),
+            transport_plate: "",
+            fumigacion: true,
+            calidad: true,
+            personalizado: false,
+            status,
+            items: store.items.map((item) => makroItemPayload(item, issueIso)),
+          };
+          try {
+            const res = await fetch("/api/constancias", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              failed.push(`${store.name}: ${data.detail || "no se pudo crear"}`);
+            } else {
+              created.push(store.clientName || store.name);
+            }
+          } catch (err) {
+            failed.push(`${store.name}: ${err?.message || "error de red"}`);
+          }
+        }
+        if (makroUploadBtn) makroUploadBtn.disabled = !makroStores.length;
+        if (typeof loadConstancias === "function") void loadConstancias();
+        if (failed.length && !created.length) {
+          showErrorModal(failed.join("\n"), { title: "No se crearon constancias" });
+          return;
+        }
+        let message = `Se reservaron ${created.length} constancia(s), una por tienda.`;
+        if (failed.length) message += `\n\nNo se pudieron crear:\n${failed.join("\n")}`;
+        showSuccessModal(message, { title: "Constancias reservadas" });
+      }
+
+      function makroEscapeHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function makroPreviewGroups() {
+        const groups = [];
+        let total = 0;
+        makroStores.forEach((store) => {
+          const sum = store.items.reduce((acc, item) => acc + item.qty, 0);
+          total += sum;
+          groups.push({
+            kind: "store",
+            label: store.name,
+            qty: sum,
+            rows: store.items.map((item) => ({
+              label: makroCatalogLabel(item) || item.product + " · sin catálogo",
+              qty: item.qty,
+            })),
+          });
+        });
+        groups.push({ kind: "total", label: "Total general", qty: total, rows: [] });
+        return groups;
+      }
+
+      function makroPackPreviewPages(groups) {
+        const maxUnits = 42;
+        const pages = [];
+        let chunk = [];
+        let used = 0;
+        groups.forEach((group) => {
+          const cost = group.rows.length + 2;
+          if (chunk.length && used + cost > maxUnits) {
+            pages.push(chunk);
+            chunk = [];
+            used = 0;
+          }
+          chunk.push(group);
+          used += cost;
+        });
+        if (chunk.length) pages.push(chunk);
+        return pages;
+      }
+
+      function makroStoreBoxHtml(group) {
+        const headClass = group.kind === "total" ? "total" : "store";
+        const products = group.rows
+          .map(
+            (row) =>
+              '<tr class="product"><td>' +
+              makroEscapeHtml(row.label) +
+              '</td><td class="qty">' +
+              makroEscapeHtml(row.qty) +
+              "</td></tr>"
+          )
+          .join("");
+        return (
+          '<div class="store-box"><table><tr class="' +
+          headClass +
+          '"><td>' +
+          makroEscapeHtml(group.label) +
+          '</td><td class="qty">' +
+          makroEscapeHtml(group.qty) +
+          "</td></tr>" +
+          products +
+          "</table></div>"
+        );
+      }
+
+      function openMakroAnalysisPreview() {
+        if (!makroStores.length) {
+          showInfoModal("Carga un archivo antes de abrir la vista previa.", { title: "Sin análisis" });
+          return;
+        }
+        const pages = makroPackPreviewPages(makroPreviewGroups());
+        const pageHtml = pages
+          .map((chunk, index) => {
+            const pageClass = index === pages.length - 1 ? "page last-page" : "page";
+            return (
+              '<section class="' +
+              pageClass +
+              '"><h1>Análisis Makro</h1><p class="meta">Tiendas: ' +
+              makroStores.length +
+              " · Página " +
+              (index + 1) +
+              " de " +
+              pages.length +
+              '</p><div class="cols"><span>Etiquetas de fila</span><span>Suma de unidades</span></div>' +
+              chunk.map((group) => makroStoreBoxHtml(group)).join("") +
+              "</section>"
+            );
+          })
+          .join("");
+        const html =
+          '<!doctype html><html lang="es"><head><meta charset="utf-8" />' +
+          "<title>Análisis Makro</title>" +
+          '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><' + '/script>' +
+          '<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><' + '/script>' +
+          "<style>" +
+          "body{margin:0;background:#e5e7eb;font-family:Arial,sans-serif;color:#111;}" +
+          ".actions{position:sticky;top:0;background:#e5e7eb;padding:10px 16px;display:flex;justify-content:flex-end;gap:8px;z-index:2;}" +
+          ".btn{background:#0f766e;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;}" +
+          ".page{width:210mm;height:297mm;background:#fff;margin:16px auto;padding:12mm 12mm 10mm;box-sizing:border-box;overflow:hidden;}" +
+          "h1{margin:0 0 4px;font-size:18px;}" +
+          ".meta{margin:0 0 8px;font-size:12px;color:#444;}" +
+          ".cols{display:flex;justify-content:space-between;background:#111827;color:#fff;font-size:11px;font-weight:700;padding:5px 8px;margin:0 0 4mm;}" +
+          ".store-box{border:1.5px solid #1e3a5f;margin:0 0 4mm;break-inside:avoid;page-break-inside:avoid;}" +
+          ".store-box table{width:100%;border-collapse:collapse;font-size:11px;}" +
+          ".store-box td{padding:3px 8px;border-top:1px solid #e5e7eb;line-height:1.25;}" +
+          ".store-box tr.store td{background:#e8eef8;font-weight:700;border-top:none;}" +
+          ".store-box tr.total td{background:#111827;color:#fff;font-weight:700;border-top:none;}" +
+          ".store-box td.qty{text-align:right;width:42mm;white-space:nowrap;}" +
+          "@media print{body{background:#fff;}.actions{display:none;}.page{margin:0;box-shadow:none;page-break-after:always;}.page.last-page{page-break-after:auto;}.store-box{break-inside:avoid;page-break-inside:avoid;}}" +
+          "</style></head><body>" +
+          '<div class="actions"><button class="btn" type="button" onclick="window.print()">Imprimir</button>' +
+          '<button class="btn" type="button" id="pdfBtn">Descargar PDF</button></div>' +
+          pageHtml +
+          "<script>document.getElementById('pdfBtn').addEventListener('click', async () => {" +
+          "if (!window.html2canvas || !window.jspdf) return;" +
+          "const pages = Array.from(document.querySelectorAll('.page'));" +
+          "const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });" +
+          "for (let i = 0; i < pages.length; i += 1) {" +
+          "const canvas = await window.html2canvas(pages[i], { scale: 2, backgroundColor: '#ffffff' });" +
+          "const img = canvas.toDataURL('image/jpeg', 0.98);" +
+          "if (i > 0) pdf.addPage();" +
+          "pdf.addImage(img, 'JPEG', 0, 0, 210, 297);" +
+          "}" +
+          "pdf.save('Analisis Makro.pdf');" +
+          "});<" + "/script></body></html>";
+        const previewWindow = window.open("", "_blank");
+        if (!previewWindow) {
+          showInfoModal("El navegador bloqueó la ventana emergente.", { title: "Ventana bloqueada" });
+          return;
+        }
+        previewWindow.document.open();
+        previewWindow.document.write(html);
+        previewWindow.document.close();
+      }
+
+      if (makroLoadBtn && makroFile) {
+        makroLoadBtn.addEventListener("click", () => makroFile.click());
+        makroFile.addEventListener("change", async () => {
+          const file = makroFile.files && makroFile.files[0];
+          makroFile.value = "";
+          if (!file) return;
+          try {
+            if (typeof loadProducts === "function") await loadProducts();
+            if (typeof loadClients === "function") await loadClients();
+            const buffer = await file.arrayBuffer();
+            let text = "";
+            try {
+              text = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+            } catch (decodeErr) {
+              text = new TextDecoder("windows-1252").decode(buffer);
+            }
+            makroStores = parseMakroOrders(text);
+            renderMakroOrders();
+            if (!makroStores.length) {
+              showInfoModal("El archivo no tiene órdenes para agrupar.", { title: "Sin datos" });
+            }
+          } catch (err) {
+            makroStores = [];
+            renderMakroOrders();
+            showErrorModal(err?.message || "No se pudo leer el archivo.", { title: "Archivo inválido" });
+          }
+        });
+      }
+
+      if (makroUploadBtn) {
+        makroUploadBtn.addEventListener("click", () => {
+          if (!makroStores.length) return;
+          const missing = makroStores.reduce(
+            (count, store) => count + store.items.filter((item) => !makroCatalogLabel(item)).length,
+            0
+          );
+          const missingNote = missing
+            ? ` ${missing} producto(s) no están en el catálogo y quedarán con el nombre del archivo, sin parámetros de calidad.`
+            : "";
+          showConfirmModal(
+            `Se reservarán ${makroStores.length} constancias, una por cada tienda, con el nombre de producto del catálogo y sus cantidades.${missingNote}`,
+            () => {
+              void uploadMakroConstancias();
+            },
+            null,
+            { title: "Subir a panel", confirmText: "Subir", cancelText: "Cancelar" }
+          );
+        });
+      }
+
+      if (makroPreviewBtn) {
+        makroPreviewBtn.addEventListener("click", () => openMakroAnalysisPreview());
+      }
+
       function fillProducts(lines) {
         const body = getPrimaryProductsBody();
         if (!body) return;
@@ -4529,6 +5058,7 @@
         "section-trasiegos": { title: "Trasiegos", subtitle: "Registro y seguimiento de trasiegos" },
         "section-fumigaciones": { title: "Fumigaciones", subtitle: "" },
         "section-analisis": { title: "Análisis", subtitle: "Importación CSV y aplicación a constancias" },
+        "section-makro": { title: "Cargar archivo Makro", subtitle: "Órdenes por tienda y alta de constancias" },
         "section-users": { title: "Usuarios", subtitle: "Cuentas, roles y permisos de acceso" },
         "section-audit": { title: "Bitácora", subtitle: "Registro de acciones por usuario" },
       };
@@ -10567,6 +11097,7 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
         "section-trazabilidad": "section_trazabilidad",
         "section-trasiegos": "section_trasiegos",
         "section-fumigaciones": "section_fumigaciones",
+        "section-makro": "constancia_create",
         "section-users": "users_manage",
         "section-audit": "audit_view",
       };

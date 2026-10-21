@@ -5429,6 +5429,37 @@ body.perm-no-trace-export #traceModalReportBtn {
   gap: 6px;
 }
 
+#section-makro .makro-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px 22px;
+  margin-top: 12px;
+}
+
+#section-makro .makro-actions .field {
+  width: auto;
+  flex: 0 0 auto;
+  align-items: flex-start;
+}
+
+#section-makro .makro-actions .btn {
+  width: auto;
+  padding: 7px 12px;
+  font-size: 13px;
+}
+
+#section-makro .makro-table {
+  table-layout: auto;
+}
+
+#section-makro .makro-qty-head,
+#section-makro .makro-qty {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
 .fumigacion-zoom-tools button {
   min-width: 40px;
   height: 36px;
