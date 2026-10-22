@@ -1364,7 +1364,6 @@
                 <div class="sub" id="fumigacionViewerMeta"></div>
               </div>
               <div class="toolbar-right">
-                <button class="btn btn-danger" id="deleteFumigacionViewer" type="button" data-requires-perm="fumigaciones_write">Eliminar</button>
                 <button class="btn btn-outline" id="closeFumigacionViewer" type="button">Cerrar</button>
               </div>
             </div>
@@ -6089,10 +6088,6 @@
         if (!id) return;
         const item = items.find((row) => Number(row.id) === id);
         if (item) void openFumigacionViewer(item);
-      });
-
-      document.getElementById("deleteFumigacionViewer")?.addEventListener("click", () => {
-        if (fumigacionViewerItem) confirmDeleteFumigacion(fumigacionViewerItem);
       });
 
       document.getElementById("closeFumigacionViewer")?.addEventListener("click", closeFumigacionViewer);
