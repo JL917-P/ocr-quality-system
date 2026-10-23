@@ -5410,6 +5410,7 @@ body.perm-no-trace-export #traceModalReportBtn {
   transform-origin: center center;
   user-select: none;
   -webkit-user-drag: none;
+  pointer-events: none;
 }
 
 .fumigacion-zoom-stage.is-zoomed {
