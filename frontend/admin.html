@@ -3812,7 +3812,38 @@
         return best;
       }
 
+      function makroIsCusi49(value) {
+        return makroBrand(value) === "cusi" && makroWeightToken(value) === "49kg";
+      }
+
+      function makroCusi49FromOrigin(csvName) {
+        if (!makroIsCusi49(csvName)) return null;
+        const family = (allProducts || []).filter((prod) => {
+          if (!prod || prod.active === false) return false;
+          return makroIsCusi49(prod.name || "") || makroIsCusi49(prod.origin || "");
+        });
+        if (!family.length) return null;
+        const target = normalizeProductKey(csvName);
+        const signature = makroSignature(csvName);
+        const originOf = (prod) => (prod.origin || "").trim();
+        const byExactOrigin = family.find((prod) => originOf(prod) && normalizeProductKey(originOf(prod)) === target);
+        if (byExactOrigin) return byExactOrigin;
+        const byOriginSignature = family.find(
+          (prod) => originOf(prod) && signature && makroSignature(originOf(prod)) === signature
+        );
+        if (byOriginSignature) return byOriginSignature;
+        const byExactName = family.find((prod) => normalizeProductKey(prod.name || "") === target);
+        if (byExactName) return byExactName;
+        return (
+          family.find((prod) => !originOf(prod) && normalizeSearchText(prod.name || "").includes("chifero")) ||
+          family.find((prod) => !originOf(prod)) ||
+          null
+        );
+      }
+
       function makroMatchProduct(csvName) {
+        const cusi49 = makroCusi49FromOrigin(csvName);
+        if (cusi49) return cusi49;
         const target = normalizeProductKey(csvName);
         if (!target || !allProducts.length) return null;
         const exact = allProducts.find((prod) => {
