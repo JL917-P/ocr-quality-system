@@ -3816,6 +3816,12 @@
         return makroBrand(value) === "cusi" && makroWeightToken(value) === "49kg";
       }
 
+      function makroPackToken(value) {
+        const compact = normalizeSearchText(value).replace(/\s+/g, "");
+        const found = compact.match(/scx\d+|sc\d+|bl\d+/);
+        return found ? found[0] : "";
+      }
+
       function makroCusi49FromOrigin(csvName) {
         if (!makroIsCusi49(csvName)) return null;
         const family = (allProducts || []).filter((prod) => {
@@ -3825,15 +3831,34 @@
         if (!family.length) return null;
         const target = normalizeProductKey(csvName);
         const signature = makroSignature(csvName);
+        const pack = makroPackToken(csvName);
         const originOf = (prod) => (prod.origin || "").trim();
         const byExactOrigin = family.find((prod) => originOf(prod) && normalizeProductKey(originOf(prod)) === target);
         if (byExactOrigin) return byExactOrigin;
+        if (pack) {
+          const byPack = family
+            .filter((prod) => originOf(prod) && makroPackToken(originOf(prod)) === pack)
+            .sort((a, b) => {
+              const score = (prod) => {
+                const origin = originOf(prod);
+                let value = 0;
+                if (signature && makroSignature(origin) === signature) value += 20;
+                makroGradeTokens(csvName).forEach((token) => {
+                  if (makroGradeTokens(origin).includes(token)) value += 3;
+                });
+                return value;
+              };
+              return score(b) - score(a);
+            });
+          if (byPack.length) return byPack[0];
+        }
         const byOriginSignature = family.find(
           (prod) => originOf(prod) && signature && makroSignature(originOf(prod)) === signature
         );
         if (byOriginSignature) return byOriginSignature;
         const byExactName = family.find((prod) => normalizeProductKey(prod.name || "") === target);
         if (byExactName) return byExactName;
+        if (pack) return null;
         return (
           family.find((prod) => !originOf(prod) && normalizeSearchText(prod.name || "").includes("chifero")) ||
           family.find((prod) => !originOf(prod)) ||
@@ -3842,8 +3867,7 @@
       }
 
       function makroMatchProduct(csvName) {
-        const cusi49 = makroCusi49FromOrigin(csvName);
-        if (cusi49) return cusi49;
+        if (makroIsCusi49(csvName)) return makroCusi49FromOrigin(csvName);
         const target = normalizeProductKey(csvName);
         if (!target || !allProducts.length) return null;
         const exact = allProducts.find((prod) => {
