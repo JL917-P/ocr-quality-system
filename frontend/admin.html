@@ -3829,41 +3829,36 @@
           return makroIsCusi49(prod.name || "") || makroIsCusi49(prod.origin || "");
         });
         if (!family.length) return null;
+        const text = normalizeSearchText(csvName);
         const target = normalizeProductKey(csvName);
-        const signature = makroSignature(csvName);
         const pack = makroPackToken(csvName);
-        const originOf = (prod) => (prod.origin || "").trim();
-        const byExactOrigin = family.find((prod) => originOf(prod) && normalizeProductKey(originOf(prod)) === target);
-        if (byExactOrigin) return byExactOrigin;
-        if (pack) {
-          const byPack = family
-            .filter((prod) => originOf(prod) && makroPackToken(originOf(prod)) === pack)
-            .sort((a, b) => {
-              const score = (prod) => {
-                const origin = originOf(prod);
-                let value = 0;
-                if (signature && makroSignature(origin) === signature) value += 20;
-                makroGradeTokens(csvName).forEach((token) => {
-                  if (makroGradeTokens(origin).includes(token)) value += 3;
-                });
-                return value;
-              };
-              return score(b) - score(a);
-            });
-          if (byPack.length) return byPack[0];
-        }
-        const byOriginSignature = family.find(
-          (prod) => originOf(prod) && signature && makroSignature(originOf(prod)) === signature
-        );
-        if (byOriginSignature) return byOriginSignature;
-        const byExactName = family.find((prod) => normalizeProductKey(prod.name || "") === target);
-        if (byExactName) return byExactName;
-        if (pack) return null;
-        return (
-          family.find((prod) => !originOf(prod) && normalizeSearchText(prod.name || "").includes("chifero")) ||
-          family.find((prod) => !originOf(prod)) ||
-          null
-        );
+        const hasAnejo = text.includes("anejo");
+        const hasSuperior = text.includes("superior");
+        const hasChifero = text.includes("chifero");
+        const ranked = family
+          .map((prod) => {
+            const originRaw = (prod.origin || "").trim();
+            const origin = normalizeSearchText(originRaw);
+            const name = normalizeSearchText(prod.name || "");
+            const originKey = normalizeProductKey(originRaw);
+            let score = 0;
+            if (originKey && originKey === target) score += 100;
+            if (pack && originRaw && makroPackToken(originRaw) === pack) score += 50;
+            if (origin) {
+              if (hasAnejo && origin.includes("anejo")) score += 8;
+              else if (hasAnejo !== origin.includes("anejo")) score -= 10;
+              if (hasSuperior && origin.includes("superior")) score += 8;
+              else if (hasSuperior !== origin.includes("superior")) score -= 10;
+            }
+            if (normalizeProductKey(prod.name || "") === target) score += 80;
+            if (!hasChifero && name.includes("chifero") && (hasAnejo || hasSuperior || pack)) score -= 30;
+            if (hasAnejo && name.includes("pilado") && name.includes("anejo") && !name.includes("chifero")) score += 15;
+            if (!hasAnejo && !hasSuperior && !pack && name.includes("chifero")) score += 12;
+            return { prod, score };
+          })
+          .sort((a, b) => b.score - a.score);
+        if (ranked[0] && ranked[0].score > 0) return ranked[0].prod;
+        return null;
       }
 
       function makroMatchProduct(csvName) {
