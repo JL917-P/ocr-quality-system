@@ -14,7 +14,7 @@
       })();
     </script>
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=fumipan1" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=makro-tiendas2" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -3720,6 +3720,8 @@
         "zarate",
       ];
       let makroStores = [];
+      let makroHiddenStores = new Set();
+      let makroPreviewWindow = null;
 
       function makroQty(value) {
         const num = Number(String(value || "").trim().replace(",", "."));
@@ -3977,6 +3979,31 @@
         return (item?.catalog?.name || "").trim();
       }
 
+      function makroVisibleStores() {
+        return makroStores.filter((store) => !makroHiddenStores.has(store.name));
+      }
+
+      function makroHiddenNames() {
+        return makroStores.filter((store) => makroHiddenStores.has(store.name)).map((store) => store.name);
+      }
+
+      function makroSameNameSet(next) {
+        return next.size === makroHiddenStores.size && Array.from(next).every((name) => makroHiddenStores.has(name));
+      }
+
+      window.makroApplyHiddenStores = function (names) {
+        const next = new Set(Array.isArray(names) ? names : []);
+        if (makroSameNameSet(next)) return;
+        makroHiddenStores = next;
+        renderMakroOrders();
+      };
+
+      function makroNotifyPreview() {
+        const popup = makroPreviewWindow;
+        if (!popup || popup.closed || typeof popup.makroSetHiddenStores !== "function") return;
+        popup.makroSetHiddenStores(makroHiddenNames());
+      }
+
       function renderMakroOrders() {
         if (!makroRows) return;
         makroRows.innerHTML = "";
@@ -3986,8 +4013,12 @@
           if (makroUploadBtn) makroUploadBtn.disabled = true;
           if (makroPreviewBtn) makroPreviewBtn.disabled = true;
           if (makroClearBtn) makroClearBtn.disabled = true;
+          makroNotifyPreview();
           return;
         }
+        if (makroUploadBtn) makroUploadBtn.disabled = false;
+        if (makroPreviewBtn) makroPreviewBtn.disabled = false;
+        if (makroClearBtn) makroClearBtn.disabled = false;
         let total = 0;
         let lines = 0;
         const addRow = (label, qty, options = {}) => {
@@ -3995,15 +4026,15 @@
           const nameCell = document.createElement("td");
           const qtyCell = document.createElement("td");
           nameCell.textContent = label;
-          qtyCell.textContent = String(qty);
+          qtyCell.textContent = qty === "" ? "" : String(qty);
           qtyCell.className = "makro-qty";
           if (options.strong) {
             nameCell.style.fontWeight = "700";
             qtyCell.style.fontWeight = "700";
           }
           if (options.store) {
-            nameCell.style.background = "#eef2ff";
-            qtyCell.style.background = "#eef2ff";
+            nameCell.style.background = options.collapsed ? "#f8fafc" : "#eef2ff";
+            qtyCell.style.background = options.collapsed ? "#f8fafc" : "#eef2ff";
           }
           if (options.indent) nameCell.style.paddingLeft = "22px";
           if (options.missing) {
@@ -4012,13 +4043,46 @@
           }
           row.append(nameCell, qtyCell);
           makroRows.appendChild(row);
+          return nameCell;
+        };
+        const addStoreHeader = (store, sum, collapsed) => {
+          const row = document.createElement("tr");
+          const nameCell = document.createElement("td");
+          const qtyCell = document.createElement("td");
+          nameCell.className = "makro-store-name";
+          qtyCell.className = "makro-qty";
+          nameCell.style.fontWeight = "700";
+          qtyCell.style.fontWeight = "700";
+          nameCell.style.background = collapsed ? "#f8fafc" : "#eef2ff";
+          qtyCell.style.background = collapsed ? "#f8fafc" : "#eef2ff";
+          const toggle = document.createElement("button");
+          toggle.type = "button";
+          toggle.className = "makro-fold" + (collapsed ? " is-closed" : "");
+          toggle.textContent = collapsed ? "ver" : "ocultar";
+          toggle.title = collapsed ? "Desplegar " + store.name : "Ocultar " + store.name;
+          toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+          toggle.addEventListener("click", () => {
+            if (makroHiddenStores.has(store.name)) makroHiddenStores.delete(store.name);
+            else makroHiddenStores.add(store.name);
+            renderMakroOrders();
+          });
+          const name = document.createElement("span");
+          name.textContent = store.name;
+          nameCell.append(toggle, name);
+          qtyCell.textContent = collapsed ? "" : String(sum);
+          row.append(nameCell, qtyCell);
+          makroRows.appendChild(row);
         };
         let missing = 0;
+        let visibleCount = 0;
         makroStores.forEach((store) => {
+          const collapsed = makroHiddenStores.has(store.name);
           const sum = store.items.reduce((acc, item) => acc + item.qty, 0);
+          addStoreHeader(store, sum, collapsed);
+          if (collapsed) return;
+          visibleCount += 1;
           total += sum;
           lines += store.items.length;
-          addRow(store.name, sum, { strong: true, store: true });
           store.items.forEach((item) => {
             const catalogName = makroCatalogLabel(item);
             if (!catalogName) missing += 1;
@@ -4028,18 +4092,19 @@
             });
           });
         });
-        addRow("Total general", total, { strong: true });
+        if (visibleCount) addRow("Total general", total, { strong: true });
         if (makroSummary) {
           const missingText = missing ? ` · Sin catálogo: ${missing}` : "";
-          makroSummary.textContent = `Tiendas: ${makroStores.length} · Productos: ${lines} · Unidades: ${total}${missingText}`;
+          const hiddenCount = makroStores.length - visibleCount;
+          const hiddenText = hiddenCount ? ` · Ocultas: ${hiddenCount}` : "";
+          makroSummary.textContent = `Tiendas: ${visibleCount} de ${makroStores.length} · Productos: ${lines} · Unidades: ${total}${missingText}${hiddenText}`;
         }
-        if (makroUploadBtn) makroUploadBtn.disabled = false;
-        if (makroPreviewBtn) makroPreviewBtn.disabled = false;
-        if (makroClearBtn) makroClearBtn.disabled = false;
+        makroNotifyPreview();
       }
 
       function clearMakroAnalysis() {
         makroStores = [];
+        makroHiddenStores = new Set();
         if (makroFile) makroFile.value = "";
         renderMakroOrders();
       }
@@ -4123,7 +4188,7 @@
       function makroPreviewGroups() {
         const groups = [];
         let total = 0;
-        makroStores.forEach((store) => {
+        makroVisibleStores().forEach((store) => {
           const sum = store.items.reduce((acc, item) => acc + item.qty, 0);
           total += sum;
           groups.push({
@@ -4184,30 +4249,29 @@
         );
       }
 
+      function makroPreviewPayload() {
+        return {
+          stores: makroStores.map((store) => ({
+            name: store.name,
+            rows: store.items.map((item) => ({
+              label: makroCatalogLabel(item) || item.product + " · sin catálogo",
+              qty: item.qty,
+              lot: (item.catalog?.lot || "").trim(),
+            })),
+          })),
+          hidden: makroHiddenNames(),
+        };
+      }
+
       function openMakroAnalysisPreview() {
         if (!makroStores.length) {
           showInfoModal("Carga un archivo antes de abrir la vista previa.", { title: "Sin análisis" });
           return;
         }
-        const pages = makroPackPreviewPages(makroPreviewGroups());
-        const pageHtml = pages
-          .map((chunk, index) => {
-            const pageClass = index === pages.length - 1 ? "page last-page" : "page";
-            return (
-              '<section class="' +
-              pageClass +
-              '"><h1>Análisis Makro</h1><p class="meta">Tiendas: ' +
-              makroStores.length +
-              " · Página " +
-              (index + 1) +
-              " de " +
-              pages.length +
-              '</p><div class="cols"><span>Etiquetas de fila</span><span>Suma de unidades</span></div>' +
-              chunk.map((group) => makroStoreBoxHtml(group)).join("") +
-              "</section>"
-            );
-          })
-          .join("");
+        const payload = JSON.stringify(makroPreviewPayload())
+          .replace(/</g, "\\u003c")
+          .replace(/\u2028/g, "\\u2028")
+          .replace(/\u2029/g, "\\u2029");
         const html =
           '<!doctype html><html lang="es"><head><meta charset="utf-8" />' +
           "<title>Análisis Makro</title>" +
@@ -4219,36 +4283,50 @@
           ".btn{background:#0f766e;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;}" +
           ".page{width:210mm;height:297mm;background:#fff;margin:16px auto;padding:12mm 12mm 10mm;box-sizing:border-box;overflow:hidden;}" +
           "h1{margin:0 0 4px;font-size:18px;}" +
-          ".meta{margin:0 0 8px;font-size:12px;color:#444;}" +
-          ".cols{display:flex;justify-content:space-between;background:#111827;color:#fff;font-size:11px;font-weight:700;padding:5px 8px;margin:0 0 4mm;}" +
-          ".store-box{border:1.5px solid #1e3a5f;margin:0 0 4mm;break-inside:avoid;page-break-inside:avoid;}" +
-          ".store-box table{width:100%;border-collapse:collapse;font-size:11px;}" +
-          ".store-box td{padding:3px 8px;border-top:1px solid #e5e7eb;line-height:1.25;}" +
-          ".store-box tr.store td{background:#e8eef8;font-weight:700;border-top:none;}" +
-          ".store-box tr.total td{background:#111827;color:#fff;font-weight:700;border-top:none;}" +
-          ".store-box td.qty{text-align:right;width:42mm;white-space:nowrap;}" +
-          "@media print{body{background:#fff;}.actions{display:none;}.page{margin:0;box-shadow:none;page-break-after:always;}.page.last-page{page-break-after:auto;}.store-box{break-inside:avoid;page-break-inside:avoid;}}" +
+          ".meta,.empty-note{margin:0 0 8px;font-size:12px;color:#444;}" +
+          ".empty-note{font-size:14px;margin-top:12px;}" +
+          "table.grid{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px;}" +
+          "table.grid col.c-qty{width:16mm;}" +
+          "table.grid col.c-lot{width:28mm;}" +
+          "table.grid col.c-note{width:58mm;}" +
+          "table.grid th,table.grid td{border:1px solid #94a3b8;padding:3px 6px;line-height:1.25;vertical-align:middle;}" +
+          "table.grid thead th{background:#111827;color:#fff;border-color:#111827;font-size:11px;text-align:left;}" +
+          "table.grid th.qty,table.grid td.qty{text-align:right;white-space:nowrap;padding-left:3px;padding-right:4px;}" +
+          "table.grid th.lot,table.grid td.lot{white-space:nowrap;padding-left:4px;padding-right:4px;}" +
+          "table.grid td.note{white-space:normal;min-height:1.2em;}" +
+          "table.grid td.note[contenteditable='true']:focus{outline:1px solid #0e7490;background:#f0fdfa;}" +
+          "table.grid tr.store td{background:#e8eef8;font-weight:700;}" +
+          "table.grid tr.total td{background:#111827;color:#fff;font-weight:700;border-color:#111827;}" +
+          "table.grid tbody.store{break-inside:avoid;page-break-inside:avoid;}" +
+          "@media print{body{background:#fff;}.actions{display:none;}.page{margin:0;box-shadow:none;page-break-after:always;}.page.last-page{page-break-after:auto;}table.grid tbody.store{break-inside:avoid;page-break-inside:avoid;}}" +
           "</style></head><body>" +
           '<div class="actions"><button class="btn" type="button" onclick="window.print()">Imprimir</button>' +
           '<button class="btn" type="button" id="pdfBtn">Descargar PDF</button></div>' +
-          pageHtml +
-          "<script>document.getElementById('pdfBtn').addEventListener('click', async () => {" +
-          "if (!window.html2canvas || !window.jspdf) return;" +
-          "const pages = Array.from(document.querySelectorAll('.page'));" +
-          "const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });" +
-          "for (let i = 0; i < pages.length; i += 1) {" +
-          "const canvas = await window.html2canvas(pages[i], { scale: 2, backgroundColor: '#ffffff' });" +
-          "const img = canvas.toDataURL('image/jpeg', 0.98);" +
-          "if (i > 0) pdf.addPage();" +
-          "pdf.addImage(img, 'JPEG', 0, 0, 210, 297);" +
-          "}" +
-          "pdf.save('Analisis Makro.pdf');" +
-          "});<" + "/script></body></html>";
+          '<div id="sheets"></div>' +
+          '<script type="application/json" id="makro-data">' + payload + "<" + "/script>" +
+          "<script>" +
+          "(function(){" +
+          "const data=JSON.parse(document.getElementById('makro-data').textContent);" +
+          "const hidden=new Set(data.hidden||[]);" +
+          "const maxUnits=42;" +
+          "function escapeHtml(value){return String(value==null?'':value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');}" +
+          "function groupsOf(){const groups=[];let total=0;data.stores.forEach(function(store){if(hidden.has(store.name))return;let sum=0;store.rows.forEach(function(row){sum+=Number(row.qty)||0;});total+=sum;groups.push({kind:'store',label:store.name,qty:sum,rows:store.rows});});if(groups.length)groups.push({kind:'total',label:'Total general',qty:total,rows:[]});return groups;}" +
+          "function pack(groups){const pages=[];let chunk=[];let used=0;groups.forEach(function(group){const cost=group.rows.length+2;if(chunk.length&&used+cost>maxUnits){pages.push(chunk);chunk=[];used=0;}chunk.push(group);used+=cost;});if(chunk.length)pages.push(chunk);return pages;}" +
+          "const notes={};" +
+          "function saveNotes(){document.querySelectorAll('[data-note]').forEach(function(cell){notes[cell.getAttribute('data-note')]=cell.textContent;});}" +
+          "function restoreNotes(){document.querySelectorAll('[data-note]').forEach(function(cell){const value=notes[cell.getAttribute('data-note')];if(value)cell.textContent=value;});}" +
+          "function box(group){const headClass=group.kind==='total'?'total':'store';const products=group.rows.map(function(row){const key=escapeHtml(group.label+'||'+row.label);return '<tr class=\"product\"><td>'+escapeHtml(row.label)+'</td><td class=\"qty\">'+escapeHtml(row.qty)+'</td><td class=\"lot\">'+escapeHtml(row.lot||'')+'</td><td class=\"note\" contenteditable=\"true\" data-note=\"'+key+'\"></td></tr>';}).join('');return '<tbody class=\"'+headClass+'\"><tr class=\"'+headClass+'\"><td>'+escapeHtml(group.label)+'</td><td class=\"qty\">'+escapeHtml(group.qty)+'</td><td class=\"lot\"></td><td class=\"note\"></td></tr>'+products+'</tbody>';}" +
+          "function renderPages(){saveNotes();const root=document.getElementById('sheets');const groups=groupsOf();const visibleCount=data.stores.filter(function(store){return !hidden.has(store.name);}).length;if(!groups.length){root.innerHTML='<section class=\"page last-page\"><h1>Análisis Makro</h1><p class=\"empty-note\">Todas las tiendas están ocultas. Pulsa Ver junto al nombre en el análisis para desplegarlas.</p></section>';return;}const pages=pack(groups);const head='<table class=\"grid\"><colgroup><col><col class=\"c-qty\"><col class=\"c-lot\"><col class=\"c-note\"></colgroup><thead><tr><th>Etiquetas de fila</th><th class=\"qty\">Cant.</th><th class=\"lot\">Lote</th><th></th></tr></thead>';root.innerHTML=pages.map(function(chunk,index){const pageClass=index===pages.length-1?'page last-page':'page';return '<section class=\"'+pageClass+'\"><h1>Análisis Makro</h1><p class=\"meta\">Tiendas: '+visibleCount+' de '+data.stores.length+' · Página '+(index+1)+' de '+pages.length+'</p>'+head+chunk.map(box).join('')+'</table></section>';}).join('');restoreNotes();}" +
+          "window.makroSetHiddenStores=function(names){const next=new Set(names||[]);if(next.size===hidden.size&&Array.from(next).every(function(name){return hidden.has(name);}))return;hidden.clear();next.forEach(function(name){hidden.add(name);});renderPages();};" +
+          "renderPages();" +
+          "document.getElementById('pdfBtn').addEventListener('click',async function(){if(!window.html2canvas||!window.jspdf)return;const pages=Array.from(document.querySelectorAll('.page'));const pdf=new window.jspdf.jsPDF({unit:'mm',format:'a4',orientation:'portrait'});for(let i=0;i<pages.length;i+=1){const canvas=await window.html2canvas(pages[i],{scale:2,backgroundColor:'#ffffff'});const img=canvas.toDataURL('image/jpeg',0.98);if(i>0)pdf.addPage();pdf.addImage(img,'JPEG',0,0,210,297);}pdf.save('Analisis Makro.pdf');});" +
+          "})();<" + "/script></body></html>";
         const previewWindow = window.open("", "_blank");
         if (!previewWindow) {
           showInfoModal("El navegador bloqueó la ventana emergente.", { title: "Ventana bloqueada" });
           return;
         }
+        makroPreviewWindow = previewWindow;
         previewWindow.document.open();
         previewWindow.document.write(html);
         previewWindow.document.close();
@@ -4271,12 +4349,14 @@
               text = new TextDecoder("windows-1252").decode(buffer);
             }
             makroStores = parseMakroOrders(text);
+            makroHiddenStores = new Set();
             renderMakroOrders();
             if (!makroStores.length) {
               showInfoModal("El archivo no tiene órdenes para agrupar.", { title: "Sin datos" });
             }
           } catch (err) {
             makroStores = [];
+            makroHiddenStores = new Set();
             renderMakroOrders();
             showErrorModal(err?.message || "No se pudo leer el archivo.", { title: "Archivo inválido" });
           }
