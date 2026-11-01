@@ -4257,6 +4257,8 @@
               label: makroCatalogLabel(item) || item.product + " · sin catálogo",
               qty: item.qty,
               lot: (item.catalog?.lot || "").trim(),
+              production: (item.catalog?.production_text || "").trim(),
+              expiration: (item.catalog?.expiration_text || "").trim(),
             })),
           })),
           hidden: makroHiddenNames(),
@@ -4285,14 +4287,14 @@
           "h1{margin:0 0 4px;font-size:18px;}" +
           ".meta,.empty-note{margin:0 0 8px;font-size:12px;color:#444;}" +
           ".empty-note{font-size:14px;margin-top:12px;}" +
-          "table.grid{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px;}" +
-          "table.grid col.c-qty{width:16mm;}" +
-          "table.grid col.c-lot{width:28mm;}" +
-          "table.grid col.c-note{width:58mm;}" +
-          "table.grid th,table.grid td{border:1px solid #94a3b8;padding:3px 6px;line-height:1.25;vertical-align:middle;}" +
-          "table.grid thead th{background:#111827;color:#fff;border-color:#111827;font-size:11px;text-align:left;}" +
-          "table.grid th.qty,table.grid td.qty{text-align:right;white-space:nowrap;padding-left:3px;padding-right:4px;}" +
-          "table.grid th.lot,table.grid td.lot{white-space:nowrap;padding-left:4px;padding-right:4px;}" +
+          "table.grid{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10px;}" +
+          "table.grid col.c-qty{width:14mm;}" +
+          "table.grid col.c-lot{width:24mm;}" +
+          "table.grid col.c-date{width:24mm;}" +
+          "table.grid col.c-note{width:32mm;}" +
+          "table.grid th,table.grid td{border:1px solid #94a3b8;padding:3px 4px;line-height:1.25;vertical-align:middle;}" +
+          "table.grid thead th{background:#111827;color:#fff;border-color:#111827;font-size:10px;text-align:left;}" +
+          "table.grid th.qty,table.grid td.qty,table.grid th.lot,table.grid td.lot,table.grid th.date,table.grid td.date{text-align:center;white-space:nowrap;padding-left:2px;padding-right:2px;}" +
           "table.grid td.note{white-space:normal;min-height:1.2em;}" +
           "table.grid td.note[contenteditable='true']:focus{outline:1px solid #0e7490;background:#f0fdfa;}" +
           "table.grid tr.store td{background:#e8eef8;font-weight:700;}" +
@@ -4315,8 +4317,8 @@
           "const notes={};" +
           "function saveNotes(){document.querySelectorAll('[data-note]').forEach(function(cell){notes[cell.getAttribute('data-note')]=cell.textContent;});}" +
           "function restoreNotes(){document.querySelectorAll('[data-note]').forEach(function(cell){const value=notes[cell.getAttribute('data-note')];if(value)cell.textContent=value;});}" +
-          "function box(group){const headClass=group.kind==='total'?'total':'store';const products=group.rows.map(function(row){const key=escapeHtml(group.label+'||'+row.label);return '<tr class=\"product\"><td>'+escapeHtml(row.label)+'</td><td class=\"qty\">'+escapeHtml(row.qty)+'</td><td class=\"lot\">'+escapeHtml(row.lot||'')+'</td><td class=\"note\" contenteditable=\"true\" data-note=\"'+key+'\"></td></tr>';}).join('');return '<tbody class=\"'+headClass+'\"><tr class=\"'+headClass+'\"><td>'+escapeHtml(group.label)+'</td><td class=\"qty\">'+escapeHtml(group.qty)+'</td><td class=\"lot\"></td><td class=\"note\"></td></tr>'+products+'</tbody>';}" +
-          "function renderPages(){saveNotes();const root=document.getElementById('sheets');const groups=groupsOf();const visibleCount=data.stores.filter(function(store){return !hidden.has(store.name);}).length;if(!groups.length){root.innerHTML='<section class=\"page last-page\"><h1>Análisis Makro</h1><p class=\"empty-note\">Todas las tiendas están ocultas. Pulsa Ver junto al nombre en el análisis para desplegarlas.</p></section>';return;}const pages=pack(groups);const head='<table class=\"grid\"><colgroup><col><col class=\"c-qty\"><col class=\"c-lot\"><col class=\"c-note\"></colgroup><thead><tr><th>Etiquetas de fila</th><th class=\"qty\">Cant.</th><th class=\"lot\">Lote</th><th></th></tr></thead>';root.innerHTML=pages.map(function(chunk,index){const pageClass=index===pages.length-1?'page last-page':'page';return '<section class=\"'+pageClass+'\"><h1>Análisis Makro</h1><p class=\"meta\">Tiendas: '+visibleCount+' de '+data.stores.length+' · Página '+(index+1)+' de '+pages.length+'</p>'+head+chunk.map(box).join('')+'</table></section>';}).join('');restoreNotes();}" +
+          "function box(group){const headClass=group.kind==='total'?'total':'store';const products=group.rows.map(function(row){const key=escapeHtml(group.label+'||'+row.label);return '<tr class=\"product\"><td>'+escapeHtml(row.label)+'</td><td class=\"qty\">'+escapeHtml(row.qty)+'</td><td class=\"lot\">'+escapeHtml(row.lot||'')+'</td><td class=\"date\">'+escapeHtml(row.production||'')+'</td><td class=\"date\">'+escapeHtml(row.expiration||'')+'</td><td class=\"note\" contenteditable=\"true\" data-note=\"'+key+'\"></td></tr>';}).join('');return '<tbody class=\"'+headClass+'\"><tr class=\"'+headClass+'\"><td>'+escapeHtml(group.label)+'</td><td class=\"qty\">'+escapeHtml(group.qty)+'</td><td class=\"lot\"></td><td class=\"date\"></td><td class=\"date\"></td><td class=\"note\"></td></tr>'+products+'</tbody>';}" +
+          "function renderPages(){saveNotes();const root=document.getElementById('sheets');const groups=groupsOf();const visibleCount=data.stores.filter(function(store){return !hidden.has(store.name);}).length;if(!groups.length){root.innerHTML='<section class=\"page last-page\"><h1>Análisis Makro</h1><p class=\"empty-note\">Todas las tiendas están ocultas. Pulsa Ver junto al nombre en el análisis para desplegarlas.</p></section>';return;}const pages=pack(groups);const head='<table class=\"grid\"><colgroup><col><col class=\"c-qty\"><col class=\"c-lot\"><col class=\"c-date\"><col class=\"c-date\"><col class=\"c-note\"></colgroup><thead><tr><th>Etiquetas de fila</th><th class=\"qty\">Cant.</th><th class=\"lot\">Lote</th><th class=\"date\">Producción</th><th class=\"date\">Vencimiento</th><th></th></tr></thead>';root.innerHTML=pages.map(function(chunk,index){const pageClass=index===pages.length-1?'page last-page':'page';return '<section class=\"'+pageClass+'\"><h1>Análisis Makro</h1><p class=\"meta\">Tiendas: '+visibleCount+' de '+data.stores.length+' · Página '+(index+1)+' de '+pages.length+'</p>'+head+chunk.map(box).join('')+'</table></section>';}).join('');restoreNotes();}" +
           "window.makroSetHiddenStores=function(names){const next=new Set(names||[]);if(next.size===hidden.size&&Array.from(next).every(function(name){return hidden.has(name);}))return;hidden.clear();next.forEach(function(name){hidden.add(name);});renderPages();};" +
           "renderPages();" +
           "document.getElementById('pdfBtn').addEventListener('click',async function(){if(!window.html2canvas||!window.jspdf)return;const pages=Array.from(document.querySelectorAll('.page'));const pdf=new window.jspdf.jsPDF({unit:'mm',format:'a4',orientation:'portrait'});for(let i=0;i<pages.length;i+=1){const canvas=await window.html2canvas(pages[i],{scale:2,backgroundColor:'#ffffff'});const img=canvas.toDataURL('image/jpeg',0.98);if(i>0)pdf.addPage();pdf.addImage(img,'JPEG',0,0,210,297);}pdf.save('Analisis Makro.pdf');});" +
