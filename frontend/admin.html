@@ -3818,6 +3818,25 @@
         return makroBrand(value) === "cusi" && makroWeightToken(value) === "49kg";
       }
 
+      const MAKRO_CUSI_CHIFERO_ORIGIN = "cusicusaarrozsuperanejochifero49kg";
+
+      function makroCsvIsCusiChifero(value) {
+        const text = normalizeSearchText(value);
+        return text.includes("cusi") && text.includes("chifero");
+      }
+
+      function makroProductIsCusiChifero(prod) {
+        return normalizeProductKey(prod?.origin || "") === MAKRO_CUSI_CHIFERO_ORIGIN;
+      }
+
+      function makroMatchCusiChifero(csvName) {
+        if (!makroCsvIsCusiChifero(csvName)) return null;
+        return (
+          (allProducts || []).find((prod) => prod && prod.active !== false && makroProductIsCusiChifero(prod)) ||
+          null
+        );
+      }
+
       function makroPackToken(value) {
         const compact = normalizeSearchText(value).replace(/\s+/g, "");
         const found = compact.match(/scx\d+|sc\d+|bl\d+/);
@@ -3828,6 +3847,9 @@
         if (!makroIsCusi49(csvName)) return null;
         const family = (allProducts || []).filter((prod) => {
           if (!prod || prod.active === false) return false;
+          const name = normalizeSearchText(prod.name || "");
+          const origin = normalizeSearchText(prod.origin || "");
+          if (makroProductIsCusiChifero(prod) || name.includes("chifero") || origin.includes("chifero")) return false;
           return makroIsCusi49(prod.name || "") || makroIsCusi49(prod.origin || "");
         });
         if (!family.length) return null;
@@ -3864,6 +3886,7 @@
       }
 
       function makroMatchProduct(csvName) {
+        if (makroCsvIsCusiChifero(csvName)) return makroMatchCusiChifero(csvName);
         if (makroIsCusi49(csvName)) return makroCusi49FromOrigin(csvName);
         const target = normalizeProductKey(csvName);
         if (!target || !allProducts.length) return null;
