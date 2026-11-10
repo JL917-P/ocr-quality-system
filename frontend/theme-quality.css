@@ -5290,6 +5290,10 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   font-size: 13px;
 }
 
+.users-table {
+  table-layout: auto;
+}
+
 .users-table th,
 .audit-table th {
   text-align: left;
@@ -5304,6 +5308,24 @@ tr:hover .itemCell .btn-mini { opacity: 1; }
   padding: 8px 6px;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
+}
+
+.users-table td {
+  height: auto;
+}
+
+.users-table td.users-actions {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.users-actions-row {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .user-perm-modal {

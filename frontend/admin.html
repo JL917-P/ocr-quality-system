@@ -14,7 +14,7 @@
       })();
     </script>
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=emerald1" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=users-actions1" />
     <link rel="stylesheet" href="/static/auth-gate.css?v=emerald1" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
@@ -11913,7 +11913,8 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
             <td>${u.display_name || ""}</td>
             <td>${u.is_admin ? "Administrador" : "Operador"}</td>
             <td>${u.active ? "Activo" : "Inactivo"}</td>
-            <td style="display:flex;gap:6px;flex-wrap:wrap;">
+            <td class="users-actions">
+              <div class="users-actions-row">
               <button type="button" class="btn btn-outline btn-mini user-edit-btn">Editar</button>
               ${
                 canEnterEnv
@@ -11921,6 +11922,7 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
                   : ""
               }
               ${u.username === "admin" ? "" : '<button type="button" class="btn btn-danger btn-mini user-del-btn">Eliminar</button>'}
+              </div>
             </td>
           `;
           tr.querySelector(".user-edit-btn")?.addEventListener("click", () => openUserModal(u));
