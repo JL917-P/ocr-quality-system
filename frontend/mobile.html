@@ -14,7 +14,7 @@
       })();
     </script>
     <title>Móvil · Control de Calidad</title>
-    <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
+    <link rel="stylesheet" href="/static/auth-gate.css?v=orbit2" />
     <link rel="stylesheet" href="/static/mobile.css?v=5" />
   </head>
   <body class="page-mobile auth-locked">
@@ -41,13 +41,12 @@
     </div>
 
     <div id="authLoading" class="auth-screen auth-loading-screen hidden" aria-live="polite">
-      <h1 class="auth-loading-title">LOADING</h1>
-      <div class="auth-progress-wrap">
-        <div class="auth-progress-track">
-          <div id="authProgressFill" class="auth-progress-fill"></div>
-        </div>
-        <span id="authProgressPct" class="auth-progress-pct">0%</span>
+      <div class="auth-orbit" id="authOrbit">
+        <div class="auth-orbit-dots" aria-hidden="true"></div>
+        <div id="authProgressFill" class="auth-orbit-cover"></div>
+        <h1 class="auth-loading-title">LOADING</h1>
       </div>
+      <span id="authProgressPct" class="auth-progress-pct">0%</span>
     </div>
 
     <div id="authWelcome" class="auth-screen auth-welcome-screen hidden">
@@ -148,7 +147,7 @@
         } catch (e) {}
       })();
     </script>
-    <script src="/static/auth-gate.js?v=auth8"></script>
+    <script src="/static/auth-gate.js?v=orbit2"></script>
     <script src="/static/mobile.js?v=7"></script>
   </body>
 </html>

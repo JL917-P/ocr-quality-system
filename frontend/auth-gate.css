@@ -32,7 +32,7 @@ body:not(.auth-locked) .auth-screen {
 .auth-login-screen {
   background:
     radial-gradient(ellipse 80% 60% at 50% 40%, rgba(14, 116, 144, 0.12), transparent),
-    linear-gradient(160deg, #0a0f18 0%, #111827 45%, #0c2340 100%);
+    linear-gradient(160deg, #101412 0%, #152824 45%, #1a4d3e 100%);
   padding: 20px;
 }
 
@@ -149,60 +149,72 @@ body:not(.auth-locked) .auth-screen {
 /* —— Loading —— */
 .auth-loading-screen {
   flex-direction: column;
+  gap: 18px;
   background: #000;
-  background-image: radial-gradient(ellipse 70% 50% at 50% 50%, rgba(0, 80, 60, 0.15), #000 70%);
 }
 
-.auth-loading-title {
-  margin: 0 0 28px;
-  font-family: "DM Sans", "Segoe UI", sans-serif;
-  font-size: clamp(2.5rem, 8vw, 4rem);
-  font-weight: 800;
-  letter-spacing: 0.35em;
-  color: #7dd3fc;
-  text-shadow:
-    0 0 20px rgba(56, 189, 248, 0.9),
-    0 0 40px rgba(56, 189, 248, 0.5),
-    0 0 80px rgba(14, 165, 233, 0.35);
-}
-
-.auth-progress-wrap {
+.auth-orbit {
+  --load: 0%;
   position: relative;
-  width: min(520px, 88vw);
+  width: min(280px, 68vw);
+  aspect-ratio: 1;
 }
 
-.auth-progress-track {
-  height: 28px;
-  border-radius: 4px;
-  border: 2px solid rgba(56, 189, 248, 0.85);
-  box-shadow: 0 0 16px rgba(56, 189, 248, 0.4);
-  overflow: hidden;
-  background: rgba(0, 20, 40, 0.8);
+.auth-orbit-dots,
+.auth-orbit-cover {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
 }
 
-.auth-progress-fill {
-  height: 100%;
-  width: 0%;
-  background: linear-gradient(90deg, #0ea5e9, #38bdf8);
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.8);
-  transition: width 0.08s linear;
-}
-
-.auth-progress-pct {
+.auth-orbit-dots span {
   position: absolute;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-  pointer-events: none;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: #7dd3fc;
+  box-shadow:
+    0 0 6px #38bdf8,
+    0 0 14px rgba(14, 165, 233, 0.9);
+  opacity: 0;
+  transform: rotate(calc(var(--i) * 10deg)) translateY(-118px) scale(0.4);
+}
+
+.auth-orbit-cover {
+  display: none;
+}
+
+.auth-loading-title {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "DM Sans", "Segoe UI", sans-serif;
+  font-size: clamp(0.95rem, 2.4vw, 1.25rem);
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  color: #7dd3fc;
+  text-shadow:
+    0 0 12px rgba(56, 189, 248, 0.95),
+    0 0 28px rgba(14, 165, 233, 0.65);
+}
+
+.auth-progress-pct {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: rgba(125, 211, 252, 0.85);
 }
 
 /* —— Bienvenido —— */
 .auth-welcome-screen {
-  background: linear-gradient(160deg, #0c2340 0%, #143352 50%, #155e75 100%);
+  background: linear-gradient(160deg, #101412 0%, #16382f 52%, #0f766e 100%);
 }
 
 .auth-welcome-text {

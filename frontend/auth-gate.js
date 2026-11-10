@@ -43,22 +43,60 @@
     setTimeout(unlockApp, WELCOME_MS);
   }
 
+  const ORBIT_DOTS = 36;
+
+  function ensureOrbitDots() {
+    const host = document.querySelector("#authOrbit .auth-orbit-dots");
+    if (!host || host.dataset.ready === "1") return;
+    host.dataset.ready = "1";
+    for (let i = 0; i < ORBIT_DOTS; i += 1) {
+      const dot = document.createElement("span");
+      dot.style.setProperty("--i", String(i));
+      host.appendChild(dot);
+    }
+  }
+
+  function paintLoad(pct) {
+    const orbit = document.getElementById("authOrbit");
+    if (orbit) orbit.style.setProperty("--load", `${pct}%`);
+    ensureOrbitDots();
+    const host = orbit && orbit.querySelector(".auth-orbit-dots");
+    if (host) {
+      const dots = host.children;
+      const n = dots.length || 1;
+      const filled = Math.max(0, Math.min(100, pct)) / 100;
+      for (let i = 0; i < dots.length; i += 1) {
+        const pos = i / n;
+        const dot = dots[i];
+        const angle = (i / n) * 360;
+        if (filled <= 0 || pos > filled) {
+          dot.style.opacity = "0";
+          dot.style.transform = `rotate(${angle}deg) translateY(-118px) scale(0.35)`;
+          continue;
+        }
+        const along = pos / filled;
+        const scale = 0.55 + along * 1.05;
+        dot.style.opacity = String(0.28 + along * 0.72);
+        dot.style.transform = `rotate(${angle}deg) translateY(-118px) scale(${scale})`;
+      }
+    }
+    if (progressFill) progressFill.style.width = `${pct}%`;
+    if (progressPct) progressPct.textContent = `${pct}%`;
+  }
+
   function runLoading() {
     hideScreen(loginScreen);
     showScreen(loadingScreen);
-    if (progressFill) progressFill.style.width = "0%";
-    if (progressPct) progressPct.textContent = "0%";
+    paintLoad(0);
     const start = performance.now();
     function tick(now) {
       const elapsed = now - start;
       const pct = Math.min(100, Math.round((elapsed / LOADING_MS) * 100));
-      if (progressFill) progressFill.style.width = `${pct}%`;
-      if (progressPct) progressPct.textContent = `${pct}%`;
+      paintLoad(pct);
       if (elapsed < LOADING_MS) {
         requestAnimationFrame(tick);
       } else {
-        if (progressFill) progressFill.style.width = "100%";
-        if (progressPct) progressPct.textContent = "100%";
+        paintLoad(100);
         setTimeout(runWelcome, 200);
       }
     }

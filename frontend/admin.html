@@ -14,8 +14,8 @@
       })();
     </script>
     <title>Panel · Control de Calidad Logística</title>
-    <link rel="stylesheet" href="/static/theme-quality.css?v=makro-tiendas2" />
-    <link rel="stylesheet" href="/static/auth-gate.css?v=auth8" />
+    <link rel="stylesheet" href="/static/theme-quality.css?v=emerald1" />
+    <link rel="stylesheet" href="/static/auth-gate.css?v=emerald1" />
     <style>
       #adminLayout { display: block; min-height: 100vh; position: relative; z-index: 1; }
       .env-impersonation-banner {
@@ -44,9 +44,9 @@
         flex-shrink: 0;
         display: flex;
         flex-direction: column;
-        background: linear-gradient(180deg, #0c2340 0%, #143352 55%, #155e75 100%);
+        background: linear-gradient(180deg, #101412 0%, #1a3330 58%, #0f766e 100%);
         color: #fff;
-        box-shadow: 4px 0 20px rgba(12, 35, 64, 0.2);
+        box-shadow: 4px 0 20px rgba(9, 11, 22, 0.28);
         transition: width 0.25s ease;
         overflow: visible;
         z-index: 200;
@@ -112,13 +112,12 @@
     </div>
 
     <div id="authLoading" class="auth-screen auth-loading-screen hidden" aria-live="polite">
-      <h1 class="auth-loading-title">LOADING</h1>
-      <div class="auth-progress-wrap">
-        <div class="auth-progress-track">
-          <div id="authProgressFill" class="auth-progress-fill"></div>
-        </div>
-        <span id="authProgressPct" class="auth-progress-pct">0%</span>
+      <div class="auth-orbit" id="authOrbit">
+        <div class="auth-orbit-dots" aria-hidden="true"></div>
+        <div id="authProgressFill" class="auth-orbit-cover"></div>
+        <h1 class="auth-loading-title">LOADING</h1>
       </div>
+      <span id="authProgressPct" class="auth-progress-pct">0%</span>
     </div>
 
     <div id="authWelcome" class="auth-screen auth-welcome-screen hidden">
@@ -130,7 +129,7 @@
       <aside id="sidebar" class="sidebar">
         <div class="sidebar-inner" id="sidebarInner">
           <div class="sidebar-brand">
-            <div class="brand-mark">QC</div>
+            <div class="brand-mark"><img src="/static/qc-seal.png?v=seal1" alt="" /></div>
             <div class="sidebar-brand-text">
               <div class="brand">Control de Calidad</div>
               <div class="brand-sub">Logística · Calidad</div>
@@ -138,40 +137,52 @@
           </div>
           <nav id="navWrap" class="sidebar-nav" aria-label="Menú principal">
             <a href="#" data-target="section-home" class="sidebar-nav-home">
+              <span class="sidebar-nav-icon icon-home" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="#fff7ed" d="M4.2 11.4 12 4.8l7.8 6.6V20H4.2z"/><path fill="#f97316" d="M12 2.6 2.4 10.6h2.7L12 5.4l6.9 5.2h2.7z"/><rect fill="#38bdf8" x="10" y="13.2" width="4" height="6.8" rx="0.4"/><rect fill="#fde68a" x="6.1" y="12.4" width="2.7" height="2.3" rx="0.3"/></svg></span>
               <span class="sidebar-nav-label">Inicio</span>
             </a>
             <a href="#" data-target="section-clients">
+              <span class="sidebar-nav-icon icon-clients" aria-hidden="true"><svg viewBox="0 0 24 24"><circle fill="#fde68a" cx="9" cy="8" r="2.7"/><path fill="#38bdf8" d="M4.4 18.6c.7-2.8 2.5-4.2 4.6-4.2s3.9 1.4 4.6 4.2z"/><circle fill="#fdba74" cx="16.2" cy="8.6" r="2.2"/><path fill="#818cf8" d="M14.2 18.4c.5-1.8 1.6-2.9 3-3.2 1.2.2 2.2 1.1 2.7 2.6z"/></svg></span>
               <span class="sidebar-nav-label">Clientes</span>
             </a>
             <a href="#" data-target="section-products">
+              <span class="sidebar-nav-icon icon-products" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="#fb923c" d="M12 3.6 20.2 7.6 12 11.6 3.8 7.6z"/><path fill="#ea580c" d="M4 8.8 12 12.8V20.4L4 16.4z"/><path fill="#fdba74" d="M20 8.8 12 12.8V20.4L20 16.4z"/><path fill="#fef3c7" d="M12 11.6v4.2"/></svg></span>
               <span class="sidebar-nav-label">Productos</span>
             </a>
             <a href="#" data-target="section-transports">
+              <span class="sidebar-nav-icon icon-transport" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="#5eead4" d="M3 8h10.6v7.2H3z"/><path fill="#14b8a6" d="M13.6 10.4h3.2l2.6 2.5v2.3h-5.8z"/><rect fill="#cffafe" x="4.4" y="9.2" width="3.4" height="2.2" rx="0.3"/><g class="wheel"><circle fill="#0f172a" cx="7.1" cy="16.8" r="1.7"/><circle fill="#e2e8f0" cx="7.1" cy="16.8" r="0.7"/></g><g class="wheel wheel-b"><circle fill="#0f172a" cx="16.8" cy="16.8" r="1.7"/><circle fill="#e2e8f0" cx="16.8" cy="16.8" r="0.7"/></g></svg></span>
               <span class="sidebar-nav-label">Transporte</span>
             </a>
             <a href="#" data-target="section-ocr">
+              <span class="sidebar-nav-icon icon-new" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="#6ee7b7" d="M7 3.4h7.1L19.2 8.4V20.4H7z"/><path fill="#059669" d="M14 3.4v5.2h5.2z"/><path class="plus" fill="#ecfdf5" d="M11 11.2h2v2.2h2.2v2H13v2.2h-2V15.4H8.8v-2H11z"/></svg></span>
               <span class="sidebar-nav-label">Nueva constancia</span>
             </a>
             <a href="#" data-target="section-constancias">
+              <span class="sidebar-nav-icon icon-docs" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="#c7d2fe" d="M8.4 5.2h8.8v13.2H8.4z"/><path fill="#818cf8" d="M6.2 3.4h8.8v13.2H6.2z"/><path fill="#eef2ff" d="M8 6.4h5.2M8 8.8h5.2M8 11.2h3.4" stroke="#eef2ff" stroke-width="1.2" stroke-linecap="round"/></svg></span>
               <span class="sidebar-nav-label">Constancias</span>
               <span class="nav-badge hidden" id="navConstanciasBadge" title="Por confirmar">0</span>
             </a>
             <a href="#" data-target="section-trazabilidad">
+              <span class="sidebar-nav-icon icon-trace" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="#ddd6fe" d="M8 7.2 15.4 11.2 9.6 16.4z"/><circle class="node" fill="#a78bfa" cx="6.4" cy="6.4" r="2.3"/><circle class="node node-b" fill="#f472b6" cx="17.4" cy="12" r="2.3"/><circle class="node node-c" fill="#22d3ee" cx="8.4" cy="17.6" r="2.3"/></svg></span>
               <span class="sidebar-nav-label">Trazabilidad</span>
             </a>
             <a href="#" data-target="section-trasiegos">
+              <span class="sidebar-nav-icon icon-swap" aria-hidden="true"><svg viewBox="0 0 24 24"><g class="swap-a"><path fill="#22d3ee" d="M3.4 7.2h11.2v2.2H3.4z"/><path fill="#67e8f9" d="M12.2 5.2 17.6 8.3 12.2 11.4z"/></g><g class="swap-b"><path fill="#fb7185" d="M9.4 14.6h11.2v2.2H9.4z"/><path fill="#fda4af" d="M11.8 12.6 6.4 15.7l5.4 3.1z"/></g></svg></span>
               <span class="sidebar-nav-label">Trasiegos</span>
             </a>
             <a href="#" data-target="section-fumigaciones">
+              <span class="sidebar-nav-icon icon-fumi" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="#84cc16" d="M8.2 11h6.4a2 2 0 0 1 2 2v3.6a2.2 2.2 0 0 1-2.2 2.2H9.4A2 2 0 0 1 7.4 16.8V13a2 2 0 0 1 2-2z"/><path fill="#65a30d" d="M14.4 11V8.6a2.2 2.2 0 0 1 3.2-2l1.3 1.1-1.5 1.6z"/><circle class="mist" fill="#d9f99d" cx="5.2" cy="8.2" r="1.1"/><circle class="mist mist-b" fill="#bef264" cx="3.8" cy="11.4" r="0.9"/><circle class="mist mist-c" fill="#ecfccb" cx="6.4" cy="13.6" r="0.8"/></svg></span>
               <span class="sidebar-nav-label">Fumigaciones</span>
             </a>
             <a href="#" data-target="section-makro" data-perm="constancia_create">
+              <span class="sidebar-nav-icon icon-makro" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="#fb7185" d="M5 15.2h14v3.6H5z"/><path fill="#ffe4e6" d="M6.2 16.1h11.6v1.2H6.2z"/><g class="up"><path fill="#fff1f2" d="M11 6.2h2V14h-2z"/><path fill="#fecdd3" d="M12 4.2 16 9.2H8z"/></g></svg></span>
               <span class="sidebar-nav-label">Cargar archivo Makro</span>
             </a>
             <a href="#" data-target="section-users" data-perm="users_manage" class="nav-perm-item hidden">
+              <span class="sidebar-nav-icon icon-users" aria-hidden="true"><svg viewBox="0 0 24 24"><circle fill="#fde68a" cx="12" cy="8" r="3"/><path fill="#60a5fa" d="M6 18.8c1.1-3 3.2-4.5 6-4.5s4.9 1.5 6 4.5z"/></svg></span>
               <span class="sidebar-nav-label">Usuarios</span>
             </a>
             <a href="#" data-target="section-audit" data-perm="audit_view" class="nav-perm-item hidden">
+              <span class="sidebar-nav-icon icon-audit" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="#fcd34d" d="M6.6 3.6h8.2L19 7.8V20.4H6.6z"/><path fill="#f59e0b" d="M14.6 3.6v4.4H19z"/><path fill="#fffbeb" d="M9 11.2h6.2M9 14.2h6.2M9 17.2h4" stroke="#fffbeb" stroke-width="1.3" stroke-linecap="round"/></svg></span>
               <span class="sidebar-nav-label">Bitácora</span>
             </a>
           </nav>
@@ -211,7 +222,7 @@
       <div class="main-wrap">
       <header class="page-header">
         <button type="button" class="page-header-brand" id="pageHeaderHomeBtn" title="Volver al resumen">
-          <div class="brand-mark">QC</div>
+          <div class="brand-mark"><img src="/static/qc-seal.png?v=seal1" alt="" /></div>
           <span class="page-header-title">Control de Calidad</span>
         </button>
         <div class="page-header-section hidden" id="sectionPageHeader" aria-live="polite">
@@ -238,7 +249,7 @@
             </div>
           </div>
           <button type="button" id="importSheetsBtn" class="btn btn-secondary btn-import-sheets" title="Restaurar SQLite desde Google Sheets">
-            Importar
+            Import
           </button>
           <button type="button" id="syncSheetsBtn" class="btn btn-secondary btn-sync-sheets hidden" title="Respaldo SQLite → Google Sheets" aria-hidden="true" tabindex="-1">
             Sincronizar con Google Sheets
@@ -2382,15 +2393,15 @@
       }
 
       function getDefaultFumigacionDate() {
-        // Ajiles: F. Fumigación = emisión − 2 días (misma lógica que liberación)
-        if (isActiveAjilesClient()) return getDefaultLiberacionDate();
         const base = (constanciaFecha && constanciaFecha.value) || formatToday();
-        return typeof formatDateMinusDays === "function" ? formatDateMinusDays(base, 9) : "";
+        if (typeof resolveFumigacionDate === "function") return resolveFumigacionDate("", base);
+        return "";
       }
 
       function getDefaultLiberacionDate() {
         const base = (constanciaFecha && constanciaFecha.value) || formatToday();
-        return typeof formatDateMinusDays === "function" ? formatDateMinusDays(base, 2) : "";
+        if (typeof resolveLiberacionDate === "function") return resolveLiberacionDate("", base);
+        return "";
       }
 
       function getDefaultInstalacionesDate() {
@@ -2509,7 +2520,7 @@
           <td><input type="text" class="prod-date-input" placeholder="${prodPlaceholder}" /></td>
           <td><input type="text" class="exp-date-input" placeholder="${expPlaceholder}" /></td>
           <td><input type="number" class="qty-input" min="0" step="any" placeholder="" /></td>
-          <td><input type="text" class="fumigacion-date-input" value="${fumDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AAAA" /></td>
+          <td><input type="text" class="fumigacion-date-input" value="${fumDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AA" /></td>
           <td><input type="number" class="fum-sacos-input" min="0" step="any" value="400" placeholder="400" /></td>
           <td><input type="number" class="tabletas-input" min="0" step="any" value="100" placeholder="100" /></td>
           <td><input type="number" class="fosfina-input" min="0" step="any" value="1800" placeholder="1800" /></td>
@@ -2523,8 +2534,8 @@
           <td><input type="text" class="prod-date-input" placeholder="${prodPlaceholder}" /></td>
           <td><input type="text" class="exp-date-input" placeholder="${expPlaceholder}" /></td>
           <td><input type="number" class="qty-input" min="0" step="any" placeholder="" /></td>
-          <td><input type="text" class="fumigacion-date-input" value="${fumDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AAAA" /></td>
-          <td><input type="text" class="liberacion-date-input" value="${libDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AAAA" /></td>
+          <td><input type="text" class="fumigacion-date-input" value="${fumDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AA" /></td>
+          <td><input type="text" class="liberacion-date-input" value="${libDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AA" /></td>
           <td><input type="text" class="instalaciones-date-input" value="${instDefault.replace(/"/g, "&quot;")}" placeholder="DD/MM/AAAA" /></td>
           <td><button class="btn btn-danger btn-sm">🗑</button></td>
         `;
@@ -2633,8 +2644,22 @@
         const savedFum = itemSnapshotField(itm, "f_fumigacion", "fumigacion_date");
         const savedLib = itemSnapshotField(itm, "f_liberacion", "liberacion_date");
         const savedInst = itemSnapshotField(itm, "f_instalaciones", "instalaciones_date");
-        if (fumInput) fumInput.value = savedFum || getDefaultFumigacionDate();
-        if (libInput) libInput.value = savedLib || getDefaultLiberacionDate();
+        if (fumInput) {
+          const emission = (constanciaFecha && constanciaFecha.value) || "";
+          const prod = itemSnapshotField(itm, "production_date_snapshot", "production_text");
+          fumInput.value =
+            resolveFumigacionDate(prod, emission) ||
+            (typeof formatShortDate === "function" ? formatShortDate(savedFum) : savedFum) ||
+            "";
+        }
+        if (libInput) {
+          const emission = (constanciaFecha && constanciaFecha.value) || "";
+          const prod = itemSnapshotField(itm, "production_date_snapshot", "production_text");
+          libInput.value =
+            resolveLiberacionDate(prod, emission) ||
+            (typeof formatShortDate === "function" ? formatShortDate(savedLib) : savedLib) ||
+            "";
+        }
         if (instInput) instInput.value = savedInst || getDefaultInstalacionesDate();
         if (sacosInput) {
           const sacos = itemSnapshotField(itm, "fumigacion_sacos", "cant_fumigada");
@@ -4141,8 +4166,8 @@
           lot: match?.lot || "",
           production_text: match?.production_text || "",
           expiration_text: match?.expiration_text || "",
-          f_fumigacion: formatDateMinusDays(issueIso, 9),
-          f_liberacion: formatDateMinusDays(issueIso, 2),
+          f_fumigacion: resolveFumigacionDate(match?.production_text || "", issueIso),
+          f_liberacion: resolveLiberacionDate(match?.production_text || "", issueIso),
           f_instalaciones: formatDateMinusDays(issueIso, 0),
         };
         if (match?.id) row.product_id = match.id;
@@ -4491,8 +4516,10 @@
         if (lotInput && (force || isBlankCatalogField(lotInput.value))) {
           lotInput.value = match.lot || "";
         }
+        let productionFilledFromCatalog = false;
         if (prodInput && (force || isBlankCatalogField(prodInput.value))) {
           prodInput.value = match.production_text || "";
+          productionFilledFromCatalog = !!(prodInput.value || "").trim();
         }
         if (expInput && (force || isBlankCatalogField(expInput.value))) {
           if (match.expiration_text) {
@@ -4507,6 +4534,9 @@
               applyExpirationFromProduction(prodInput);
             }
           }
+        }
+        if (productionFilledFromCatalog && prodInput) {
+          applyFumigacionFromProduction(prodInput);
         }
       }
 
@@ -4635,8 +4665,6 @@
       }
 
       function refreshDefaultFumigacionDatesOnRows({ onlyEmpty = true } = {}) {
-        const fumDefault = getDefaultFumigacionDate();
-        const libDefault = getDefaultLiberacionDate();
         const instDefault = getDefaultInstalacionesDate();
         const shipDefault = formatEmissionDateForInput();
         getActiveProductBodies().forEach((bodyEl) => {
@@ -4645,11 +4673,21 @@
             const libInput = row.querySelector(".liberacion-date-input");
             const instInput = row.querySelector(".instalaciones-date-input");
             const shipInput = row.querySelector(".shipping-date-input");
-            if (fumInput && (!onlyEmpty || !(fumInput.value || "").trim())) {
-              fumInput.value = fumDefault;
+            const prodValue = row.querySelector(".prod-date-input")?.value || "";
+            const emission = (constanciaFecha && constanciaFecha.value) || formatToday();
+            if (fumInput) {
+              const next = resolveFumigacionDate(prodValue, emission);
+              const hasDay = productionDateHasDay(prodValue);
+              if (next && (!hasDay || !onlyEmpty || !(fumInput.value || "").trim())) {
+                fumInput.value = next;
+              }
             }
-            if (libInput && (!onlyEmpty || !(libInput.value || "").trim())) {
-              libInput.value = libDefault;
+            if (libInput) {
+              const nextLib = resolveLiberacionDate(prodValue, emission);
+              const hasDay = productionDateHasDay(prodValue);
+              if (nextLib && (!hasDay || !onlyEmpty || !(libInput.value || "").trim())) {
+                libInput.value = nextLib;
+              }
             }
             if (instInput && (!onlyEmpty || !(instInput.value || "").trim())) {
               instInput.value = instDefault;
@@ -4763,6 +4801,11 @@
         if (!productTableBodyFromTarget(event.target)) return;
         const input = event.target;
         if (!(input instanceof HTMLInputElement)) return;
+        if (input.classList.contains("prod-date-input")) {
+          applyFumigacionFromProduction(input);
+          refreshOcrRowStates();
+          return;
+        }
         if (!input.classList.contains("product-input")) {
           refreshOcrRowStates();
           return;
@@ -5283,7 +5326,7 @@
         "section-products": { title: "Productos", subtitle: "Catálogo de productos y parámetros de calidad" },
         "section-transports": { title: "Transporte", subtitle: "Matrículas y unidades de transporte" },
         "section-ocr": { title: "OCR · Nueva constancia", subtitle: "Captura de datos y emisión de constancias" },
-        "section-constancias": { title: "Constancias", subtitle: "Lista, filtros y confirmación de emisiones" },
+        "section-constancias": { title: "Historial de Constancias", subtitle: "Lista, filtros y confirmación de emisiones" },
         "section-trazabilidad": { title: "Trazabilidad", subtitle: "Historial por producto, lote, tienda o mes" },
         "section-trasiegos": { title: "Trasiegos", subtitle: "Registro y seguimiento de trasiegos" },
         "section-fumigaciones": { title: "Fumigaciones", subtitle: "" },
@@ -7137,7 +7180,10 @@
               lot: lot || match?.lot || "",
               production_text: prodDate || match?.production_text || "",
               expiration_text: expDate || match?.expiration_text || "",
-              f_fumigacion: fumDate || getDefaultFumigacionDate(),
+              f_fumigacion:
+                resolveFumigacionDate(prodDate, (constanciaFecha && constanciaFecha.value) || "") ||
+                fumDate ||
+                getDefaultFumigacionDate(),
             };
             if (ajiles) {
               row.fecha_envio = shipDate || formatEmissionDateForInput();
@@ -7147,7 +7193,10 @@
               row.nivel_fosfina =
                 fosfinaRaw === "" || fosfinaRaw === undefined ? 1800 : Number(fosfinaRaw);
             } else {
-              row.f_liberacion = libDate || getDefaultLiberacionDate();
+              row.f_liberacion =
+                resolveLiberacionDate(prodDate, (constanciaFecha && constanciaFecha.value) || "") ||
+                libDate ||
+                getDefaultLiberacionDate();
               row.f_instalaciones = instDate || getDefaultInstalacionesDate();
             }
             if (match?.id) row.product_id = match.id;
@@ -9553,16 +9602,79 @@
         return null;
       }
 
+      function productionDateHasDay(productionText) {
+        const raw = (productionText || "").trim();
+        if (!raw) return false;
+        const inner = stripAdminFpFvPrefix(raw);
+        return !!(parseUser01DayMonthYearText(inner) || parseConstanciaDate(inner));
+      }
+
+      /** Día de producción − 9, en DD/MM/AA. FP30OCT26 → 21/10/26. Vacío si solo hay mes. */
+      function fumigationDateFromProduction(productionText) {
+        const raw = (productionText || "").trim();
+        if (!raw || !productionDateHasDay(raw)) return "";
+        const inner = stripAdminFpFvPrefix(raw);
+        const parsed = parseUser01DayMonthYearText(inner) || parseConstanciaDate(inner);
+        if (!parsed) return "";
+        const iso = `${parsed.year}-${String(parsed.month).padStart(2, "0")}-${String(parsed.day).padStart(2, "0")}`;
+        return formatShortDate(formatDateMinusDays(iso, 9));
+      }
+
+      function emissionFumigacionDate(emissionDate) {
+        const base = (emissionDate || "").trim();
+        if (!base) return "";
+        return formatShortDate(formatDateMinusDays(base, 9));
+      }
+
+      /** Con día: producción − 9. Solo mes (OCT26, SET26) o vacío: emisión de la constancia − 9. */
+      function resolveFumigacionDate(productionText, emissionDate) {
+        return fumigationDateFromProduction(productionText) || emissionFumigacionDate(emissionDate);
+      }
+
+      function shiftConstanciaDate(dateText, days) {
+        const parsed = parseConstanciaDate(dateText);
+        if (!parsed) return "";
+        const baseDate = new Date(parsed.year, parsed.month - 1, parsed.day);
+        if (Number.isNaN(baseDate.getTime())) return "";
+        baseDate.setDate(baseDate.getDate() + days);
+        const dd = String(baseDate.getDate()).padStart(2, "0");
+        const mm = String(baseDate.getMonth() + 1).padStart(2, "0");
+        const yy = String(baseDate.getFullYear()).slice(-2);
+        return `${dd}/${mm}/${yy}`;
+      }
+
+      /** Liberación = fumigación + 7 días. 21/10/26 → 28/10/26. */
+      function resolveLiberacionDate(productionText, emissionDate) {
+        const fum = resolveFumigacionDate(productionText, emissionDate);
+        if (!fum) return "";
+        return shiftConstanciaDate(fum, 7);
+      }
+
+      function applyFumigacionFromProduction(prodInput) {
+        if (!(prodInput instanceof HTMLInputElement)) return;
+        const row = prodInput.closest("tr");
+        if (!row) return;
+        const emission = (constanciaFecha && constanciaFecha.value) || formatToday();
+        const fum = resolveFumigacionDate(prodInput.value, emission);
+        const fumInput = row.querySelector(".fumigacion-date-input");
+        if (fum && fumInput) fumInput.value = fum;
+        const lib = resolveLiberacionDate(prodInput.value, emission);
+        const libInput = row.querySelector(".liberacion-date-input");
+        if (lib && libInput) libInput.value = lib;
+      }
+
       /** Constancia: al editar F. Producción → F. Vencimiento (user01 o admin FP/FV). */
       function applyExpirationFromProduction(prodInput) {
         if (!(prodInput instanceof HTMLInputElement)) return;
         if (!prodInput.classList.contains("prod-date-input")) return;
         const row = prodInput.closest("tr");
         const expInput = row?.querySelector(".exp-date-input");
-        if (!expInput) return;
-        const productName = row.querySelector(".product-input")?.value || "";
-        const computed = computeExpirationFromProduction(prodInput.value, productName);
-        if (computed != null) expInput.value = computed;
+        if (expInput) {
+          const productName = row.querySelector(".product-input")?.value || "";
+          const computed = computeExpirationFromProduction(prodInput.value, productName);
+          if (computed != null) expInput.value = computed;
+        }
+        applyFumigacionFromProduction(prodInput);
       }
 
       /** Catálogo: al editar Fecha Producción → Fecha Vencimiento. */
@@ -10346,13 +10458,13 @@
           const plate = plateValue ?? transporte;
           return list
             .map((item, idx) => {
-            const fumDefault = isAjilesFumigacion ? liberacion : fumigacion;
-            const fumCell = formatShortDate(
-              itemSnapshotField(item, "f_fumigacion", "fumigacion_date") || fumDefault
-            );
-            const libCell = formatShortDate(
-              itemSnapshotField(item, "f_liberacion", "liberacion_date") || liberacion
-            );
+            const prodText = itemSnapshotField(item, "production_date_snapshot", "production_text");
+            const savedFum = itemSnapshotField(item, "f_fumigacion", "fumigacion_date");
+            const fumCell =
+              resolveFumigacionDate(prodText, fecha) || formatShortDate(savedFum);
+            const savedLib = itemSnapshotField(item, "f_liberacion", "liberacion_date");
+            const libCell =
+              resolveLiberacionDate(prodText, fecha) || formatShortDate(savedLib);
             const instCell = formatShortDate(
               itemSnapshotField(item, "f_instalaciones", "instalaciones_date") || instalaciones
             );
@@ -12410,6 +12522,6 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
       void refreshNotifications();
 
     </script>
-    <script src="/static/auth-gate.js?v=auth12"></script>
+    <script src="/static/auth-gate.js?v=orbit2"></script>
   </body>
 </html>

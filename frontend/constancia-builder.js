@@ -469,16 +469,79 @@
         return null;
       }
 
+      function productionDateHasDay(productionText) {
+        const raw = (productionText || "").trim();
+        if (!raw) return false;
+        const inner = stripAdminFpFvPrefix(raw);
+        return !!(parseUser01DayMonthYearText(inner) || parseConstanciaDate(inner));
+      }
+
+      /** Día de producción − 9, en DD/MM/AA. FP30OCT26 → 21/10/26. Vacío si solo hay mes. */
+      function fumigationDateFromProduction(productionText) {
+        const raw = (productionText || "").trim();
+        if (!raw || !productionDateHasDay(raw)) return "";
+        const inner = stripAdminFpFvPrefix(raw);
+        const parsed = parseUser01DayMonthYearText(inner) || parseConstanciaDate(inner);
+        if (!parsed) return "";
+        const iso = `${parsed.year}-${String(parsed.month).padStart(2, "0")}-${String(parsed.day).padStart(2, "0")}`;
+        return formatShortDate(formatDateMinusDays(iso, 9));
+      }
+
+      function emissionFumigacionDate(emissionDate) {
+        const base = (emissionDate || "").trim();
+        if (!base) return "";
+        return formatShortDate(formatDateMinusDays(base, 9));
+      }
+
+      /** Con día: producción − 9. Solo mes (OCT26, SET26) o vacío: emisión de la constancia − 9. */
+      function resolveFumigacionDate(productionText, emissionDate) {
+        return fumigationDateFromProduction(productionText) || emissionFumigacionDate(emissionDate);
+      }
+
+      function shiftConstanciaDate(dateText, days) {
+        const parsed = parseConstanciaDate(dateText);
+        if (!parsed) return "";
+        const baseDate = new Date(parsed.year, parsed.month - 1, parsed.day);
+        if (Number.isNaN(baseDate.getTime())) return "";
+        baseDate.setDate(baseDate.getDate() + days);
+        const dd = String(baseDate.getDate()).padStart(2, "0");
+        const mm = String(baseDate.getMonth() + 1).padStart(2, "0");
+        const yy = String(baseDate.getFullYear()).slice(-2);
+        return `${dd}/${mm}/${yy}`;
+      }
+
+      /** Liberación = fumigación + 7 días. 21/10/26 → 28/10/26. */
+      function resolveLiberacionDate(productionText, emissionDate) {
+        const fum = resolveFumigacionDate(productionText, emissionDate);
+        if (!fum) return "";
+        return shiftConstanciaDate(fum, 7);
+      }
+
+      function applyFumigacionFromProduction(prodInput) {
+        if (!(prodInput instanceof HTMLInputElement)) return;
+        const row = prodInput.closest("tr");
+        if (!row) return;
+        const emission = (typeof constanciaFecha !== "undefined" && constanciaFecha && constanciaFecha.value) || "";
+        const fum = resolveFumigacionDate(prodInput.value, emission);
+        const fumInput = row.querySelector(".fumigacion-date-input");
+        if (fum && fumInput) fumInput.value = fum;
+        const lib = resolveLiberacionDate(prodInput.value, emission);
+        const libInput = row.querySelector(".liberacion-date-input");
+        if (lib && libInput) libInput.value = lib;
+      }
+
       /** Constancia: al editar F. Producción → F. Vencimiento (user01 o admin FP/FV). */
       function applyExpirationFromProduction(prodInput) {
         if (!(prodInput instanceof HTMLInputElement)) return;
         if (!prodInput.classList.contains("prod-date-input")) return;
         const row = prodInput.closest("tr");
         const expInput = row?.querySelector(".exp-date-input");
-        if (!expInput) return;
-        const productName = row.querySelector(".product-input")?.value || "";
-        const computed = computeExpirationFromProduction(prodInput.value, productName);
-        if (computed != null) expInput.value = computed;
+        if (expInput) {
+          const productName = row.querySelector(".product-input")?.value || "";
+          const computed = computeExpirationFromProduction(prodInput.value, productName);
+          if (computed != null) expInput.value = computed;
+        }
+        applyFumigacionFromProduction(prodInput);
       }
 
       /** Catálogo: al editar Fecha Producción → Fecha Vencimiento. */
@@ -1270,13 +1333,13 @@
           const plate = plateValue ?? transporte;
           return list
             .map((item, idx) => {
-            const fumDefault = isAjilesFumigacion ? liberacion : fumigacion;
-            const fumCell = formatShortDate(
-              itemSnapshotField(item, "f_fumigacion", "fumigacion_date") || fumDefault
-            );
-            const libCell = formatShortDate(
-              itemSnapshotField(item, "f_liberacion", "liberacion_date") || liberacion
-            );
+            const prodText = itemSnapshotField(item, "production_date_snapshot", "production_text");
+            const savedFum = itemSnapshotField(item, "f_fumigacion", "fumigacion_date");
+            const fumCell =
+              resolveFumigacionDate(prodText, fecha) || formatShortDate(savedFum);
+            const savedLib = itemSnapshotField(item, "f_liberacion", "liberacion_date");
+            const libCell =
+              resolveLiberacionDate(prodText, fecha) || formatShortDate(savedLib);
             const instCell = formatShortDate(
               itemSnapshotField(item, "f_instalaciones", "instalaciones_date") || instalaciones
             );
