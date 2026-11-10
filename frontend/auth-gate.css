@@ -28,11 +28,20 @@ body:not(.auth-locked) .auth-screen {
   pointer-events: none;
 }
 
-/* —— Login —— */
+/* —— Login, carga y bienvenida comparten el paisaje del día —— */
+.auth-login-screen,
+.auth-loading-screen,
+.auth-welcome-screen {
+  background-color: #101412;
+  background-image:
+    linear-gradient(180deg, rgba(6, 14, 12, 0.28), rgba(6, 14, 12, 0.46)),
+    var(--login-landscape, none);
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
 .auth-login-screen {
-  background:
-    radial-gradient(ellipse 80% 60% at 50% 40%, rgba(14, 116, 144, 0.12), transparent),
-    linear-gradient(160deg, #101412 0%, #152824 45%, #1a4d3e 100%);
   padding: 20px;
 }
 
@@ -47,17 +56,67 @@ body:not(.auth-locked) .auth-screen {
 }
 
 .auth-avatar {
-  width: 72px;
-  height: 72px;
-  margin: 0 auto 22px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 28px;
+  position: relative;
+  width: 118px;
+  height: 78px;
+  margin: 0 auto 18px;
+  border: 0;
+  background: transparent;
+  perspective: 260px;
+}
+
+.auth-buddy {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 48px;
+  height: 58px;
+  margin: -29px 0 0 -24px;
+  color: #4ad12d;
+  filter: drop-shadow(0 6px 6px rgba(0, 0, 0, 0.28));
+  animation: auth-buddy-pass 4.5s linear infinite;
+}
+
+.auth-buddy svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  fill: currentColor;
+}
+
+.auth-buddy-blue {
+  color: #1c9ef0;
+  animation-delay: -1.5s;
+}
+
+.auth-buddy-orange {
+  color: #ff7a14;
+  animation-delay: -3s;
+}
+
+@keyframes auth-buddy-pass {
+  0% {
+    transform: translateX(0) scale(1.08) rotateY(0deg);
+    z-index: 3;
+  }
+  33% {
+    transform: translateX(32px) scale(0.68) rotateY(32deg);
+    z-index: 1;
+  }
+  66% {
+    transform: translateX(-32px) scale(0.68) rotateY(-32deg);
+    z-index: 2;
+  }
+  100% {
+    transform: translateX(0) scale(1.08) rotateY(0deg);
+    z-index: 3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-buddy { animation: none; }
+  .auth-buddy-blue { transform: translateX(26px) scale(0.7); }
+  .auth-buddy-orange { transform: translateX(-26px) scale(0.7); }
 }
 
 .auth-field {
@@ -150,7 +209,6 @@ body:not(.auth-locked) .auth-screen {
 .auth-loading-screen {
   flex-direction: column;
   gap: 18px;
-  background: #000;
 }
 
 .auth-orbit {
@@ -213,10 +271,6 @@ body:not(.auth-locked) .auth-screen {
 }
 
 /* —— Bienvenido —— */
-.auth-welcome-screen {
-  background: linear-gradient(160deg, #101412 0%, #16382f 52%, #0f766e 100%);
-}
-
 .auth-welcome-text {
   margin: 0;
   font-family: "DM Sans", "Segoe UI", sans-serif;

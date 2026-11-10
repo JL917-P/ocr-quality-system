@@ -11,6 +11,19 @@
   const progressPct = document.getElementById("authProgressPct");
   const rememberCheck = document.getElementById("authRemember");
 
+  const LOGIN_LANDSCAPES = 7;
+  if (loginScreen) {
+    const now = new Date();
+    const start = Date.UTC(now.getFullYear(), 0, 0);
+    const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayOfYear = Math.floor((today - start) / 86400000);
+    const index = ((dayOfYear % LOGIN_LANDSCAPES) + LOGIN_LANDSCAPES) % LOGIN_LANDSCAPES;
+    document.documentElement.style.setProperty(
+      "--login-landscape",
+      `url("/static/login-landscapes/paisaje-${index + 1}.jpg")`
+    );
+  }
+
   if (!loginScreen || !loginForm || !window.QCAuth) return;
 
   function hideScreen(el) {
