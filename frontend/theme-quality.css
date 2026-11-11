@@ -1088,10 +1088,43 @@ body.page-admin {
 #section-home .card {
   margin-bottom: 0;
   padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+#section-home .home-stat-card {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+#section-home .home-stat-card--accent {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.86) 0%, rgba(231, 246, 239, 0.72) 120%);
+}
+
+#section-home .home-action-btn {
+  background: #fff;
 }
 
 .content:has(#section-home:not(.hidden)) {
   padding: 12px 20px 16px;
+}
+
+.content:has(#section-home:not(.hidden))::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(180deg, rgba(238, 243, 240, 0.12), rgba(238, 243, 240, 0.16)),
+    var(--login-landscape, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: blur(0.5px);
+}
+
+.content:has(#section-home:not(.hidden)) > * {
+  position: relative;
+  z-index: 1;
 }
 
 .content:has(#section-ocr:not(.hidden)) {
