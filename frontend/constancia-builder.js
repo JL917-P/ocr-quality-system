@@ -1846,7 +1846,12 @@
           : pageQualityStandard;
         const pagePersonalizado =
           showPersonalizado ? buildAjilesQualityPage(constancia, clientMatch, items, fecha) : "";
-        const showTransport = isCencosudCdLimaClient(cliente, clientMatch);
+        const ajilesUnitFumigacion =
+          (typeof clientLooksLikeAjiles === "function" && clientLooksLikeAjiles(cliente)) ||
+          (typeof isAjilesPeruClient === "function" && isAjilesPeruClient(cliente, clientList)) ||
+          /ajile/i.test(String(cliente).replace(/[^a-z0-9]/gi, ""));
+        const showTransport =
+          isCencosudCdLimaClient(cliente, clientMatch) || ajilesUnitFumigacion;
         const pageTransport = showTransport
           ? buildCencosudTransportPage(constancia, items, fecha, numero, cliente, transporte)
           : "";

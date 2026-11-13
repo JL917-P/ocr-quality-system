@@ -1902,6 +1902,7 @@
         if (constanciaFumigacion.checked) types.push("Fumigación");
         if (constanciaCalidad.checked) types.push(isActiveTottusClient() ? "Desinsectación" : "Calidad");
         if (isActiveAjilesClient() && constanciaPersonalizado?.checked) types.push("Personalizado");
+        if (isActiveAjilesClient()) types.push("Fumigación unidad");
         if (types.length) parts.push(types.join(" + "));
         return parts.join(" · ") || "Datos de constancia";
       }
@@ -2460,7 +2461,7 @@
         if (constanciaPersonalizadoLabel) {
           constanciaPersonalizadoLabel.classList.toggle("hidden", !show);
         }
-        // Ajiles: Fum. + Cal. + Pers. (3 hojas) en admin y en todos los operadores.
+        // Ajiles: Fum. + Cal. + Pers. + fumigación de unidad (4 hojas) en admin y en todos los operadores.
         if (show && !ajilesTripleArmed) {
           if (constanciaFumigacion) constanciaFumigacion.checked = true;
           if (constanciaCalidad) constanciaCalidad.checked = true;
@@ -10975,7 +10976,12 @@
           : pageQualityStandard;
         const pagePersonalizado =
           showPersonalizado ? buildAjilesQualityPage(constancia, clientMatch, items, fecha) : "";
-        const showTransport = isCencosudCdLimaClient(cliente, clientMatch);
+        const ajilesUnitFumigacion =
+          (typeof clientLooksLikeAjiles === "function" && clientLooksLikeAjiles(cliente)) ||
+          (typeof isAjilesPeruClient === "function" && isAjilesPeruClient(cliente, clientList)) ||
+          /ajile/i.test(String(cliente).replace(/[^a-z0-9]/gi, ""));
+        const showTransport =
+          isCencosudCdLimaClient(cliente, clientMatch) || ajilesUnitFumigacion;
         const pageTransport = showTransport
           ? buildCencosudTransportPage(constancia, items, fecha, numero, cliente, transporte)
           : "";
