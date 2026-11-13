@@ -2040,7 +2040,7 @@
 
       if (constanciaFecha) {
         constanciaFecha.addEventListener("change", () => {
-          refreshDefaultFumigacionDatesOnRows({ onlyEmpty: true });
+          refreshDefaultFumigacionDatesOnRows({ onlyEmpty: false });
         });
       }
 
@@ -2651,19 +2651,21 @@
         const savedInst = itemSnapshotField(itm, "f_instalaciones", "instalaciones_date");
         if (fumInput) {
           const emission = (constanciaFecha && constanciaFecha.value) || "";
-          const prod = itemSnapshotField(itm, "production_date_snapshot", "production_text");
-          fumInput.value =
-            resolveFumigacionDate(prod, emission) ||
-            (typeof formatShortDate === "function" ? formatShortDate(savedFum) : savedFum) ||
-            "";
+          const computed = resolveFumigacionDate("", emission);
+          const saved = savedFum
+            ? (typeof formatShortDate === "function" ? formatShortDate(savedFum) || savedFum : savedFum)
+            : "";
+          fumInput.value = saved || computed || "";
+          if (saved && (!computed || saved !== computed)) fumInput.dataset.userEdited = "1";
         }
         if (libInput) {
           const emission = (constanciaFecha && constanciaFecha.value) || "";
-          const prod = itemSnapshotField(itm, "production_date_snapshot", "production_text");
-          libInput.value =
-            resolveLiberacionDate(prod, emission) ||
-            (typeof formatShortDate === "function" ? formatShortDate(savedLib) : savedLib) ||
-            "";
+          const computed = resolveLiberacionDate("", emission);
+          const saved = savedLib
+            ? (typeof formatShortDate === "function" ? formatShortDate(savedLib) || savedLib : savedLib)
+            : "";
+          libInput.value = saved || computed || "";
+          if (saved && (!computed || saved !== computed)) libInput.dataset.userEdited = "1";
         }
         if (instInput) instInput.value = savedInst || getDefaultInstalacionesDate();
         if (sacosInput) {
@@ -4672,27 +4674,30 @@
       function refreshDefaultFumigacionDatesOnRows({ onlyEmpty = true } = {}) {
         const instDefault = getDefaultInstalacionesDate();
         const shipDefault = formatEmissionDateForInput();
+        const emission = (constanciaFecha && constanciaFecha.value) || formatToday();
+        const nextFum = resolveFumigacionDate("", emission);
+        const nextLib = resolveLiberacionDate("", emission);
         getActiveProductBodies().forEach((bodyEl) => {
           bodyEl.querySelectorAll("tr").forEach((row) => {
             const fumInput = row.querySelector(".fumigacion-date-input");
             const libInput = row.querySelector(".liberacion-date-input");
             const instInput = row.querySelector(".instalaciones-date-input");
             const shipInput = row.querySelector(".shipping-date-input");
-            const prodValue = row.querySelector(".prod-date-input")?.value || "";
-            const emission = (constanciaFecha && constanciaFecha.value) || formatToday();
-            if (fumInput) {
-              const next = resolveFumigacionDate(prodValue, emission);
-              const hasDay = productionDateHasDay(prodValue);
-              if (next && (!hasDay || !onlyEmpty || !(fumInput.value || "").trim())) {
-                fumInput.value = next;
-              }
+            if (
+              fumInput &&
+              nextFum &&
+              fumInput.dataset.userEdited !== "1" &&
+              (!onlyEmpty || !(fumInput.value || "").trim())
+            ) {
+              fumInput.value = nextFum;
             }
-            if (libInput) {
-              const nextLib = resolveLiberacionDate(prodValue, emission);
-              const hasDay = productionDateHasDay(prodValue);
-              if (nextLib && (!hasDay || !onlyEmpty || !(libInput.value || "").trim())) {
-                libInput.value = nextLib;
-              }
+            if (
+              libInput &&
+              nextLib &&
+              libInput.dataset.userEdited !== "1" &&
+              (!onlyEmpty || !(libInput.value || "").trim())
+            ) {
+              libInput.value = nextLib;
             }
             if (instInput && (!onlyEmpty || !(instInput.value || "").trim())) {
               instInput.value = instDefault;
@@ -4806,6 +4811,12 @@
         if (!productTableBodyFromTarget(event.target)) return;
         const input = event.target;
         if (!(input instanceof HTMLInputElement)) return;
+        if (input.classList.contains("fumigacion-date-input") || input.classList.contains("liberacion-date-input")) {
+          if ((input.value || "").trim()) input.dataset.userEdited = "1";
+          else delete input.dataset.userEdited;
+          refreshOcrRowStates();
+          return;
+        }
         if (input.classList.contains("prod-date-input")) {
           applyFumigacionFromProduction(input);
           refreshOcrRowStates();
@@ -7180,15 +7191,13 @@
           const qty = qtyRaw === "" || qtyRaw === undefined ? null : Number(qtyRaw);
           if (product) {
             const match = getProductByName(product);
+            const emission = (constanciaFecha && constanciaFecha.value) || "";
             const row = {
               product,
               lot: lot || match?.lot || "",
               production_text: prodDate || match?.production_text || "",
               expiration_text: expDate || match?.expiration_text || "",
-              f_fumigacion:
-                resolveFumigacionDate(prodDate, (constanciaFecha && constanciaFecha.value) || "") ||
-                fumDate ||
-                getDefaultFumigacionDate(),
+              f_fumigacion: fumDate || resolveFumigacionDate("", emission) || getDefaultFumigacionDate(),
             };
             if (ajiles) {
               row.fecha_envio = shipDate || formatEmissionDateForInput();
@@ -7198,10 +7207,7 @@
               row.nivel_fosfina =
                 fosfinaRaw === "" || fosfinaRaw === undefined ? 1800 : Number(fosfinaRaw);
             } else {
-              row.f_liberacion =
-                resolveLiberacionDate(prodDate, (constanciaFecha && constanciaFecha.value) || "") ||
-                libDate ||
-                getDefaultLiberacionDate();
+              row.f_liberacion = libDate || resolveLiberacionDate("", emission) || getDefaultLiberacionDate();
               row.f_instalaciones = instDate || getDefaultInstalacionesDate();
             }
             if (match?.id) row.product_id = match.id;
@@ -9614,26 +9620,11 @@
         return !!(parseUser01DayMonthYearText(inner) || parseConstanciaDate(inner));
       }
 
-      /** Día de producción − 9, en DD/MM/AA. FP30OCT26 → 21/10/26. Vacío si solo hay mes. */
-      function fumigationDateFromProduction(productionText) {
-        const raw = (productionText || "").trim();
-        if (!raw || !productionDateHasDay(raw)) return "";
-        const inner = stripAdminFpFvPrefix(raw);
-        const parsed = parseUser01DayMonthYearText(inner) || parseConstanciaDate(inner);
-        if (!parsed) return "";
-        const iso = `${parsed.year}-${String(parsed.month).padStart(2, "0")}-${String(parsed.day).padStart(2, "0")}`;
-        return formatShortDate(formatDateMinusDays(iso, 9));
-      }
-
-      function emissionFumigacionDate(emissionDate) {
+      /** Fumigación = fecha de emisión − 10 días. DD/MM/AA. */
+      function resolveFumigacionDate(_productionText, emissionDate) {
         const base = (emissionDate || "").trim();
         if (!base) return "";
-        return formatShortDate(formatDateMinusDays(base, 9));
-      }
-
-      /** Con día: producción − 9. Solo mes (OCT26, SET26) o vacío: emisión de la constancia − 9. */
-      function resolveFumigacionDate(productionText, emissionDate) {
-        return fumigationDateFromProduction(productionText) || emissionFumigacionDate(emissionDate);
+        return formatShortDate(formatDateMinusDays(base, 10));
       }
 
       function shiftConstanciaDate(dateText, days) {
@@ -9648,11 +9639,11 @@
         return `${dd}/${mm}/${yy}`;
       }
 
-      /** Liberación = fumigación + 7 días. 21/10/26 → 28/10/26. */
-      function resolveLiberacionDate(productionText, emissionDate) {
-        const fum = resolveFumigacionDate(productionText, emissionDate);
-        if (!fum) return "";
-        return shiftConstanciaDate(fum, 7);
+      /** Liberación = fecha de emisión − 3 días. DD/MM/AA. */
+      function resolveLiberacionDate(_productionText, emissionDate) {
+        const base = (emissionDate || "").trim();
+        if (!base) return "";
+        return formatShortDate(formatDateMinusDays(base, 3));
       }
 
       function applyFumigacionFromProduction(prodInput) {
@@ -9660,12 +9651,16 @@
         const row = prodInput.closest("tr");
         if (!row) return;
         const emission = (constanciaFecha && constanciaFecha.value) || formatToday();
-        const fum = resolveFumigacionDate(prodInput.value, emission);
+        const fum = resolveFumigacionDate("", emission);
         const fumInput = row.querySelector(".fumigacion-date-input");
-        if (fum && fumInput) fumInput.value = fum;
-        const lib = resolveLiberacionDate(prodInput.value, emission);
+        if (fum && fumInput && fumInput.dataset.userEdited !== "1" && !(fumInput.value || "").trim()) {
+          fumInput.value = fum;
+        }
+        const lib = resolveLiberacionDate("", emission);
         const libInput = row.querySelector(".liberacion-date-input");
-        if (lib && libInput) libInput.value = lib;
+        if (lib && libInput && libInput.dataset.userEdited !== "1" && !(libInput.value || "").trim()) {
+          libInput.value = lib;
+        }
       }
 
       /** Constancia: al editar F. Producción → F. Vencimiento (user01 o admin FP/FV). */
@@ -10438,8 +10433,8 @@
           fileName += " Comercial";
         }
         const transporte = constancia.transport_plate || "";
-        const fumigacion = formatDateMinusDays(fecha, 9);
-        const liberacion = formatDateMinusDays(fecha, 2);
+        const fumigacion = formatDateMinusDays(fecha, 10);
+        const liberacion = formatDateMinusDays(fecha, 3);
         const instalaciones = formatDateMinusDays(fecha, 0);
         const showFumigacion =
           isAjilesClient || (constancia.fumigacion !== 0 && constancia.fumigacion !== false);
@@ -10463,13 +10458,10 @@
           const plate = plateValue ?? transporte;
           return list
             .map((item, idx) => {
-            const prodText = itemSnapshotField(item, "production_date_snapshot", "production_text");
             const savedFum = itemSnapshotField(item, "f_fumigacion", "fumigacion_date");
-            const fumCell =
-              resolveFumigacionDate(prodText, fecha) || formatShortDate(savedFum);
+            const fumCell = (savedFum ? formatShortDate(savedFum) || savedFum : "") || resolveFumigacionDate("", fecha);
             const savedLib = itemSnapshotField(item, "f_liberacion", "liberacion_date");
-            const libCell =
-              resolveLiberacionDate(prodText, fecha) || formatShortDate(savedLib);
+            const libCell = (savedLib ? formatShortDate(savedLib) || savedLib : "") || resolveLiberacionDate("", fecha);
             const instCell = formatShortDate(
               itemSnapshotField(item, "f_instalaciones", "instalaciones_date") || instalaciones
             );
