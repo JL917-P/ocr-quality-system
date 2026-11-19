@@ -2397,15 +2397,19 @@
         return base;
       }
 
-      function getDefaultFumigacionDate() {
+      function randomFumigacionOffset() {
+        return Math.random() < 0.5 ? 9 : 10;
+      }
+
+      function getDefaultFumigacionDate(offsetDays) {
         const base = (constanciaFecha && constanciaFecha.value) || formatToday();
-        if (typeof resolveFumigacionDate === "function") return resolveFumigacionDate("", base);
+        if (typeof resolveFumigacionDate === "function") return resolveFumigacionDate("", base, offsetDays);
         return "";
       }
 
-      function getDefaultLiberacionDate() {
+      function getDefaultLiberacionDate(offsetDays) {
         const base = (constanciaFecha && constanciaFecha.value) || formatToday();
-        if (typeof resolveLiberacionDate === "function") return resolveLiberacionDate("", base);
+        if (typeof resolveLiberacionDate === "function") return resolveLiberacionDate("", base, offsetDays);
         return "";
       }
 
@@ -2507,10 +2511,11 @@
       syncTottusExtraVisibility();
       renderOcrProductsHeader();
 
-      function buildProductRowHtml(productValue = "") {
+      function buildProductRowHtml(productValue = "", fumOffset) {
         const safeProduct = (productValue || "").replace(/"/g, "&quot;");
-        const fumDefault = getDefaultFumigacionDate();
-        const libDefault = getDefaultLiberacionDate();
+        const offset = Number(fumOffset) === 9 ? 9 : 10;
+        const fumDefault = getDefaultFumigacionDate(offset);
+        const libDefault = getDefaultLiberacionDate(offset);
         const instDefault = getDefaultInstalacionesDate();
         const user01Dates = typeof isUser01ConstanciaLayout === "function" && isUser01ConstanciaLayout();
         const prodPlaceholder = user01Dates ? "Ej: DIC25" : "Ej: 01AGO26 o FP01AGO26";
@@ -2588,11 +2593,18 @@
         refreshOcrRowStates();
       }
 
-      function addRowToBody(bodyEl, productValue = "") {
-        if (!bodyEl) return null;
+      function createProductRowElement(productValue = "") {
         const row = document.createElement("tr");
         row.className = "ocr-product-row";
-        row.innerHTML = buildProductRowHtml(productValue);
+        const offset = randomFumigacionOffset();
+        row.dataset.fumOffset = String(offset);
+        row.innerHTML = buildProductRowHtml(productValue, offset);
+        return row;
+      }
+
+      function addRowToBody(bodyEl, productValue = "") {
+        if (!bodyEl) return null;
+        const row = createProductRowElement(productValue);
         wireProductRow(row, bodyEl);
         bodyEl.appendChild(row);
         reindexProductBody(bodyEl);
@@ -2608,9 +2620,7 @@
       function insertRowAfter(targetRow, bodyEl = null) {
         const body = bodyEl || targetRow?.closest("tbody");
         if (!body || !targetRow) return;
-        const newRow = document.createElement("tr");
-        newRow.className = "ocr-product-row";
-        newRow.innerHTML = buildProductRowHtml("");
+        const newRow = createProductRowElement("");
         wireProductRow(newRow, body);
         targetRow.insertAdjacentElement("afterend", newRow);
         reindexProductBody(body);
@@ -2651,19 +2661,23 @@
         const savedInst = itemSnapshotField(itm, "f_instalaciones", "instalaciones_date");
         if (fumInput) {
           const emission = (constanciaFecha && constanciaFecha.value) || "";
-          const computed = resolveFumigacionDate("", emission);
           const saved = savedFum
             ? (typeof formatShortDate === "function" ? formatShortDate(savedFum) || savedFum : savedFum)
             : "";
+          const offset = inferFumOffset(emission, saved);
+          if (offset) row.dataset.fumOffset = String(offset);
+          else if (saved) delete row.dataset.fumOffset;
+          const computed = offset ? resolveFumigacionDate("", emission, offset) : "";
           fumInput.value = saved || computed || "";
-          if (saved && (!computed || saved !== computed)) fumInput.dataset.userEdited = "1";
+          if (saved && !offset) fumInput.dataset.userEdited = "1";
         }
         if (libInput) {
           const emission = (constanciaFecha && constanciaFecha.value) || "";
-          const computed = resolveLiberacionDate("", emission);
           const saved = savedLib
             ? (typeof formatShortDate === "function" ? formatShortDate(savedLib) || savedLib : savedLib)
             : "";
+          const offset = Number(row.dataset.fumOffset);
+          const computed = offset === 9 || offset === 10 ? resolveLiberacionDate("", emission, offset) : "";
           libInput.value = saved || computed || "";
           if (saved && (!computed || saved !== computed)) libInput.dataset.userEdited = "1";
         }
@@ -4167,14 +4181,15 @@
       function makroItemPayload(item, issueIso) {
         const match = item.catalog;
         const productName = (match?.name || item.product || "").trim();
+        const fumOffset = randomFumigacionOffset();
         const row = {
           product: productName,
           quantity: item.qty,
           lot: match?.lot || "",
           production_text: match?.production_text || "",
           expiration_text: match?.expiration_text || "",
-          f_fumigacion: resolveFumigacionDate(match?.production_text || "", issueIso),
-          f_liberacion: resolveLiberacionDate(match?.production_text || "", issueIso),
+          f_fumigacion: resolveFumigacionDate(match?.production_text || "", issueIso, fumOffset),
+          f_liberacion: resolveLiberacionDate(match?.production_text || "", issueIso, fumOffset),
           f_instalaciones: formatDateMinusDays(issueIso, 0),
         };
         if (match?.id) row.product_id = match.id;
@@ -4675,29 +4690,37 @@
         const instDefault = getDefaultInstalacionesDate();
         const shipDefault = formatEmissionDateForInput();
         const emission = (constanciaFecha && constanciaFecha.value) || formatToday();
-        const nextFum = resolveFumigacionDate("", emission);
-        const nextLib = resolveLiberacionDate("", emission);
         getActiveProductBodies().forEach((bodyEl) => {
           bodyEl.querySelectorAll("tr").forEach((row) => {
             const fumInput = row.querySelector(".fumigacion-date-input");
             const libInput = row.querySelector(".liberacion-date-input");
             const instInput = row.querySelector(".instalaciones-date-input");
             const shipInput = row.querySelector(".shipping-date-input");
-            if (
-              fumInput &&
-              nextFum &&
-              fumInput.dataset.userEdited !== "1" &&
-              (!onlyEmpty || !(fumInput.value || "").trim())
-            ) {
-              fumInput.value = nextFum;
+            let offset = Number(row.dataset.fumOffset);
+            const hasOffset = offset === 9 || offset === 10;
+            if (!hasOffset && onlyEmpty) {
+              offset = randomFumigacionOffset();
+              row.dataset.fumOffset = String(offset);
             }
-            if (
-              libInput &&
-              nextLib &&
-              libInput.dataset.userEdited !== "1" &&
-              (!onlyEmpty || !(libInput.value || "").trim())
-            ) {
-              libInput.value = nextLib;
+            if (hasOffset || onlyEmpty) {
+              const nextFum = resolveFumigacionDate("", emission, offset);
+              const nextLib = resolveLiberacionDate("", emission, offset);
+              if (
+                fumInput &&
+                nextFum &&
+                fumInput.dataset.userEdited !== "1" &&
+                (!onlyEmpty || !(fumInput.value || "").trim())
+              ) {
+                fumInput.value = nextFum;
+              }
+              if (
+                libInput &&
+                nextLib &&
+                libInput.dataset.userEdited !== "1" &&
+                (!onlyEmpty || !(libInput.value || "").trim())
+              ) {
+                libInput.value = nextLib;
+              }
             }
             if (instInput && (!onlyEmpty || !(instInput.value || "").trim())) {
               instInput.value = instDefault;
@@ -7192,12 +7215,13 @@
           if (product) {
             const match = getProductByName(product);
             const emission = (constanciaFecha && constanciaFecha.value) || "";
+            const fumOffset = Number(tr.dataset.fumOffset) === 9 ? 9 : 10;
             const row = {
               product,
               lot: lot || match?.lot || "",
               production_text: prodDate || match?.production_text || "",
               expiration_text: expDate || match?.expiration_text || "",
-              f_fumigacion: fumDate || resolveFumigacionDate("", emission) || getDefaultFumigacionDate(),
+              f_fumigacion: fumDate || resolveFumigacionDate("", emission, fumOffset) || getDefaultFumigacionDate(fumOffset),
             };
             if (ajiles) {
               row.fecha_envio = shipDate || formatEmissionDateForInput();
@@ -7207,7 +7231,7 @@
               row.nivel_fosfina =
                 fosfinaRaw === "" || fosfinaRaw === undefined ? 1800 : Number(fosfinaRaw);
             } else {
-              row.f_liberacion = libDate || resolveLiberacionDate("", emission) || getDefaultLiberacionDate();
+              row.f_liberacion = libDate || resolveLiberacionDate("", emission, fumOffset) || getDefaultLiberacionDate(fumOffset);
               row.f_instalaciones = instDate || getDefaultInstalacionesDate();
             }
             if (match?.id) row.product_id = match.id;
@@ -9620,11 +9644,32 @@
         return !!(parseUser01DayMonthYearText(inner) || parseConstanciaDate(inner));
       }
 
-      /** Fumigación = fecha de emisión − 10 días. DD/MM/AA. */
-      function resolveFumigacionDate(_productionText, emissionDate) {
+      /** 9 días de fumigación van con 2 de liberación; 10 van con 3. */
+      function fumDaysFromOffset(offsetDays) {
+        return Number(offsetDays) === 9 ? 9 : 10;
+      }
+
+      function libDaysFromOffset(offsetDays) {
+        return Number(offsetDays) === 9 ? 2 : 3;
+      }
+
+      function formatEmissionOffset(emissionDate, days) {
         const base = (emissionDate || "").trim();
         if (!base) return "";
-        return formatShortDate(formatDateMinusDays(base, 10));
+        return formatShortDate(formatDateMinusDays(base, days));
+      }
+
+      function inferFumOffset(emissionDate, savedFum) {
+        if (!emissionDate || !savedFum) return 0;
+        const saved = formatShortDate(savedFum) || savedFum;
+        if (saved === formatEmissionOffset(emissionDate, 9)) return 9;
+        if (saved === formatEmissionOffset(emissionDate, 10)) return 10;
+        return 0;
+      }
+
+      /** Fumigación = emisión − 10 días, o − 9 si la línea salió en ese par. DD/MM/AA. */
+      function resolveFumigacionDate(_productionText, emissionDate, offsetDays) {
+        return formatEmissionOffset(emissionDate, fumDaysFromOffset(offsetDays));
       }
 
       function shiftConstanciaDate(dateText, days) {
@@ -9639,28 +9684,30 @@
         return `${dd}/${mm}/${yy}`;
       }
 
-      /** Liberación = fecha de emisión − 3 días. DD/MM/AA. */
-      function resolveLiberacionDate(_productionText, emissionDate) {
-        const base = (emissionDate || "").trim();
-        if (!base) return "";
-        return formatShortDate(formatDateMinusDays(base, 3));
+      /** Liberación = emisión − 3 días, o − 2 si la fumigación de la línea es − 9. DD/MM/AA. */
+      function resolveLiberacionDate(_productionText, emissionDate, offsetDays) {
+        return formatEmissionOffset(emissionDate, libDaysFromOffset(offsetDays));
       }
 
       function applyFumigacionFromProduction(prodInput) {
         if (!(prodInput instanceof HTMLInputElement)) return;
         const row = prodInput.closest("tr");
         if (!row) return;
-        const emission = (constanciaFecha && constanciaFecha.value) || formatToday();
-        const fum = resolveFumigacionDate("", emission);
         const fumInput = row.querySelector(".fumigacion-date-input");
-        if (fum && fumInput && fumInput.dataset.userEdited !== "1" && !(fumInput.value || "").trim()) {
-          fumInput.value = fum;
-        }
-        const lib = resolveLiberacionDate("", emission);
         const libInput = row.querySelector(".liberacion-date-input");
-        if (lib && libInput && libInput.dataset.userEdited !== "1" && !(libInput.value || "").trim()) {
-          libInput.value = lib;
+        const fumEmpty = fumInput && fumInput.dataset.userEdited !== "1" && !(fumInput.value || "").trim();
+        const libEmpty = libInput && libInput.dataset.userEdited !== "1" && !(libInput.value || "").trim();
+        if (!fumEmpty && !libEmpty) return;
+        let offset = Number(row.dataset.fumOffset);
+        if (offset !== 9 && offset !== 10) {
+          offset = randomFumigacionOffset();
+          row.dataset.fumOffset = String(offset);
         }
+        const emission = (constanciaFecha && constanciaFecha.value) || formatToday();
+        const fum = resolveFumigacionDate("", emission, offset);
+        if (fum && fumEmpty) fumInput.value = fum;
+        const lib = resolveLiberacionDate("", emission, offset);
+        if (lib && libEmpty) libInput.value = lib;
       }
 
       /** Constancia: al editar F. Producción → F. Vencimiento (user01 o admin FP/FV). */
@@ -10433,8 +10480,8 @@
           fileName += " Comercial";
         }
         const transporte = constancia.transport_plate || "";
-        const fumigacion = formatDateMinusDays(fecha, 10);
-        const liberacion = formatDateMinusDays(fecha, 3);
+        const fumigacion = resolveFumigacionDate("", fecha);
+        const liberacion = resolveLiberacionDate("", fecha);
         const instalaciones = formatDateMinusDays(fecha, 0);
         const showFumigacion =
           isAjilesClient || (constancia.fumigacion !== 0 && constancia.fumigacion !== false);
@@ -12526,6 +12573,6 @@ document.addEventListener("DOMContentLoaded",()=>{fitSingleLineCells();setTimeou
       void refreshNotifications();
 
     </script>
-    <script src="/static/auth-gate.js?v=login-land2"></script>
+    <script src="/static/auth-gate.js?v=login-land3"></script>
   </body>
 </html>

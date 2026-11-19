@@ -11,7 +11,7 @@
   const progressPct = document.getElementById("authProgressPct");
   const rememberCheck = document.getElementById("authRemember");
 
-  const LOGIN_LANDSCAPES = 7;
+  const LOGIN_LANDSCAPES = 15;
   if (loginScreen) {
     const now = new Date();
     const start = Date.UTC(now.getFullYear(), 0, 0);

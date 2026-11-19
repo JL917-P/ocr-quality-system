@@ -476,11 +476,24 @@
         return !!(parseUser01DayMonthYearText(inner) || parseConstanciaDate(inner));
       }
 
-      /** Fumigación = fecha de emisión − 10 días. DD/MM/AA. */
-      function resolveFumigacionDate(_productionText, emissionDate) {
+      /** 9 días de fumigación van con 2 de liberación; 10 van con 3. */
+      function fumDaysFromOffset(offsetDays) {
+        return Number(offsetDays) === 9 ? 9 : 10;
+      }
+
+      function libDaysFromOffset(offsetDays) {
+        return Number(offsetDays) === 9 ? 2 : 3;
+      }
+
+      function formatEmissionOffset(emissionDate, days) {
         const base = (emissionDate || "").trim();
         if (!base) return "";
-        return formatShortDate(formatDateMinusDays(base, 10));
+        return formatShortDate(formatDateMinusDays(base, days));
+      }
+
+      /** Fumigación = emisión − 10 días, o − 9 si la línea trae ese par. DD/MM/AA. */
+      function resolveFumigacionDate(_productionText, emissionDate, offsetDays) {
+        return formatEmissionOffset(emissionDate, fumDaysFromOffset(offsetDays));
       }
 
       function shiftConstanciaDate(dateText, days) {
@@ -495,11 +508,9 @@
         return `${dd}/${mm}/${yy}`;
       }
 
-      /** Liberación = fecha de emisión − 3 días. DD/MM/AA. */
-      function resolveLiberacionDate(_productionText, emissionDate) {
-        const base = (emissionDate || "").trim();
-        if (!base) return "";
-        return formatShortDate(formatDateMinusDays(base, 3));
+      /** Liberación = emisión − 3 días, o − 2 si la fumigación de la línea es − 9. DD/MM/AA. */
+      function resolveLiberacionDate(_productionText, emissionDate, offsetDays) {
+        return formatEmissionOffset(emissionDate, libDaysFromOffset(offsetDays));
       }
 
       function applyFumigacionFromProduction(prodInput) {
@@ -1297,8 +1308,8 @@
           fileName += " Comercial";
         }
         const transporte = constancia.transport_plate || "";
-        const fumigacion = formatDateMinusDays(fecha, 10);
-        const liberacion = formatDateMinusDays(fecha, 3);
+        const fumigacion = resolveFumigacionDate("", fecha);
+        const liberacion = resolveLiberacionDate("", fecha);
         const instalaciones = formatDateMinusDays(fecha, 0);
         const showFumigacion =
           isAjilesClient || (constancia.fumigacion !== 0 && constancia.fumigacion !== false);
